@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:showIn="navigation_view">
+
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_manage_subjects"
+            android:icon="@drawable/ic_subject_menu"
+            android:title="Manage Subjects" />
+
+        <!-- NEW ITEM FOR ADDING MARKS -->
+        <item
+            android:id="@+id/nav_add_update_marks"
+            android:icon="@drawable/ic_edit_note"
+            android:title="Add/Update Marks" />
+
+        <item
+            android:id="@+id/nav_overall_leaderboard"
+            android:icon="@drawable/ic_leaderboard_star"
+            android:title="Leaderboard" />
+        <item
+            android:id="@+id/nav_profile"
+            android:icon="@drawable/ic_person"
+            android:title="Teachers Profile" />
+    </group>
+</menu>

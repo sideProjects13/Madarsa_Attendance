@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    style="?attr/materialCardViewStyle"
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="6dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/ivPaymentIconHistory"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_receipt"
+            app:tint="?attr/colorPrimary"
+            android:layout_marginEnd="12dp"
+            android:contentDescription="Payment Icon"/>
+
+            <TextView
+                android:id="@+id/tvPaymentDateHistory"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                tools:text="15 Jul, 2024"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                android:textColor="?attr/colorOnSurface"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/tvPaymentAmountHistory"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="₹500"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textStyle="bold"
+                android:textColor="@color/status_paid_green"/> <!-- Or ?attr/colorPrimary -->
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvPaymentModeHistory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="Mode: Cash"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="4dp"
+            android:layout_marginStart="36dp"
+        android:visibility="gone"
+        tools:visibility="visible"/>
+
+        <TextView
+            android:id="@+id/tvPaymentNotesHistory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="Notes: For July monthly fee."
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="2dp"
+            android:layout_marginStart="36dp"
+        android:visibility="gone"
+        tools:visibility="visible"/>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

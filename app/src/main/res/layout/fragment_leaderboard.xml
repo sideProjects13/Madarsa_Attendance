@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".LeaderboardFragment">
+
+    <!-- Filters Section - Now only contains the Year Spinner -->
+    <LinearLayout
+        android:id="@+id/filters_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Year: "
+            android:textAppearance="?attr/textAppearanceSubtitle1"/>
+
+        <Spinner
+            android:id="@+id/spinnerYearLeaderboard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:listitem="@android:layout/simple_spinner_item"/>
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerViewLeaderboard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/filters_layout"
+        android:clipToPadding="false"
+        android:padding="8dp"
+        tools:listitem="@layout/item_leaderboard_student"/>
+
+    <ProgressBar
+        android:id="@+id/progressBarLeaderboard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/tvNoDataLeaderboard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:text="No data available"
+        android:textAppearance="?attr/textAppearanceBody1"
+        android:visibility="gone"/>
+
+</RelativeLayout>

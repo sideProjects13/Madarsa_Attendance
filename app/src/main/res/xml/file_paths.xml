@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path name="external_files" path="." /> <!-- For getExternalFilesDir() -->
+    <external-cache-path name="external_cache" path="." /> <!-- For getExternalCacheDir() -->
+    <files-path name="files" path="." /> <!-- For getFilesDir() -->
+    <cache-path name="cache" path="." /> <!-- For getCacheDir() -->
+    <!-- To access public directories like Documents -->
+    <external-path name="external_documents" path="Documents/MadarsaReports/" />
+</paths>

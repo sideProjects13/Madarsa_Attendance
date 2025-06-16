@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawer_layout_teacher_options"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    tools:openDrawer="start"
+    tools:context=".TeacherOptionsActivity">
+
+    <!-- Main Content of the Activity -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/teacher_options_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="?attr/colorPrimary"
+            app:titleTextColor="?attr/colorOnPrimary"
+            app:navigationIconTint="?attr/colorOnPrimary"
+            tools:title="Teacher Dashboard" />
+        <!-- The actual navigationIcon (hamburger) will be set by ActionBarDrawerToggle -->
+
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabLayoutTeacherOptions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/colorSurface"
+            app:tabTextColor="?attr/colorOnSurfaceVariant"
+            app:tabSelectedTextColor="?attr/colorPrimary"
+            app:tabIndicatorColor="?attr/colorPrimary"
+            app:tabMode="fixed"/> <!-- Fixed for 3 tabs, adjust if more -->
+
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPagerTeacherOptions"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+
+    <!-- Navigation Drawer View -->
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/navigation_view_teacher_options"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:fitsSystemWindows="true"
+        app:headerLayout="@layout/nav_drawer_header"
+        app:menu="@menu/drawer_menu"
+        app:itemIconTint="?attr/colorPrimary"
+        app:itemTextColor="?attr/colorOnSurface"
+        app:itemShapeFillColor="@color/mono_palette_background_subtle"/> <!-- Example for selected item bg -->
+
+</androidx.drawerlayout.widget.DrawerLayout>

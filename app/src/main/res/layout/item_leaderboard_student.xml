@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    style="?attr/materialCardViewStyle"
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="6dp">
+
+<LinearLayout
+android:layout_width="match_parent"
+android:layout_height="wrap_content"
+android:orientation="vertical"
+android:padding="16dp">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
+
+    <ImageView
+        android:id="@+id/ivRankIcon"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:src="@drawable/ic_leaderboard_star"
+        app:tint="?attr/colorPrimary"
+        android:layout_marginEnd="8dp"
+        android:visibility="gone"
+        tools:visibility="visible"
+        android:contentDescription="Rank Icon"/>
+
+    <TextView
+        android:id="@+id/tvRank"
+        android:layout_width="wrap_content"
+        android:minWidth="30dp"
+        android:layout_height="wrap_content"
+        tools:text="1."
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="?attr/colorOnSurface"
+        android:textStyle="bold"/>
+
+    <TextView
+        android:id="@+id/tvStudentNameLeaderboard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        tools:text="Student Name Placeholder"
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="?attr/colorOnSurface"
+        android:layout_marginStart="12dp"/>
+
+    <TextView
+        android:id="@+id/tvAttendancePercentage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        tools:text="100.0%"
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textStyle="bold"
+        android:textColor="?attr/colorPrimary"/>
+</LinearLayout>
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:layout_marginTop="8dp"
+    android:gravity="start"
+    android:paddingStart="0dp"> <!-- If rank takes space, or adjust based on tvRank's minWidth -->
+
+    <TextView
+        android:id="@+id/tvPresentDays"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        tools:text="P: 25"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="@color/status_paid_green"
+    android:layout_marginEnd="16dp"/>
+
+    <TextView
+        android:id="@+id/tvAbsentDays"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        tools:text="A: 1"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="@color/status_unpaid_red"
+    android:layout_marginEnd="16dp"/>
+
+    <TextView
+        android:id="@+id/tvTotalMarkedDays"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        tools:text="Total: 26"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="?attr/colorOnSurfaceVariant"/>
+</LinearLayout>
+</LinearLayout>
+    </com.google.android.material.card.MaterialCardView>

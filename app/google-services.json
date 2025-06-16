@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1029056742421",
+    "project_id": "madarsaattendance",
+    "storage_bucket": "madarsaattendance.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1029056742421:android:533b0d01ad7bb6c8c2ba1c",
+        "android_client_info": {
+          "package_name": "com.example.madarsa_attendance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCW_68TkFPrzCnYDGkD4GTRdx7-O7-u6lc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

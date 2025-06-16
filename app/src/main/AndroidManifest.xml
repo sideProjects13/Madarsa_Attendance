@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <application
+        android:name=".MyApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@drawable/logo"
+        android:label="MADARSA AAISHA SIDDIQA TAALIMUL QURAN SARNI MASJID"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
+        tools:targetApi="35">
+        <activity
+            android:name=".ReportCardGenerator"
+            android:exported="false" />
+        <activity
+            android:name=".ManageMarks"
+            android:exported="false" /> <!-- NEW LAUNCHER ACTIVITY -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity> <!-- OLD ACTIVITIES (no longer directly launched from UI) -->
+        <activity
+            android:name=".SplashActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AddEditSubjectActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManageSubjectsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".PdfGenerator"
+            android:exported="false" />
+        <activity
+            android:name=".StudentMonthlyAttendanceActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SelectClassActivity"
+            android:exported="false" />
+        <activity
+            android:name=".RegisterActivity"
+            android:exported="false" />
+        <!--
+ NOTE: You had two declarations for ManageTeachersActivity, I am keeping one.
+             Since it's now a fragment, you might not even need this entry anymore
+             unless another activity explicitly starts it.
+        -->
+        <activity
+            android:name=".ManageTeachersActivity"
+            android:exported="false" />
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".EditTeacherActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AddTeacherActivity"
+            android:exported="false" />
+        <activity
+            android:name=".TeacherOptionsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AddStudentActivity"
+            android:exported="false" />
+        <activity
+            android:name=".EditStudentActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ClassPaymentSummaryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudentPaymentHistoryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ClassLeaderboardActivity"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+</manifest>

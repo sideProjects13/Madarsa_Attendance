@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/white"
+    tools:context=".SelectClassActivity">
+
+<com.google.android.material.appbar.MaterialToolbar
+android:id="@+id/select_class_toolbar"
+android:layout_width="match_parent"
+android:layout_height="?attr/actionBarSize"
+android:background="?attr/colorPrimary"
+    app:title="Select Class"
+    app:titleCentered="true"
+    app:titleTextColor="?attr/colorOnPrimary" />
+
+<TextView
+android:layout_width="match_parent"
+android:layout_height="wrap_content"
+android:textAppearance="?attr/textAppearanceTitleMedium"
+    android:textColor="?attr/colorOnBackground"
+    android:paddingHorizontal="16dp"
+    android:paddingTop="5dp"
+    android:paddingBottom="8dp"/>
+
+<FrameLayout
+android:layout_width="match_parent"
+android:layout_height="0dp"
+android:layout_weight="1">
+
+<androidx.recyclerview.widget.RecyclerView
+    android:id="@+id/recyclerViewTeachers"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingTop="8dp"
+    android:paddingHorizontal="8dp"
+    android:clipToPadding="false"
+    tools:listitem="@layout/item_teacher_select"/>
+
+<TextView
+    android:id="@+id/tvNoTeachers"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="No classes available. Please contact admin."
+    android:textAppearance="?attr/textAppearanceBodyLarge"
+android:textColor="?attr/colorOnSurfaceVariant"
+android:layout_gravity="center"
+android:visibility="gone"
+android:padding="32dp"
+android:textAlignment="center"/>
+
+<ProgressBar
+    android:id="@+id/progressBarSelectClass"
+    style="?android:attr/progressBarStyle"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center"
+    android:indeterminateTint="?attr/colorPrimary"
+android:visibility="gone"/>
+</FrameLayout>
+    </LinearLayout>

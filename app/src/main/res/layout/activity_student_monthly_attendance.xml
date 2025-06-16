@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface"
+    tools:context=".StudentMonthlyAttendanceActivity">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/student_monthly_attendance_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:titleTextColor="?attr/colorOnPrimary"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:navigationIconTint="?attr/colorOnPrimary"
+        tools:title="Monthly Attendance" />
+
+    <TextView
+        android:id="@+id/tvStudentNameMonthlyHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        tools:text="Student: Student Name Placeholder"
+        android:textAppearance="?attr/textAppearanceHeadlineSmall"
+        android:textColor="?attr/colorOnSurface"
+        android:padding="16dp"/>
+
+    <TextView
+        android:id="@+id/tvMonthYearHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        tools:text="Record for: May 2024"
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="16dp"/>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewDailyAttendance"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="8dp"
+            tools:listitem="@layout/item_daily_attendance_record"/>
+
+        <TextView
+            android:id="@+id/tvNoMonthlyAttendanceData"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No attendance data found for this month."
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:padding="32dp"
+            android:textAlignment="center"/>
+
+        <ProgressBar
+            android:id="@+id/progressBarMonthlyAttendance"
+            style="?android:attr/progressBarStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminateTint="?attr/colorPrimary"
+            android:visibility="gone"/>
+    </FrameLayout>
+</LinearLayout>

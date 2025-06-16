@@ -1,0 +1,6 @@
+<!-- app/res/values/attrs.xml -->
+<resources>
+    <attr name="datePickerDialogTheme" format="reference" />
+    <!-- You might also have alertDialogTheme here if you define it similarly -->
+    <!-- <attr name="alertDialogTheme" format="reference" /> -->
+</resources>

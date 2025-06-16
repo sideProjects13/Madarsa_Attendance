@@ -1,0 +1,8 @@
+<!-- In app/res/values/themes.xml -->
+<resources>
+    <!-- ... your other theme definitions (Base.Theme.Madarsa_Attendance, Theme.App.Starting, etc.) ... -->
+
+
+
+    <!-- ... other styles ... -->
+</resources>

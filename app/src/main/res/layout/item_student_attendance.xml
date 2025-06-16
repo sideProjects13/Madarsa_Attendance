@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    style="@style/Widget.App.Card.PureMonochrome"
+    android:layout_marginStart="8dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginTop="6dp"
+    android:layout_marginBottom="6dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:minHeight="72dp">
+
+        <ImageView
+            android:id="@+id/ivStudentIconAttendance"
+            android:layout_width="55dp"
+            android:layout_height="55dp"
+            app:srcCompat="@drawable/student"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:contentDescription="@string/student_icon_desc" />
+
+        <TextView
+            android:id="@+id/tvStudentNameAttendanceItem"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:textAppearance="@style/TextAppearance.App.PureMonochrome.TitleMedium"
+            android:textColor="?attr/colorOnSurface"
+            android:maxLines="2"
+            android:ellipsize="end"
+            app:layout_constraintStart_toEndOf="@id/ivStudentIconAttendance"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/toggleGroupAttendanceStatus"
+            app:layout_constraintBottom_toTopOf="@+id/tvStudentRollNumber"
+            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintVertical_chainStyle="packed"
+            tools:text="Muhammad Abdullah ibn Umar al-Khattab" />
+
+        <TextView
+            android:id="@+id/tvStudentRollNumber"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="2dp"
+            android:textAppearance="@style/TextAppearance.App.PureMonochrome.BodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            app:layout_constraintStart_toEndOf="@id/ivStudentIconAttendance"
+            app:layout_constraintTop_toBottomOf="@id/tvStudentNameAttendanceItem"
+            app:layout_constraintEnd_toStartOf="@+id/toggleGroupAttendanceStatus"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintHorizontal_bias="0.0"
+            tools:text="Roll No: 101" />
+
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/toggleGroupAttendanceStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.App.Button.Toggle"
+            app:singleSelection="true"
+            app:selectionRequired="true"
+            android:layout_marginStart="8dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTogglePresent"
+                style="@style/Widget.App.Button.Toggle"
+                android:layout_width="wrap_content"
+                app:cornerRadius="10dp"
+                android:layout_height="wrap_content"
+                android:minWidth="80dp"
+                android:text="@string/status_present_short" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToggleAbsent"
+                app:cornerRadius="10dp"
+                style="@style/Widget.App.Button.Toggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="80dp"
+                android:text="@string/status_absent_short" />
+
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</com.google.android.material.card.MaterialCardView>

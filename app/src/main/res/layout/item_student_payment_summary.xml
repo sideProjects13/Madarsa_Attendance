@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    style="?attr/materialCardViewStyle"
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="6dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/ivStudentIconPaymentSummary"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/student"
+
+                android:layout_marginEnd="12dp"
+                android:contentDescription="Student Icon"/>
+
+            <TextView
+                android:id="@+id/tvStudentNamePaymentSummary"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                tools:text="Student Name Placeholder"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textColor="?attr/colorOnSurface"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/tvTotalPaidThisMonth"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="₹1500"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textStyle="bold"
+                android:textColor="?attr/colorPrimary"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvPaymentCountThisMonth"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="1 payment"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="4dp"
+            android:layout_marginStart="44dp"/> <!-- Align with student name after icon -->
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
