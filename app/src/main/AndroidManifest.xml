@@ -26,9 +26,6 @@
             android:name=".InactiveStudentsActivity"
             android:exported="false" />
         <activity
-            android:name=".ReportCardGenerator"
-            android:exported="false" />
-        <activity
             android:name=".ManageMarks"
             android:exported="false" /> <!-- NEW LAUNCHER ACTIVITY -->
         <activity
@@ -50,16 +47,7 @@
             android:name=".ManageSubjectsActivity"
             android:exported="false" />
         <activity
-            android:name=".PdfGenerator"
-            android:exported="false" />
-        <activity
             android:name=".StudentMonthlyAttendanceActivity"
-            android:exported="false" />
-        <activity
-            android:name=".SelectClassActivity"
-            android:exported="false" />
-        <activity
-            android:name=".RegisterActivity"
             android:exported="false" />
         <!--
  NOTE: You had two declarations for ManageTeachersActivity, I am keeping one.
