@@ -8,7 +8,7 @@ name: Build and Distribute to Firebase
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 jobs:
