@@ -4,98 +4,132 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?android:colorBackground"
     tools:context=".DashboardFragment">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
-        <!-- Summary Cards -->
-        <LinearLayout
+        <!-- Shimmer Layout for Loading State -->
+        <com.facebook.shimmer.ShimmerFrameLayout
+            android:id="@+id/shimmer_view_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:baselineAligned="false">
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                app:cardElevation="4dp"
-                app:cardUseCompatPadding="true">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Total Students"
-                        android:textAppearance="?attr/textAppearanceBody2"/>
-                    <TextView
-                        android:id="@+id/tvTotalStudentsCount"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="..."
-                        android:textAppearance="?attr/textAppearanceHeadline5"
-                        android:textStyle="bold"/>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                app:cardElevation="4dp"
-                app:cardUseCompatPadding="true">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Total Teachers"
-                        android:textAppearance="?attr/textAppearanceBody2"/>
-                    <TextView
-                        android:id="@+id/tvTotalTeachersCount"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="..."
-                        android:textAppearance="?attr/textAppearanceHeadline5"
-                        android:textStyle="bold"/>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-        </LinearLayout>
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardElevation="4dp"
-            app:cardUseCompatPadding="true">
+            android:visibility="visible">
+            <!-- This is a dummy layout that will be shown during loading -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Fees Collected This Month"
-                    android:textAppearance="?attr/textAppearanceBody2"/>
-                <TextView
-                    android:id="@+id/tvFeesCollectedMonth"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="..."
-                    android:textAppearance="?attr/textAppearanceHeadline5"
-                    android:textStyle="bold"/>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+                android:orientation="vertical">
 
+                <include layout="@layout/placeholder_dashboard" />
+            </LinearLayout>
+        </com.facebook.shimmer.ShimmerFrameLayout>
+
+        <!-- Main Content Layout (Hidden until data loads) -->
+        <LinearLayout
+            android:id="@+id/main_content_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <!-- Summary Cards -->
+            <GridLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="2"
+                android:rowCount="2"
+                android:useDefaultMargins="true">
+
+                <!-- Total Students Card -->
+                <com.google.android.material.card.MaterialCardView style="@style/DashboardCard">
+                    <LinearLayout style="@style/DashboardCardContent">
+                        <TextView style="@style/DashboardCardTitle" android:text="Total Students" />
+                        <TextView android:id="@+id/tvTotalStudentsCount" style="@style/DashboardCardValue" tools:text="152" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Total Teachers Card -->
+                <com.google.android.material.card.MaterialCardView style="@style/DashboardCard">
+                    <LinearLayout style="@style/DashboardCardContent">
+                        <TextView style="@style/DashboardCardTitle" android:text="Total Teachers" />
+                        <TextView android:id="@+id/tvTotalTeachersCount" style="@style/DashboardCardValue" tools:text="8" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Fees This Month Card -->
+                <com.google.android.material.card.MaterialCardView style="@style/DashboardCard">
+                    <LinearLayout style="@style/DashboardCardContent">
+                        <TextView style="@style/DashboardCardTitle" android:text="Fees This Month" />
+                        <TextView android:id="@+id/tvFeesCollectedMonth" style="@style/DashboardCardValue" tools:text="₹45,000" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Fees This Year Card -->
+                <com.google.android.material.card.MaterialCardView style="@style/DashboardCard">
+                    <LinearLayout style="@style/DashboardCardContent">
+                        <TextView style="@style/DashboardCardTitle" android:text="Fees This Year" />
+                        <TextView android:id="@+id/tvFeesCollectedYear" style="@style/DashboardCardValue" tools:text="₹3,15,000" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </GridLayout>
+
+            <!-- Recently Joined Students -->
+            <TextView style="@style/DashboardSectionHeader" android:text="Recently Joined" />
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_recently_joined"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:clipToPadding="false"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_dashboard_student"
+                tools:layout_height="150dp"/>
+
+            <!-- Absent Today -->
+            <TextView style="@style/DashboardSectionHeader" android:text="Absent Today" />
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_absent_today"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:clipToPadding="false"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                tools:listitem="@layout/item_dashboard_student"
+                tools:layout_height="150dp"/>
+            <TextView
+                android:id="@+id/tv_no_absentees"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="All students are present today!"
+                android:textAlignment="center"
+                android:padding="16dp"
+                android:visibility="gone"/>
+
+            <!-- Students per Class -->
+            <TextView style="@style/DashboardSectionHeader" android:text="Students per Class" />
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="300dp"
+                app:cardElevation="2dp"
+                app:cardUseCompatPadding="true"
+                app:cardCornerRadius="12dp">
+
+                <com.github.mikephil.charting.charts.BarChart
+                    android:id="@+id/bar_chart_class_distribution"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:padding="12dp" />
+
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

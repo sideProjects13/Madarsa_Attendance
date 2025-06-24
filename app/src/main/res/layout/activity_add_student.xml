@@ -130,6 +130,7 @@
 
             <!-- NEWLY ADDED FIELDS -->
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilRegNo"
                 style="?attr/textInputOutlinedStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

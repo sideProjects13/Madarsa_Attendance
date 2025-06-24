@@ -166,6 +166,13 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
                 }
                 startActivity(intent)
             }
+            R.id.nav_inactive_students -> {
+                val intent = Intent(this, InactiveStudentsActivity::class.java).apply {
+                    putExtra("TEACHER_ID", currentTeacherId)
+                    putExtra("TEACHER_NAME", currentTeacherName)
+                }
+                startActivity(intent)
+            }
             R.id.nav_profile -> {
                 val profileIntent = Intent(this, EditTeacherActivity::class.java).apply {
                     putExtra("TEACHER_ID", currentTeacherId)

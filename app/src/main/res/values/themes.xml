@@ -209,4 +209,61 @@
         <item name="android:textSize">16sp</item>
     </style>
 
+
+    <!-- Dashboard Styles -->
+    <style name="DashboardCard">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_columnWeight">1</item>
+        <item name="android:layout_gravity">fill_horizontal</item>
+        <item name="cardCornerRadius">12dp</item>
+        <item name="cardElevation">2dp</item>
+    </style>
+    <style name="DashboardCardContent">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:padding">16dp</item>
+    </style>
+    <style name="DashboardCardTitle" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
+    </style>
+    <style name="DashboardCardValue" parent="TextAppearance.MaterialComponents.Headline5">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:layout_marginTop">4dp</item>
+    </style>
+    <style name="DashboardSectionHeader" parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">24dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
+    </style>
+
+    <!-- Placeholder Styles for Shimmer -->
+    <color name="placeholder_bg">#dddddd</color>
+    <style name="PlaceholderCard">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">100dp</item>
+        <item name="android:layout_columnWeight">1</item>
+        <item name="android:layout_gravity">fill_horizontal</item>
+        <item name="android:background">@color/placeholder_bg</item>
+    </style>
+    <style name="PlaceholderHeader">
+        <item name="android:layout_width">200dp</item>
+        <item name="android:layout_height">24dp</item>
+        <item name="android:layout_marginTop">24dp</item>
+        <item name="android:background">@color/placeholder_bg</item>
+    </style>
+    <style name="PlaceholderItem">
+        <item name="android:layout_width">120dp</item>
+        <item name="android:layout_height">130dp</item>
+        <item name="android:layout_margin">8dp</item>
+        <item name="android:background">@color/placeholder_bg</item>
+    </style>
+
+
 </resources>

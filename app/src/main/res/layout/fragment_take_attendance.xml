@@ -1,135 +1,148 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
     tools:context=".TakeAttendanceFragment">
 
-    <!-- The AppBarLayout and Toolbar are now in TeacherOptionsActivity -->
-    <!-- The app:layout_behavior from the original ConstraintLayout is not needed
-         if this ConstraintLayout is the root of the fragment. -->
-
-    <LinearLayout
-        android:id="@+id/header_info_container_frag_att"
-    android:layout_width="0dp"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp"
-    android:paddingTop="16dp"
-    android:paddingBottom="12dp"
-    android:background="?attr/colorSurface"
-    app:layout_constraintTop_toTopOf="parent"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent">
-
-    <TextView
-        android:id="@+id/tvClassNameAttendanceFrag"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:textSize="18sp" android:visibility="gone"
-    tools:text="Class: Hifz - Section A"
-    android:textAppearance="?attr/textAppearanceHeadlineSmall"
-    android:textColor="?attr/colorOnSurface"
-    android:layout_marginBottom="4dp"/>
-
-    <!-- LinearLayout to hold Date TextView and Change Date Button -->
-    <LinearLayout
+    <!-- The AppBarLayout remains unchanged -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:background="?attr/colorSurface"
+        app:elevation="2dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingEnd="8dp"
+            android:background="?attr/colorSurface">
+
+            <TextView
+                android:id="@+id/tvClassNameAttendance"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:padding="16dp"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="Class: Hifz - Section A" />
+
+            <ImageButton
+                android:id="@+id/btnChangeDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Change Date"
+                android:padding="8dp"
+                android:src="@drawable/ic_calendar"
+                app:tint="?attr/colorPrimary" />
+
+        </LinearLayout>
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <TextView
-            android:id="@+id/tvAttendanceDateFrag"
-        android:layout_width="0dp"
-        android:layout_weight="1"
-        android:layout_height="wrap_content"
-        tools:text="Date: 2024-05-24"
-        android:textAppearance="?attr/textAppearanceBodyLarge"
-        android:textColor="?attr/colorOnSurfaceVariant"/>
+            android:id="@+id/tvAttendanceDate"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:textAppearance="?attr/textAppearanceBodyLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="Date: 2024-05-24" />
 
-        <ImageButton
-            android:id="@+id/btnChangeDateAttendanceFrag"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:src="@drawable/ic_calendar"
-        app:tint="?attr/colorPrimary"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Change Attendance Date"
-        android:layout_marginStart="8dp"/>
-    </LinearLayout>
-</LinearLayout>
+        <View
+            android:id="@+id/header_divider"
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:background="?attr/colorOutline"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tvAttendanceDate" />
 
-<View
-android:id="@+id/header_divider_frag_att"
-    android:layout_width="0dp"
-    android:layout_height="1dp"
-    android:background="?attr/colorOutline"
-    app:layout_constraintTop_toBottomOf="@id/header_info_container_frag_att"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent" />
+        <!-- ============================================================= -->
+        <!-- START: SWIPE REFRESH LAYOUT                                   -->
+        <!-- ============================================================= -->
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh_layout_attendance"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toTopOf="@+id/btnSaveAttendance"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/header_divider">
 
-<androidx.recyclerview.widget.RecyclerView
-android:id="@+id/recyclerViewStudentsAttendanceFrag"
-    android:layout_width="0dp"
-    android:layout_height="0dp"
-    android:paddingStart="8dp"
-    android:paddingEnd="8dp"
-    android:paddingTop="8dp"
-    android:paddingBottom="80dp"
-    android:clipToPadding="false"
-    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-    app:layout_constraintTop_toBottomOf="@id/header_divider_frag_att"
-    app:layout_constraintBottom_toBottomOf="parent"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"
-    tools:listitem="@layout/item_student_attendance"/>
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
 
-<TextView
-android:id="@+id/tvNoStudentsForAttendanceFrag"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:text="@string/no_students_in_class"
-    android:textAppearance="?attr/textAppearanceBodyLarge"
-    android:textColor="?attr/colorOnSurfaceVariant"
-    android:visibility="gone"
-    android:padding="32dp"
-    android:gravity="center"
-    app:layout_constraintTop_toBottomOf="@id/header_divider_frag_att"
-    app:layout_constraintBottom_toTopOf="@+id/btnSaveAttendanceFrag"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"
-    tools:visibility="gone"/>
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerViewStudentsAttendance"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                    tools:listitem="@layout/item_student_attendance" />
 
-<ProgressBar
-android:id="@+id/progressBarTakeAttendanceFrag"
-    style="?android:attr/progressBarStyle"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:indeterminateTint="?attr/colorPrimary"
-    android:visibility="gone"
-    app:layout_constraintTop_toBottomOf="@id/header_divider_frag_att"
-    app:layout_constraintBottom_toTopOf="@+id/btnSaveAttendanceFrag"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"
-    tools:visibility="visible"/>
+                <TextView
+                    android:id="@+id/tvNoStudentsForAttendance"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:padding="32dp"
+                    android:text="@string/no_students_in_class"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:visibility="gone"
+                    tools:visibility="gone" />
 
-<com.google.android.material.button.MaterialButton
-android:id="@+id/btnSaveAttendanceFrag"
-    style="?attr/materialButtonStyle"
-    android:layout_width="0dp"
-    android:layout_height="wrap_content"
-    android:text="@string/save_attendance"
-    android:layout_marginStart="16dp"
-    android:layout_marginEnd="16dp"
-    android:layout_marginBottom="16dp"
-    app:iconGravity="textStart"
-    app:layout_constraintBottom_toBottomOf="parent"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"/>
+                <ProgressBar
+                    android:id="@+id/progressBarTakeAttendance"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:indeterminateTint="?attr/colorPrimary"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+            </FrameLayout>
+
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        <!-- ============================================================= -->
+        <!-- END: SWIPE REFRESH LAYOUT                                     -->
+        <!-- ============================================================= -->
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveAttendance"
+
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="16dp"
+            android:paddingVertical="12dp"
+            android:text="@string/save_attendance"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

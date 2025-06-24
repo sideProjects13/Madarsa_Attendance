@@ -23,6 +23,9 @@
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
         <activity
+            android:name=".InactiveStudentsActivity"
+            android:exported="false" />
+        <activity
             android:name=".ReportCardGenerator"
             android:exported="false" />
         <activity

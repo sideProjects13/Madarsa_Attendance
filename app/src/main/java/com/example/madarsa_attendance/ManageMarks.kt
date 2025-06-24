@@ -116,7 +116,7 @@ class ManageMarks : AppCompatActivity() {
         val reportData = ReportCardGenerator.ReportData(studentMarks.student, toolbar.title.toString(), studentMarks.marks, allSubjects)
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
-            val result = reportCardGenerator.generateSingleReport(reportData, "Madarsa Aaisha Siddiqa talimul quran", "Your Madarsa Address, City, State")
+            val result = reportCardGenerator.generateSingleReport(reportData, "Madarsa Aaisha Siddiqa talimul quran", "Sarni Society, Ahmedabad, Gujarat")
             progressBar.visibility = View.GONE
             Toast.makeText(this@ManageMarks, result ?: "Failed to generate PDF.", Toast.LENGTH_LONG).show()
         }

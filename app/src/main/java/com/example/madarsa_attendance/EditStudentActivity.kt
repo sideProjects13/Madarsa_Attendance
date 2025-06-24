@@ -70,8 +70,8 @@ class EditStudentActivity : AppCompatActivity() {
     private lateinit var db: FirebaseFirestore
     private var studentId: String? = null
     private var currentTeacherNameFromIntent: String? = null
-    private var imageUri: Uri? = null
-    private var existingProfileImageUrl: String? = null
+    private var imageUri: Uri? = null // This will hold the URI of a NEW image if selected
+    private var existingProfileImageUrl: String? = null // This holds the student's current image URL
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -164,8 +164,11 @@ class EditStudentActivity : AppCompatActivity() {
                     }
 
                     existingProfileImageUrl = student.profileImageUrl
+                    // Load existing image if available
                     if (!existingProfileImageUrl.isNullOrEmpty()) {
-                        Glide.with(this).load(existingProfileImageUrl).circleCrop().into(ivProfileImage)
+                        Glide.with(this).load(existingProfileImageUrl).circleCrop().placeholder(R.drawable.student).into(ivProfileImage)
+                    } else {
+                        ivProfileImage.setImageResource(R.drawable.student)
                     }
                     tvCurrentTeacher.text = student.teacherName ?: currentTeacherNameFromIntent ?: "N/A"
                 }
@@ -179,11 +182,20 @@ class EditStudentActivity : AppCompatActivity() {
     }
 
     private fun validateAndUpdateStudentDetails() {
-        // Validation logic here (similar to AddStudentActivity)
+        // Simple validation, can be expanded
+        if (etStudentName.text.toString().trim().isEmpty()) {
+            tilStudentName.error = "Student name cannot be empty"
+            return
+        } else {
+            tilStudentName.error = null
+        }
+
         setInputsEnabled(false)
         if (imageUri != null) {
+            // A new image was selected, so upload it first
             uploadImageAndUpdateStudent()
         } else {
+            // No new image selected, update Firestore with existing image URL
             updateStudentInFirestore(existingProfileImageUrl)
         }
     }
@@ -192,10 +204,13 @@ class EditStudentActivity : AppCompatActivity() {
         MediaManager.get().upload(imageUri).unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT)
             .option("folder", "student_profiles").callback(object : UploadCallback {
                 override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
-                    updateStudentInFirestore(resultData?.get("secure_url") as? String)
+                    // Image uploaded successfully, get the new URL
+                    val newImageUrl = resultData?.get("secure_url") as? String
+                    updateStudentInFirestore(newImageUrl)
                 }
                 override fun onError(requestId: String?, error: ErrorInfo?) {
                     Toast.makeText(this@EditStudentActivity, "Image upload failed. Updating details without image change.", Toast.LENGTH_LONG).show()
+                    // If upload fails, proceed with the update using the old image URL
                     updateStudentInFirestore(existingProfileImageUrl)
                 }
                 override fun onStart(requestId: String?) {}
@@ -204,15 +219,17 @@ class EditStudentActivity : AppCompatActivity() {
             }).dispatch()
     }
 
+    // --- FUNCTION CORRECTED ---
     private fun updateStudentInFirestore(imageUrl: String?) {
         val selectedGenderId = rgGender.checkedRadioButtonId
         val gender = if (selectedGenderId != -1) findViewById<RadioButton>(selectedGenderId).text.toString() else null
 
-        val studentUpdates = mapOf(
+        // Use a mutable map to build the update data.
+        // This allows us to conditionally add the image URL.
+        val studentUpdates = mutableMapOf<String, Any?>(
             "studentName" to etStudentName.text.toString().trim(),
             "parentName" to etParentName.text.toString().trim(),
             "parentMobileNumber" to etParentMobile.text.toString().trim(),
-            "profileImageUrl" to (imageUrl ?: ""),
             "regNo" to etRegNo.text.toString().trim(),
             "gender" to gender,
             "birthDate" to etBirthDate.text.toString().trim().ifEmpty { null },
@@ -220,31 +237,65 @@ class EditStudentActivity : AppCompatActivity() {
             "lastUpdatedAt" to FieldValue.serverTimestamp()
         )
 
+        // **THE FIX**: Only add the profileImageUrl to the map if it's not null.
+        // This prevents overwriting an existing URL with null or an empty string.
+        if (imageUrl != null) {
+            studentUpdates["profileImageUrl"] = imageUrl
+        }
+
         db.collection("students").document(studentId!!)
-            .set(studentUpdates, SetOptions.merge())
+            .set(studentUpdates, SetOptions.merge()) // Use merge to only update the specified fields
             .addOnSuccessListener {
-                Toast.makeText(this, "Details updated.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Details updated successfully.", Toast.LENGTH_SHORT).show()
                 setResult(Activity.RESULT_OK)
                 finish()
             }.addOnFailureListener { e ->
                 setInputsEnabled(true)
-                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Error updating details: ${e.message}", Toast.LENGTH_LONG).show()
             }
     }
 
     private fun setInputsEnabled(enabled: Boolean, isInitialLoad: Boolean = false) {
-        // ... (this function can be copied from the previous response)
+        if (isInitialLoad) {
+            progressBar.visibility = View.VISIBLE
+        } else {
+            progressBar.visibility = if (enabled) View.GONE else View.VISIBLE
+        }
+        btnSaveChanges.isEnabled = enabled
+        btnSelectImage.isEnabled = enabled
+        etStudentName.isEnabled = enabled
+        etParentName.isEnabled = enabled
+        etParentMobile.isEnabled = enabled
+        etRegNo.isEnabled = enabled
+        rgGender.isEnabled = enabled
+        etBirthDate.isEnabled = enabled
+        etAdmissionDate.isEnabled = enabled
     }
 
     private fun checkAndRequestPermissions() {
-        // ... (this function can be copied from the previous response)
+        val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(permission), PERMISSION_REQUEST_CODE_EDIT_STUDENT)
+        } else {
+            openGallery()
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        // ... (this function can be copied from the previous response)
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE_EDIT_STUDENT && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            openGallery()
+        } else {
+            Toast.makeText(this, "Permission to access gallery denied.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun openGallery() {
-        // ... (this function can be copied from the previous response)
+        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        imagePickerLauncher.launch(intent)
     }
 }

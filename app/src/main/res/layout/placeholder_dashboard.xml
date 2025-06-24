@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Dummy summary cards -->
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:columnCount="2"
+        android:useDefaultMargins="true">
+        <View style="@style/PlaceholderCard" />
+        <View style="@style/PlaceholderCard" />
+        <View style="@style/PlaceholderCard" />
+        <View style="@style/PlaceholderCard" />
+    </GridLayout>
+
+    <!-- Dummy section header -->
+    <View style="@style/PlaceholderHeader" />
+
+    <!-- Dummy horizontal list -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <View style="@style/PlaceholderItem" />
+        <View style="@style/PlaceholderItem" />
+        <View style="@style/PlaceholderItem" />
+    </LinearLayout>
+
+    <!-- Dummy section header -->
+    <View style="@style/PlaceholderHeader" />
+
+    <!-- Dummy Bar Chart Area -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_marginTop="16dp"
+        android:background="@color/placeholder_bg" />
+
+</LinearLayout>

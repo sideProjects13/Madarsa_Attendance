@@ -25,7 +25,8 @@ data class StudentDetailsItem(
     val regNo: String? = null,
     val gender: String? = null,
     val admissionDate: String? = null,
-    val birthDate: String? = null
+    val birthDate: String? = null,
+    val isActive: Boolean = true
 )
 
 data class StudentAttendanceItem(
@@ -102,4 +103,11 @@ data class Exam(
 data class StudentMarks(
 val student: StudentDetailsItem, // Corrected from `Student` to `StudentDetailsItem`
 var marks: MutableMap<String, String> = mutableMapOf()
+)
+
+data class DashboardStudentItem(
+    val id: String,
+    val name: String,
+    val imageUrl: String?,
+    val subtitle: String? = null // Can be used for teacher name, admission date, etc.
 )

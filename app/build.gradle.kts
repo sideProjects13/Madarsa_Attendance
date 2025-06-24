@@ -83,7 +83,8 @@ dependencies {
     implementation("com.cloudinary:cloudinary-android:2.4.0") // Check for the latest version
     // You'll also need an HTTP client, OkHttp is common:
     implementation ("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("androidx.activity:activity:1.10.1") // Or your
+    implementation("androidx.activity:activity:1.10.1")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0") // Or your
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5") // Updated
@@ -92,4 +93,14 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest") // Check latest version
+
+
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+
+    // For a sleek loading animation (Shimmer effect)
+    implementation("com.facebook.shimmer:shimmer:0.5.0")
+
+    // Make sure you have these for ViewModel and LiveData
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0") // Use the latest version
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
 }

@@ -20,4 +20,5 @@
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="nav_open">Open navigation drawer</string>
     <string name="nav_close">Close navigation drawer</string>
+    <string name="student_profile_image">Student profile image</string>
 </resources>
