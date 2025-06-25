@@ -27,42 +27,45 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      # 4. Decodes the keystore from the correct secret
+      # 4. Decodes the keystore. This step only runs if the secret exists.
       - name: Decode Keystore
         id: decode_keystore
+        # NOTE: The 'if' expression here does NOT use ${{...}}
+        if: secrets.RELEASE_KEYSTORE_BASE64 != ''
         run: |
           keystore_path="${{ runner.temp }}/keystore.jks"
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > $keystore_path
           echo "keystore_path=$keystore_path" >> $GITHUB_OUTPUT
-        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
-      # 5. Builds a SIGNED release APK
+      # 5. Builds a SIGNED release APK.
+      # This step only runs if the 'Decode Keystore' step was successful.
       - name: Build with Gradle
+        # === NEW, MORE ROBUST CONDITION ===
+        if: steps.decode_keystore.outcome == 'success'
         run: ./gradlew assembleRelease
         env:
           RELEASE_STORE_FILE: ${{ steps.decode_keystore.outputs.keystore_path }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
-      # 6. Authenticates with Google Cloud
+      # 6. Authenticates with Google Cloud.
+      # This step also only runs if the keystore was decoded successfully.
       - name: Authenticate with Google Cloud
+        # === NEW, MORE ROBUST CONDITION ===
+        if: steps.decode_keystore.outcome == 'success'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
-        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
-      # 7. Uploads the signed APK to Firebase App Distribution
+      # 7. Uploads the signed APK to Firebase App Distribution.
+      # This final step also depends on the keystore step's success.
       - name: Upload artifact to Firebase App Distribution
+        # === NEW, MORE ROBUST CONDITION ===
+        if: steps.decode_keystore.outcome == 'success'
         run: |
           npm install -g firebase-tools
           firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes "Build from commit ${{ github.sha }}" \
             --groups "qa-testers"
-        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
