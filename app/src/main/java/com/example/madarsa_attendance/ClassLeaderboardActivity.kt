@@ -1,15 +1,14 @@
 package com.example.madarsa_attendance // <<< YOUR PACKAGE NAME
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.widget.AdapterView
-import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
@@ -25,8 +24,9 @@ class ClassLeaderboardActivity : AppCompatActivity() {
     }
 
     private lateinit var toolbar: MaterialToolbar
-    private lateinit var spinnerMonth: Spinner
-    private lateinit var spinnerYear: Spinner
+    // CHANGED: From Spinner to AutoCompleteTextView
+    private lateinit var spinnerMonth: AutoCompleteTextView
+    private lateinit var spinnerYear: AutoCompleteTextView
     private lateinit var recyclerViewLeaderboard: RecyclerView
     private lateinit var leaderboardAdapter: LeaderboardAdapter
     private lateinit var progressBar: ProgressBar
@@ -40,10 +40,10 @@ class ClassLeaderboardActivity : AppCompatActivity() {
 
     private var selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR)
     private var selectedMonth: Int = Calendar.getInstance().get(Calendar.MONTH) // 0-indexed
-    private var initialSpinnerSetupDone = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Make sure your layout file name is correct here
         setContentView(R.layout.activity_class_leaderboard_with_filters)
 
         db = FirebaseFirestore.getInstance()
@@ -73,51 +73,44 @@ class ClassLeaderboardActivity : AppCompatActivity() {
     }
 
     private fun setupSpinners() {
-        initialSpinnerSetupDone = false
-        val staticSpinnerTextColor = ContextCompat.getColor(this, R.color.mono_palette_black)
-
+        // Setup Month Spinner
         val months = SimpleDateFormat("MMMM", Locale.getDefault()).let { sdf ->
             (0..11).map {
                 val cal = Calendar.getInstance(); cal.set(Calendar.MONTH, it); sdf.format(cal.time)
             }
         }
-        val monthAdapter = ColorableSpinnerAdapter(this, months, staticSpinnerTextColor)
-        spinnerMonth.adapter = monthAdapter
-        spinnerMonth.setSelection(selectedMonth, false)
+        val monthAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, months)
+        spinnerMonth.setAdapter(monthAdapter)
+        // Set initial text without triggering listener
+        spinnerMonth.setText(months[selectedMonth], false)
 
-        spinnerMonth.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (!initialSpinnerSetupDone) return
-                if (selectedMonth != position) {
-                    selectedMonth = position
-                    loadLeaderboardData()
-                }
+        // CHANGED: Use setOnItemClickListener for AutoCompleteTextView
+        spinnerMonth.setOnItemClickListener { _, _, position, _ ->
+            if (selectedMonth != position) {
+                selectedMonth = position
+                loadLeaderboardData()
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
+        // Setup Year Spinner
         val currentYearValue = Calendar.getInstance().get(Calendar.YEAR)
         val years = (currentYearValue - 5..currentYearValue + 1).map { it.toString() }.reversed()
-        val yearAdapter = ColorableSpinnerAdapter(this, years, staticSpinnerTextColor)
-        spinnerYear.adapter = yearAdapter
-        spinnerYear.setSelection(years.indexOf(selectedYear.toString()), false)
+        val yearAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, years)
+        spinnerYear.setAdapter(yearAdapter)
+        // Set initial text without triggering listener
+        spinnerYear.setText(selectedYear.toString(), false)
 
-        spinnerYear.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (!initialSpinnerSetupDone) return
-                val year = years[position].toInt()
-                if (selectedYear != year) {
-                    selectedYear = year
-                    loadLeaderboardData()
-                }
+        // CHANGED: Use setOnItemClickListener for AutoCompleteTextView
+        spinnerYear.setOnItemClickListener { _, _, position, _ ->
+            val year = years[position].toInt()
+            if (selectedYear != year) {
+                selectedYear = year
+                loadLeaderboardData()
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        spinnerYear.post {
-            initialSpinnerSetupDone = true
-            loadLeaderboardData()
-        }
+        // Load data initially
+        loadLeaderboardData()
     }
 
     private fun setupRecyclerView() {
@@ -125,6 +118,9 @@ class ClassLeaderboardActivity : AppCompatActivity() {
         recyclerViewLeaderboard.layoutManager = LinearLayoutManager(this)
         recyclerViewLeaderboard.adapter = leaderboardAdapter
     }
+
+    // The rest of your data loading logic remains the same.
+    // I have included it here for completeness without any changes to the logic itself.
 
     private fun loadLeaderboardData() {
         if (currentTeacherId == null) {
@@ -213,10 +209,6 @@ class ClassLeaderboardActivity : AppCompatActivity() {
             val denominator = if (actualTotalSchoolDaysInMonthForClass > 0) actualTotalSchoolDaysInMonthForClass else 1
             val percentage = if (denominator > 0) (presentDays.toDouble() / denominator.toDouble()) * 100.0 else 0.0
 
-            // =================================================================
-            //  THE ONLY CHANGE IS ON THE NEXT LINE:
-            //  We add 'currentTeacherName' as the last parameter.
-            // =================================================================
             leaderboardList.add(LeaderboardItem(studentId, studentName, presentDays, absentDays, totalMarked, percentage, currentTeacherName ?: "N/A"))
         }
         leaderboardList.sortByDescending { it.attendancePercentage }

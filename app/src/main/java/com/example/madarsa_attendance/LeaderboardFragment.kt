@@ -4,11 +4,10 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.ProgressBar
-import android.widget.Spinner
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -17,17 +16,16 @@ import java.util.Calendar
 
 class LeaderboardFragment : Fragment() {
 
-    // Use the viewModels delegate to get the ViewModel instance
     private val viewModel: LeaderboardViewModel by viewModels()
 
-    private lateinit var spinnerYear: Spinner
+    // CHANGED: From Spinner to AutoCompleteTextView
+    private lateinit var spinnerYear: AutoCompleteTextView
     private lateinit var recyclerViewLeaderboard: RecyclerView
     private lateinit var leaderboardAdapter: LeaderboardAdapter
     private lateinit var progressBar: ProgressBar
     private lateinit var tvNoData: TextView
 
     private var selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR)
-    private var initialSpinnerSetupDone = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -52,39 +50,27 @@ class LeaderboardFragment : Fragment() {
 
     private fun setupSpinner() {
         if (!isAdded) return
-        initialSpinnerSetupDone = false
 
-        val spinnerTextColor = ContextCompat.getColor(requireContext(), R.color.mono_palette_black)
         val currentYearValue = Calendar.getInstance().get(Calendar.YEAR)
         val years = (currentYearValue - 5..currentYearValue).map { it.toString() }.reversed()
-        val yearAdapter = ColorableSpinnerAdapter(requireContext(), years, spinnerTextColor)
-        spinnerYear.adapter = yearAdapter
+        val yearAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, years)
+        spinnerYear.setAdapter(yearAdapter)
 
-        // Set initial selection without triggering the listener
-        spinnerYear.setSelection(years.indexOf(selectedYear.toString()), false)
+        // Set initial text without triggering listener or showing dropdown
+        spinnerYear.setText(selectedYear.toString(), false)
 
-        spinnerYear.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                // Prevent loading on initial setup
-                if (!initialSpinnerSetupDone) return
-
-                val year = years[position].toInt()
-                if (selectedYear != year) {
-                    selectedYear = year
-                    // Tell the ViewModel to load data for the new year
-                    viewModel.loadLeaderboardForYear(selectedYear)
-                }
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        // After the spinner is laid out, mark setup as done and load initial data
-        spinnerYear.post {
-            initialSpinnerSetupDone = true
-            // Load initial data only if it hasn't been loaded before
-            if (viewModel.leaderboardData.value.isNullOrEmpty()) {
+        // CHANGED: Use setOnItemClickListener for AutoCompleteTextView
+        spinnerYear.setOnItemClickListener { _, _, position, _ ->
+            val year = years[position].toInt()
+            if (selectedYear != year) {
+                selectedYear = year
                 viewModel.loadLeaderboardForYear(selectedYear)
             }
+        }
+
+        // Load initial data only if it hasn't been loaded before
+        if (viewModel.leaderboardData.value.isNullOrEmpty()) {
+            viewModel.loadLeaderboardForYear(selectedYear)
         }
     }
 
@@ -101,7 +87,6 @@ class LeaderboardFragment : Fragment() {
 
         viewModel.leaderboardData.observe(viewLifecycleOwner) { data ->
             leaderboardAdapter.updateData(data)
-            // Show/hide recycler view based on data
             recyclerViewLeaderboard.visibility = if (data.isNotEmpty()) View.VISIBLE else View.GONE
         }
 
@@ -111,7 +96,6 @@ class LeaderboardFragment : Fragment() {
                 tvNoData.visibility = View.VISIBLE
                 recyclerViewLeaderboard.visibility = View.GONE
             } else {
-                // Hide error message if there's no error (and data isn't empty)
                 if (viewModel.leaderboardData.value?.isNotEmpty() == true) {
                     tvNoData.visibility = View.GONE
                 }
