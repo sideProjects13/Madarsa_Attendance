@@ -1,27 +1,21 @@
-# .github/workflows/firebase_distribution.yml
-
 name: Build and Distribute to Firebase
 
-# Controls when the action will run. 
-# This workflow runs on a push to the 'main' branch.
-# It can also be triggered manually from the Actions tab.
 on:
   push:
     branches:
-      - master
+      - master # Changed from main to master to match your original file
   workflow_dispatch:
 
 jobs:
   build-and-distribute:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      # 1. Checks-out your repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Sets up JDK 17, which is required for modern Android builds
+      # 2. Sets up JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -29,28 +23,59 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 3. Grants execute permission for gradlew, which is needed on Linux runners
+      # 3. Grants execute permission for gradlew
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      # 4. Builds a release APK. You can change this to 'bundleRelease' to build an AAB
+      # =================================================================
+      # START: NEW STEP TO DECODE KEYSTORE
+      # This step takes the Base64 string from GitHub Secrets and decodes it
+      # back into a .jks file that Gradle can use.
+      - name: Decode Keystore
+        id: decode_keystore
+        run: |
+          keystore_path="${{ runner.temp }}/keystore.jks"
+          echo "${{ secrets.RELEASE_KEYSTORE }}" | base64 --decode > $keystore_path
+          echo "keystore_path=$keystore_path" >> $GITHUB_OUTPUT
+        # This 'if' condition ensures this step only runs if the secret exists.
+        # This prevents the workflow from failing on forks of your repository.
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
+      # END: NEW STEP TO DECODE KEYSTORE
+      # =================================================================
+
+      # 4. Builds a SIGNED release APK
       - name: Build with Gradle
         run: ./gradlew assembleRelease
+        # =================================================================
+        # START: NEW ENV BLOCK
+        # This 'env' block creates the environment variables that your
+        # build.gradle.kts file is configured to read.
+        env:
+          RELEASE_STORE_FILE: ${{ steps.decode_keystore.outputs.keystore_path }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
+        # END: NEW ENV BLOCK
+        # =================================================================
 
-      # 5. Authenticates with Google Cloud using the Service Account key
+      # 5. Authenticates with Google Cloud
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
 
-      # 6. Uploads the artifact (APK) to Firebase App Distribution
+      # 6. Uploads the signed APK to Firebase App Distribution
       - name: Upload artifact to Firebase App Distribution
         run: |
           # Install Firebase CLI
           npm install -g firebase-tools
           
-          # Distribute the APK
-          firebase appdistribution:distribute app/build/outputs/apk/release/app-release-unsigned.apk \
+          # Distribute the SIGNED APK. Note the path has changed.
+          # The signed APK is named 'app-release.apk', not 'app-release-unsigned.apk'.
+          firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes "Build from commit ${{ github.sha }}" \
             --groups "qa-testers"
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}

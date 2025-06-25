@@ -1,17 +1,40 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("com.google.gms.google-services") // Apply the google-services plugin
+    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.example.madarsa_attendance"
-    compileSdk = 35 // Keep this as libraries require it
+    compileSdk = 35
+
+    signingConfigs {
+        create("release") {
+            // Read credentials from environment variables
+            val storeFileFromEnv = System.getenv("RELEASE_STORE_FILE")
+            val storePasswordFromEnv = System.getenv("RELEASE_STORE_PASSWORD")
+            val keyAliasFromEnv = System.getenv("RELEASE_KEY_ALIAS")
+            val keyPasswordFromEnv = System.getenv("RELEASE_KEY_PASSWORD")
+
+            // Check if the environment variable for the keystore file path exists
+            if (storeFileFromEnv != null && storeFileFromEnv.isNotEmpty()) {
+                // =================================================================
+                // START: THIS IS THE CORRECTED PART
+                // Use the assignment operator (=) to set the properties
+                storeFile = file(storeFileFromEnv)
+                storePassword = storePasswordFromEnv
+                keyAlias = keyAliasFromEnv
+                keyPassword = keyPasswordFromEnv
+                // END: THIS IS THE CORRECTED PART
+                // =================================================================
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.example.madarsa_attendance"
         minSdk = 29
-        targetSdk = 35 // <<< UPDATED to match compileSdk or requirements
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -23,11 +46,17 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Apply our 'release' signing configuration to the release build type
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true // Recommended for release builds
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            isMinifyEnabled = false
         }
     }
     compileOptions {
@@ -38,10 +67,10 @@ android {
         jvmTarget = "1.8"
     }
     buildFeatures {
-        compose = true // You have this enabled
+        compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.10" // <<< OFTEN NEEDS TO MATCH KOTLIN VERSION (e.g., for Kotlin 1.9.22, this is usually 1.5.10 or 1.5.11)
+        kotlinCompilerExtensionVersion = "1.5.10"
     }
     packaging {
         resources {
@@ -51,56 +80,43 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.12.0") // Or latest stable (e.g., 1.13.x)
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3") // Updated to a recent stable version
-    implementation("androidx.activity:activity-compose:1.9.0") // Updated to a recent stable version
-    implementation(platform("androidx.compose:compose-bom:2024.06.00")) // <<< USE LATEST COMPOSE BOM
+    // Your dependencies section remains the same...
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
+    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3") // This will pull in an appropriate version from the BOM
-
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:33.1.1")) // <<< ADDED/UPDATED FIREBASE BOM (use latest)
+    implementation("androidx.compose.material3:material3")
+    implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
     implementation("com.google.firebase:firebase-storage-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
-    implementation ("com.github.bumptech.glide:glide:4.16.0")
-    implementation("com.google.firebase:firebase-firestore-ktx") // Version managed by BoM
-    implementation("com.google.firebase:firebase-analytics-ktx") // Also managed by BoM (if you added it before)
-
-
-    implementation("androidx.appcompat:appcompat:1.7.0") // Or latest stable (e.g., 1.6.1 is very common)
-    implementation("com.google.android.material:material:1.12.0") // This version should support Material 3 dialog themes
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4") // Updated to common stable
-    implementation("androidx.core:core-splashscreen:1.0.1") // This is fine
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.activity:activity-ktx:1.8.0")
-
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3") // Check latest version
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-
     implementation("androidx.viewpager2:viewpager2:1.0.0")
-    implementation("androidx.fragment:fragment-ktx:1.6.2") //
-    implementation("com.cloudinary:cloudinary-android:2.4.0") // Check for the latest version
-    // You'll also need an HTTP client, OkHttp is common:
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+    implementation("com.cloudinary:cloudinary-android:2.4.0")
     implementation ("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.activity:activity:1.10.1")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0") // Or your
-
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5") // Updated
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1") // Updated
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00")) // Match BOM
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest") // Check latest version
-
-
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
-
-    // For a sleek loading animation (Shimmer effect)
     implementation("com.facebook.shimmer:shimmer:0.5.0")
-
-    // Make sure you have these for ViewModel and LiveData
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0") // Use the latest version
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
 }
