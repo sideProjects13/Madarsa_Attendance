@@ -25,7 +25,7 @@ android {
                 storePassword = storePasswordFromEnv
                 keyAlias = keyAliasFromEnv
                 keyPassword = keyPasswordFromEnv
-                // END: THIS IS THE CORRECTED PART
+                // END: THIS IS THE CORRECTED PART HERE
                 // =================================================================
             }
         }
