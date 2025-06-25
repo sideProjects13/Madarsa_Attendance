@@ -32,25 +32,20 @@ jobs:
         id: decode_keystore
         run: |
           keystore_path="${{ runner.temp }}/keystore.jks"
-          # === CHANGED HERE: Using the correct secret name from your screenshot ===
           echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > $keystore_path
           echo "keystore_path=$keystore_path" >> $GITHUB_OUTPUT
-        # === CHANGED HERE: The 'if' condition now checks the correct secret ===
+        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
         if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
       # 5. Builds a SIGNED release APK
       - name: Build with Gradle
         run: ./gradlew assembleRelease
         env:
-          # This 'env' block creates the environment variables for Gradle.
-          # The names on the left (e.g., RELEASE_STORE_PASSWORD) MUST match your build.gradle.kts.
-          # The names on the right (e.g., secrets.RELEASE_KEYSTORE_PASSWORD) MUST match your GitHub Secrets.
           RELEASE_STORE_FILE: ${{ steps.decode_keystore.outputs.keystore_path }}
-          # === CHANGED HERE: Using the correct secret name for the store password ===
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        # === CHANGED HERE: The 'if' condition now checks the correct secret ===
+        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
         if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
       # 6. Authenticates with Google Cloud
@@ -58,7 +53,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
-        # === CHANGED HERE: The 'if' condition now checks the correct secret ===
+        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
         if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
       # 7. Uploads the signed APK to Firebase App Distribution
@@ -69,5 +64,5 @@ jobs:
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes "Build from commit ${{ github.sha }}" \
             --groups "qa-testers"
-        # === CHANGED HERE: The 'if' condition now checks the correct secret ===
+        # === FIXED HERE: The 'if' condition is now correctly wrapped in ${{...}} ===
         if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
