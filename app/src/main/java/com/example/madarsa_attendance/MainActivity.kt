@@ -7,7 +7,6 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
 
 // Adjust these imports if your fragments are
-import com.example.madarsa_attendance.fragments.SettingsFragment
 
 class MainActivity : AppCompatActivity() {
 
@@ -38,10 +37,6 @@ class MainActivity : AppCompatActivity() {
                 R.id.navigation_exam -> {
                     selectedFragment = ExamFragment()
                     toolbar.title = "Exam"
-                }
-                R.id.navigation_settings -> {
-                    selectedFragment = SettingsFragment()
-                    toolbar.title = "Settings"
                 }
             }
             replaceFragment(selectedFragment!!)

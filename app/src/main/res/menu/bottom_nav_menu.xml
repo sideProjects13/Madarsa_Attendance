@@ -20,9 +20,4 @@
         android:id="@+id/navigation_exam"
         android:icon="@drawable/ic_exam"
         android:title="Exam" />
-
-    <item
-        android:id="@+id/navigation_settings"
-        android:icon="@drawable/ic_settings"
-        android:title="Setting" />
 </menu>
