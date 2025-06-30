@@ -1,7 +1,6 @@
 package com.example.madarsa_attendance
 
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.MenuItem
@@ -10,7 +9,12 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
@@ -47,9 +51,26 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // CHANGE 1: Enable edge-to-edge display for this activity.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContentView(R.layout.activity_teacher_options)
 
         db = FirebaseFirestore.getInstance()
+
+        // --- Find all views ---
+        toolbar = findViewById(R.id.teacher_options_toolbar)
+        drawerLayout = findViewById(R.id.drawer_layout_teacher_options)
+        navigationView = findViewById(R.id.navigation_view_teacher_options)
+        tabLayout = findViewById(R.id.tabLayoutTeacherOptions)
+        viewPager = findViewById(R.id.viewPagerTeacherOptions)
+
+        // CHANGE 2: Apply window insets to add padding for system bars.
+        applyWindowInsets()
+
+        // --- The rest of your original onCreate logic ---
+        setSupportActionBar(toolbar)
 
         val intentTeacherId = intent.getStringExtra(EXTRA_TEACHER_ID)
         val intentTeacherName = intent.getStringExtra(EXTRA_TEACHER_NAME)
@@ -66,22 +87,29 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
         currentTeacherName = intentTeacherName
         currentTeacherProfileUrl = intentTeacherImageUrl
 
-        toolbar = findViewById(R.id.teacher_options_toolbar)
-        setSupportActionBar(toolbar)
-
-        drawerLayout = findViewById(R.id.drawer_layout_teacher_options)
-        navigationView = findViewById(R.id.navigation_view_teacher_options)
-
         actionBarDrawerToggle = ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.nav_open, R.string.nav_close)
         drawerLayout.addDrawerListener(actionBarDrawerToggle)
         actionBarDrawerToggle.syncState()
 
         navigationView.setNavigationItemSelectedListener(this)
 
-        tabLayout = findViewById(R.id.tabLayoutTeacherOptions)
-        viewPager = findViewById(R.id.viewPagerTeacherOptions)
-
         fetchTeacherDetailsFromFirestore(currentTeacherId!!)
+    }
+
+    // CHANGE 3: New function to handle insets and add appropriate padding.
+    private fun applyWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(drawerLayout) { view, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            // Apply top padding to the toolbar to push its content down from the status bar.
+            toolbar.updatePadding(top = insets.top)
+
+            // Apply bottom padding to the main content area to avoid the gesture navigation bar.
+            viewPager.updatePadding(bottom = insets.bottom)
+
+            // Return the insets so the NavigationView can use them correctly for its header.
+            windowInsets
+        }
     }
 
     private fun fetchTeacherDetailsFromFirestore(teacherIdToFetch: String) {

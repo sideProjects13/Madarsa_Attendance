@@ -8,6 +8,12 @@
     <!-- =================================================================================== -->
 
     <style name="Base.Theme.Madarsa_Attendance.PureMonochrome" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Edge-to-edge setup: Make status and navigation bars transparent -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Ensures status bar icons (time, battery) are dark and visible -->
+        <item name="android:windowLightStatusBar">true</item>
+
         <!-- Monochrome color mapping -->
         <item name="colorPrimary">@color/bw_theme_primary</item>
         <item name="colorOnPrimary">@color/bw_theme_onPrimary</item>
@@ -22,7 +28,8 @@
         <item name="colorTertiaryContainer">@color/mono_palette_background_subtle_variant</item>
         <item name="colorOnTertiaryContainer">@color/mono_palette_grey_primary_text</item>
         <item name="colorError">@color/bw_theme_error</item>
-        <item name="android:windowFullscreen">true</item>
+        <!-- REMOVED: This conflicts with the modern WindowCompat edge-to-edge API -->
+        <!-- <item name="android:windowFullscreen">true</item> -->
         <item name="colorOnError">@color/bw_theme_onError</item>
         <item name="android:colorBackground">@color/bw_theme_background</item>
         <item name="colorOnBackground">@color/bw_theme_onBackground</item>
@@ -53,7 +60,7 @@
         <item name="buttonBarNeutralButtonStyle">@style/Widget.App.Button.Dialog.PureMonochrome.Neutral</item>
         <item name="alertDialogTheme">@style/AlertDialog.App.Monochrome</item>
         <item name="datePickerDialogTheme">@style/DatePickerDialog.App.Monochrome</item>
-<!--        <item name="popupMenuTheme">@style/AppTheme.PopupMenuStyle</item>-->
+        <!--        <item name="popupMenuTheme">@style/AppTheme.PopupMenuStyle</item>-->
     </style>
 
     <style name="Theme.Madarsa_Attendance.PureMonochrome" parent="Base.Theme.Madarsa_Attendance.PureMonochrome" />
@@ -63,7 +70,8 @@
         <item name="strokeColor">?attr/colorPrimary</item>
         <item name="strokeWidth">@dimen/toggle_button_stroke_width</item>
         <item name="iconTint">?attr/colorPrimary</item>
-        <item name="android:windowFullscreen">true</item>
+        <!-- REMOVED: This has no effect on a button style and is incorrect -->
+        <!-- <item name="android:windowFullscreen">true</item> -->
         <item name="rippleColor">@color/bw_ripple_color</item>
         <item name="android:minWidth">75dp</item>
         <item name="android:paddingVertical">8dp</item>
@@ -75,6 +83,7 @@
         <item name="cornerRadius">8dp</item>
     </style>
 
+    <!-- The rest of your styles are fine as they were -->
     <style name="TextAppearance.App.PureMonochrome.HeadlineSmall" parent="TextAppearance.Material3.HeadlineSmall">
         <item name="android:textColor">?attr/colorOnBackground</item>
         <item name="fontFamily">sans-serif-medium</item>
@@ -264,6 +273,5 @@
         <item name="android:layout_margin">8dp</item>
         <item name="android:background">@color/placeholder_bg</item>
     </style>
-
 
 </resources>
