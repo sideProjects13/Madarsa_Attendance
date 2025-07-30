@@ -1,4 +1,4 @@
-package com.example.madarsa_attendance // <<< YOUR ACTUAL PACKAGE NAME
+package com.example.madarsa_attendance
 
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
@@ -19,7 +19,6 @@ import com.google.firebase.firestore.QuerySnapshot
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-// Assumes StudentPaymentSummaryItem is defined in DataModels.kt (or imported)
 
 class ClassPaymentSummaryActivity : AppCompatActivity() {
 
@@ -38,6 +37,7 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
     private lateinit var db: FirebaseFirestore
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
+    private var currentOrganizationId: String? = null // NEW: Organization ID
 
     private val paymentSummaryDisplayList = mutableListOf<StudentPaymentSummaryItem>()
 
@@ -53,6 +53,13 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
         db = FirebaseFirestore.getInstance()
         currentTeacherId = intent.getStringExtra("TEACHER_ID")
         currentTeacherName = intent.getStringExtra("TEACHER_NAME")
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         toolbar = findViewById(R.id.class_payment_summary_toolbar)
         setSupportActionBar(toolbar)
@@ -75,11 +82,7 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
         }
 
         setupRecyclerView()
-        setupSpinners() // Setup spinners before initial load
-        // loadPaymentSummaryData() will be called by spinner's onItemSelected initially if needed,
-        // or we can call it explicitly after setup if setSelection doesn't trigger it.
-        // For safety, let's call it once after spinners are set.
-        // The initialSpinnerSetupDone flag will prevent multiple loads.
+        setupSpinners()
     }
 
     private fun setupSpinners() {
@@ -149,11 +152,11 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
     }
 
     private fun loadPaymentSummaryData() {
-        if (currentTeacherId == null) {
-            Log.e(TAG, "loadPaymentSummaryData: Aborting, currentTeacherId is null.")
+        if (currentTeacherId == null || currentOrganizationId == null) { // NEW: Check organization ID
+            Log.e(TAG, "loadPaymentSummaryData: Aborting, currentTeacherId or currentOrganizationId is null.")
             return
         }
-        Log.d(TAG, "Loading payment summary for Teacher ID: $currentTeacherId, Year: $selectedYear, Month: ${selectedMonth + 1}")
+        Log.d(TAG, "Loading payment summary for Teacher ID: $currentTeacherId, Org ID: $currentOrganizationId, Year: $selectedYear, Month: ${selectedMonth + 1}")
 
         progressBar.visibility = View.VISIBLE
         tvNoData.visibility = View.GONE
@@ -167,14 +170,15 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
         val studentsMap = mutableMapOf<String, String>() // studentId to studentName
         val studentMonthlyPaymentDetails = mutableMapOf<String, Pair<Double, Int>>() // studentId to Pair<TotalAmount, PaymentCount>
 
-        // 1. Fetch all students for this teacher
-        db.collection("students")
+        // 1. Fetch all students for this teacher (scoped to organization)
+        db.collection("organizations").document(currentOrganizationId!!) // NEW
+            .collection("students") // NEW
             .whereEqualTo("teacherId", currentTeacherId)
-            .orderBy("studentName") // Order for consistent display
+            .orderBy("studentName")
             .get()
             .addOnSuccessListener { studentsSnapshot ->
                 if (studentsSnapshot.isEmpty) {
-                    Log.d(TAG, "No students found for teacher $currentTeacherId")
+                    Log.d(TAG, "No students found for teacher $currentTeacherId in organization $currentOrganizationId")
                     progressBar.visibility = View.GONE
                     tvNoData.text = "No students in this class."
                     tvNoData.visibility = View.VISIBLE
@@ -182,22 +186,23 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
                     paymentSummaryAdapter.updateData(emptyList()) // Clear adapter
                     return@addOnSuccessListener
                 }
-                Log.d(TAG, "Fetched ${studentsSnapshot.size()} students for class.")
+                Log.d(TAG, "Fetched ${studentsSnapshot.size()} students for class in organization $currentOrganizationId.")
                 studentsSnapshot.forEach { doc ->
                     val studentId = doc.id
                     studentsMap[studentId] = doc.getString("studentName") ?: "N/A"
                     studentMonthlyPaymentDetails[studentId] = Pair(0.0, 0) // Initialize
                 }
 
-                // 2. Fetch feePayments for the selected month and for THIS teacher
-                db.collection("feePayments")
+                // 2. Fetch feePayments for the selected month and for THIS teacher (scoped to organization)
+                db.collection("organizations").document(currentOrganizationId!!) // NEW
+                    .collection("feePayments") // NEW
                     .whereEqualTo("teacherId", currentTeacherId) // Filter by teacherId
                     .whereEqualTo("paymentMonth", targetMonthYearStr) // Filter by "yyyy-MM"
                     .get()
                     .addOnSuccessListener { paymentsSnapshot ->
                         progressBar.visibility = View.GONE // Hide progress bar after all queries attempt
                         if (!paymentsSnapshot.isEmpty) {
-                            Log.d(TAG, "Found ${paymentsSnapshot.size()} payment records for $targetMonthYearStr for this teacher.")
+                            Log.d(TAG, "Found ${paymentsSnapshot.size()} payment records for $targetMonthYearStr for this teacher in organization $currentOrganizationId.")
                             paymentsSnapshot.forEach { paymentDoc ->
                                 val studentId = paymentDoc.getString("studentId")
                                 val amount = paymentDoc.getDouble("paymentAmount") ?: 0.0
@@ -207,13 +212,13 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
                                 }
                             }
                         } else {
-                            Log.d(TAG, "No payment records found for $targetMonthYearStr for this teacher.")
+                            Log.d(TAG, "No payment records found for $targetMonthYearStr for this teacher in organization $currentOrganizationId.")
                         }
                         processAndDisplaySummary(studentsMap, studentMonthlyPaymentDetails)
                     }
                     .addOnFailureListener { e ->
                         progressBar.visibility = View.GONE
-                        Log.e(TAG, "Error fetching payment records for $targetMonthYearStr", e)
+                        Log.e(TAG, "Error fetching payment records for $targetMonthYearStr in organization $currentOrganizationId", e)
                         Toast.makeText(this, "Error loading payment records: ${e.message}", Toast.LENGTH_LONG).show()
                         tvNoData.text = "Error loading payment records."
                         tvNoData.visibility = View.VISIBLE
@@ -222,7 +227,7 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
             }
             .addOnFailureListener { e ->
                 progressBar.visibility = View.GONE
-                Log.e(TAG, "Error fetching students for teacher $currentTeacherId", e)
+                Log.e(TAG, "Error fetching students for teacher $currentTeacherId in organization $currentOrganizationId", e)
                 Toast.makeText(this, "Error loading students: ${e.message}", Toast.LENGTH_LONG).show()
                 tvNoData.text = "Error loading students."
                 tvNoData.visibility = View.VISIBLE
@@ -248,17 +253,12 @@ class ClassPaymentSummaryActivity : AppCompatActivity() {
             )
         }
 
-        // Sort by student name for consistent order
-        // paymentSummaryDisplayList.sortBy { it.studentName } // Already fetched ordered by studentName
-
         if (paymentSummaryDisplayList.isEmpty() && studentsMap.isNotEmpty()){
             tvNoData.text = "No payment data for students in this period."
             tvNoData.visibility = View.VISIBLE
             recyclerViewPayments.visibility = View.GONE
-        } else if (studentsMap.isEmpty()){ // This case should be handled by the student fetch logic
-            // tvNoData.text = "No students in this class."
-            // tvNoData.visibility = View.VISIBLE
-            // recyclerViewPayments.visibility = View.GONE
+        } else if (studentsMap.isEmpty()){
+            // This case should be handled by the student fetch logic
         } else if (paymentSummaryDisplayList.isNotEmpty()) {
             tvNoData.visibility = View.GONE
             recyclerViewPayments.visibility = View.VISIBLE

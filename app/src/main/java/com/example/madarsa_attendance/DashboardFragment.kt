@@ -1,5 +1,6 @@
 package com.example.madarsa_attendance
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -7,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog // Import AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -18,6 +20,7 @@ import com.github.mikephil.charting.data.BarData
 import com.github.mikephil.charting.data.BarDataSet
 import com.github.mikephil.charting.data.BarEntry
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
+import com.google.android.material.button.MaterialButton // Import MaterialButton
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -36,6 +39,7 @@ class DashboardFragment : Fragment() {
     private lateinit var rvAbsentToday: RecyclerView
     private lateinit var tvNoAbsentees: TextView
     private lateinit var barChart: BarChart
+    private lateinit var btnLogout: MaterialButton // NEW: Logout button
 
     // Adapters
     private lateinit var recentStudentsAdapter: DashboardStudentAdapter
@@ -56,6 +60,7 @@ class DashboardFragment : Fragment() {
         setupViews(view)
         setupRecyclerViews()
         setupObservers()
+        setupLogoutButton() // NEW: Setup logout button
     }
 
     override fun onResume() {
@@ -80,6 +85,7 @@ class DashboardFragment : Fragment() {
         rvAbsentToday = view.findViewById(R.id.rv_absent_today)
         tvNoAbsentees = view.findViewById(R.id.tv_no_absentees)
         barChart = view.findViewById(R.id.bar_chart_class_distribution)
+        btnLogout = view.findViewById(R.id.btnLogout) // NEW: Initialize logout button
     }
 
     private fun setupRecyclerViews() {
@@ -146,29 +152,25 @@ class DashboardFragment : Fragment() {
         val labels = ArrayList<String>()
         var index = 0f
 
-        // Sort by teacher name for consistent order
         data.toSortedMap().forEach { (teacherName, count) ->
             entries.add(BarEntry(index, count.toFloat()))
-            // Use a shorter name if possible for better display
             labels.add(teacherName.split(" ").first())
             index++
         }
 
         val dataSet = BarDataSet(entries, "Students")
-        dataSet.color = ContextCompat.getColor(requireContext(), R.color.mono_palette_white) // Or your app's primary color
+        dataSet.color = ContextCompat.getColor(requireContext(), R.color.mono_palette_white)
         dataSet.valueTextColor = Color.BLACK
         dataSet.valueTextSize = 12f
 
         barChart.data = BarData(dataSet)
 
-        // Chart styling
         barChart.description.isEnabled = false
         barChart.legend.isEnabled = false
         barChart.setDrawValueAboveBar(true)
         barChart.setFitBars(true)
         barChart.animateY(1000)
 
-        // X-Axis
         val xAxis = barChart.xAxis
         xAxis.valueFormatter = IndexAxisValueFormatter(labels)
         xAxis.position = XAxis.XAxisPosition.BOTTOM
@@ -176,13 +178,33 @@ class DashboardFragment : Fragment() {
         xAxis.setDrawGridLines(false)
         xAxis.textColor = Color.DKGRAY
         xAxis.textSize = 10f
-        xAxis.labelRotationAngle = -45f // Rotate labels to prevent overlap
+        xAxis.labelRotationAngle = -45f
 
-        // Y-Axis
         barChart.axisLeft.axisMinimum = 0f
         barChart.axisLeft.setDrawGridLines(false)
         barChart.axisRight.isEnabled = false
 
-        barChart.invalidate() // Refresh chart
+        barChart.invalidate()
+    }
+
+    // NEW METHOD: Setup Logout Button
+    private fun setupLogoutButton() {
+        btnLogout.setOnClickListener {
+            if (!isAdded) return@setOnClickListener // Ensure fragment is still attached
+
+            AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
+                .setTitle("Logout")
+                .setMessage("Are you sure you want to log out?")
+                .setPositiveButton("Logout") { _, _ ->
+                    FirebaseAuthManager.logout(requireContext())
+                    // Redirect to LoginActivity after logout
+                    val intent = Intent(activity, LoginActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK // Clear back stack
+                    startActivity(intent)
+                    activity?.finish() // Finish the hosting activity (MainActivity)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
     }
 }

@@ -1,10 +1,16 @@
 package com.example.madarsa_attendance
 
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -16,6 +22,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -23,7 +30,11 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import java.io.OutputStream
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class ManageClassFragment : Fragment() {
 
@@ -33,6 +44,16 @@ class ManageClassFragment : Fragment() {
         private const val ARG_TEACHER_NAME_MCF = "teacher_name_mcf"
         private const val INTRO_EXTEND_DELAY_ADD_STUDENT_FAB = 500L
         private const val INTRO_SHRINK_DELAY_ADD_STUDENT_FAB = 2500L
+
+        private const val BULK_IMPORT_REQUEST_CODE = 1001
+        private const val PICK_CSV_FILE_REQUEST_CODE = 1002
+
+        // Constants for CSV Template
+        private const val CSV_TEMPLATE_FILENAME = "Madarsa_Student_Template.csv"
+        private const val CSV_TEMPLATE_CONTENT =
+            "\"Student Name\",\"Parent Name\",\"Parent Mobile Number\",\"Registration Number\",\"Gender\",\"Birth Date (YYYY-MM-DD)\",\"Admission Date (YYYY-MM-DD)\",\"Monthly Fee\",\"Profile Image URL (Optional)\"\n" +
+                    "\"Example Student\",\"Example Parent\",\"9876543210\",\"R101\",\"Male\",\"2010-01-01\",\"2015-09-01\",500.00,\"\"\n" +
+                    "\"Another Student\",\"Another Parent\",\"0123456789\",\"R102\",\"Female\",\"2011-02-15\",\"2016-09-01\",450.00,\"https://example.com/image.jpg\""
 
         @JvmStatic
         fun newInstance(teacherId: String, teacherName: String): ManageClassFragment {
@@ -65,6 +86,8 @@ class ManageClassFragment : Fragment() {
     private lateinit var db: FirebaseFirestore
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
+    private var currentOrganizationId: String? = null
+
     private lateinit var teacherDataViewModel: TeacherDataViewModel
 
     // Handlers & Launchers
@@ -81,6 +104,44 @@ class ManageClassFragment : Fragment() {
         _fabAddStudentToClass?.shrink()
     }
 
+    private val pickCsvFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (!isAdded) return@registerForActivityResult
+        if (uri != null) {
+            Log.d(TAG, "CSV file selected: $uri")
+            launchBulkAddStudentsActivity(uri)
+        } else {
+            Log.d(TAG, "CSV file selection cancelled.")
+            Toast.makeText(context, "File selection cancelled.", Toast.LENGTH_SHORT).show()
+        }
+        _fabAddStudentToClass?.shrink()
+    }
+
+    private val bulkAddStudentsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (!isAdded) return@registerForActivityResult
+        if (result.resultCode == Activity.RESULT_OK) {
+            Log.d(TAG, "Bulk add students returned OK. Reloading student list.")
+            loadStudentsForClass()
+            val successCount = result.data?.getIntExtra("SUCCESS_COUNT", 0) ?: 0
+            val failureCount = result.data?.getIntExtra("FAILURE_COUNT", 0) ?: 0
+            Toast.makeText(context, "Bulk import complete. Added: $successCount, Failed: $failureCount.", Toast.LENGTH_LONG).show()
+        } else {
+            Log.d(TAG, "Bulk add students returned CANCELED or other result.")
+            Toast.makeText(context, "Bulk import cancelled or failed.", Toast.LENGTH_SHORT).show()
+        }
+        _fabAddStudentToClass?.shrink()
+    }
+
+    private val requestWritePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            downloadCsvTemplate()
+        } else {
+            Toast.makeText(context, "Storage permission is required to save the template.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         arguments?.let {
@@ -89,7 +150,9 @@ class ManageClassFragment : Fragment() {
         }
         db = FirebaseFirestore.getInstance()
         teacherDataViewModel = ViewModelProvider(requireActivity()).get(TeacherDataViewModel::class.java)
-        Log.d(TAG, "onCreate - Teacher ID: $currentTeacherId")
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext())
+
+        Log.d(TAG, "onCreate - Teacher ID: $currentTeacherId, Org ID: $currentOrganizationId")
     }
 
     override fun onCreateView(
@@ -111,8 +174,8 @@ class ManageClassFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         Log.d(TAG, "onViewCreated - Initializing UI.")
 
-        if (currentTeacherId == null) {
-            Toast.makeText(context, "Teacher info missing.", Toast.LENGTH_LONG).show()
+        if (currentTeacherId == null || currentOrganizationId == null) {
+            Toast.makeText(context, "Teacher or Organization info missing.", Toast.LENGTH_LONG).show()
             return
         }
         setupRecyclerView()
@@ -189,15 +252,49 @@ class ManageClassFragment : Fragment() {
         }
     }
 
+    // MODIFIED: FAB now shows a dialog
     private fun setupFabInteraction() {
         fabAddStudentToClass.setOnClickListener {
             cancelAddStudentFabIntroAnimation()
-            launchAddStudentActivity()
+            showAddStudentOptionsDialog()
         }
     }
 
+    // NEW METHOD: Show dialog for adding options
+    private fun showAddStudentOptionsDialog() {
+        if (!isAdded || context == null || currentOrganizationId == null) return
+
+        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_add_student_options, null)
+        val btnAddSingle = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddSingleStudent)
+        val btnAddBulk = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddBulkStudents)
+        val tvDownloadTemplate = dialogView.findViewById<TextView>(R.id.tvDownloadTemplate)
+
+        val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
+            .setView(dialogView)
+            .create()
+
+        btnAddSingle.setOnClickListener {
+            dialog.dismiss()
+            launchAddStudentActivity() // Launch original single student add flow
+        }
+
+        btnAddBulk.setOnClickListener {
+            dialog.dismiss()
+            pickCsvFile() // Launch file picker for bulk add
+        }
+
+        tvDownloadTemplate.setOnClickListener {
+            dialog.dismiss()
+            checkAndRequestStoragePermissionForTemplate() // NEW: Check permissions before downloading
+        }
+
+        dialog.show()
+    }
+
+
+    // Original method (renamed for clarity if you wish, but kept name for minimal changes)
     private fun launchAddStudentActivity() {
-        if (!isAdded || activity == null) return
+        if (!isAdded || activity == null || currentOrganizationId == null) return
         val intent = Intent(activity, AddStudentActivity::class.java).apply {
             putExtra("PRESELECTED_TEACHER_ID", currentTeacherId)
             putExtra("PRESELECTED_TEACHER_NAME", currentTeacherName)
@@ -205,6 +302,102 @@ class ManageClassFragment : Fragment() {
         studentActionLauncher.launch(intent)
         _fabAddStudentToClass?.shrink()
     }
+
+    // NEW METHOD: Pick a CSV file
+    private fun pickCsvFile() {
+        if (!isAdded || context == null || currentOrganizationId == null) {
+            Toast.makeText(context, "Application not ready for file selection.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/csv" // Mime type for CSV
+        }
+        try {
+            pickCsvFileLauncher.launch(arrayOf("text/csv"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error launching file picker: ${e.message}", e)
+            Toast.makeText(context, "Could not open file picker. Check permissions.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // NEW METHOD: Launch BulkAddStudentsActivity
+    private fun launchBulkAddStudentsActivity(csvFileUri: Uri) {
+        if (!isAdded || activity == null || currentTeacherId == null || currentOrganizationId == null) {
+            Toast.makeText(context, "Cannot proceed with bulk add: Context missing.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val intent = Intent(activity, BulkAddStudentsActivity::class.java).apply {
+            putExtra("CSV_FILE_URI", csvFileUri.toString())
+            putExtra("TEACHER_ID", currentTeacherId)
+            putExtra("TEACHER_NAME", currentTeacherName)
+        }
+        bulkAddStudentsLauncher.launch(intent)
+    }
+
+    // NEW METHOD: Check and request permissions for saving template
+    private fun checkAndRequestStoragePermissionForTemplate() {
+        if (!isAdded || context == null) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            downloadCsvTemplate()
+        } else {
+            if (ContextCompat.checkSelfPermission(
+                    requireContext(),
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                downloadCsvTemplate()
+            } else {
+                requestWritePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }
+    }
+
+    // NEW METHOD: Download CSV Template
+    private fun downloadCsvTemplate() {
+        if (!isAdded || context == null) {
+            Toast.makeText(context, "Application not ready to download template.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val mimeType = "text/csv"
+        val displayName = CSV_TEMPLATE_FILENAME
+
+        try {
+            val contentUri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/MadarsaReports")
+                }
+                context?.contentResolver?.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val appDir = java.io.File(downloadsDir, "MadarsaReports")
+                if (!appDir.exists()) {
+                    appDir.mkdirs()
+                }
+                val file = java.io.File(appDir, displayName)
+                Uri.fromFile(file)
+            }
+
+            contentUri?.let { uri ->
+                context?.contentResolver?.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(CSV_TEMPLATE_CONTENT.toByteArray())
+                    Toast.makeText(context, "Template downloaded to Downloads/MadarsaReports", Toast.LENGTH_LONG).show()
+                    Log.d(TAG, "CSV template saved to: $uri")
+                }
+            } ?: run {
+                Toast.makeText(context, "Failed to create file URI for template.", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "Failed to create file URI for template download.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving CSV template: ${e.message}", e)
+            Toast.makeText(context, "Error saving template: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
 
     private fun startAddStudentFabIntroAnimation(fab: ExtendedFloatingActionButton) {
         if (!isAdded || activity == null || !fab.isAttachedToWindow) return
@@ -238,13 +431,13 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun showStudentOptionsDialog(student: StudentDetailsItem) {
-        if (!isAdded || context == null) return
+        if (!isAdded || context == null || currentOrganizationId == null) return
         val options = arrayOf("Edit Student", "Inactivate Student", "Delete Student", "Move to Another Class", "View Monthly Attendance")
         AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
             .setTitle("Student: ${student.studentName}")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> { // Edit
+                    0 -> {
                         val intent = Intent(activity, EditStudentActivity::class.java).apply {
                             putExtra("STUDENT_ID", student.id)
                         }
@@ -253,7 +446,7 @@ class ManageClassFragment : Fragment() {
                     1 -> confirmInactivateStudent(student)
                     2 -> confirmDeleteStudent(student)
                     3 -> showMoveStudentDialog(student)
-                    4 -> { // View Monthly Attendance
+                    4 -> {
                         val calendar = Calendar.getInstance()
                         val intent = Intent(activity, StudentMonthlyAttendanceActivity::class.java).apply {
                             putExtra("STUDENT_ID", student.id)
@@ -269,7 +462,7 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun confirmInactivateStudent(student: StudentDetailsItem) {
-        if (!isAdded || context == null) return
+        if (!isAdded || context == null || currentOrganizationId == null) return
         AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
             .setTitle("Inactivate Student")
             .setMessage("Are you sure you want to inactivate ${student.studentName}? They will be removed from this list and can be viewed in the 'Inactive Students' section.")
@@ -281,9 +474,10 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun inactivateStudentInFirestore(studentId: String) {
-        if (!isAdded) return
+        if (!isAdded || currentOrganizationId == null) return
         progressBar.visibility = View.VISIBLE
-        db.collection("students").document(studentId)
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId)
             .update("isActive", false)
             .addOnSuccessListener {
                 if (!isAdded) return@addOnSuccessListener
@@ -299,7 +493,7 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun confirmDeleteStudent(student: StudentDetailsItem) {
-        if (!isAdded || context == null) return
+        if (!isAdded || context == null || currentOrganizationId == null) return
         AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
             .setTitle("Delete Student")
             .setMessage("Are you sure you want to permanently delete ${student.studentName}? This action cannot be undone.")
@@ -308,9 +502,10 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun deleteStudentFromFirestore(studentId: String) {
-        if (!isAdded) return
+        if (!isAdded || currentOrganizationId == null) return
         progressBar.visibility = View.VISIBLE
-        db.collection("students").document(studentId).delete()
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId).delete()
             .addOnSuccessListener {
                 if (!isAdded) return@addOnSuccessListener
                 progressBar.visibility = View.GONE
@@ -325,9 +520,10 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun showMoveStudentDialog(studentToMove: StudentDetailsItem) {
-        if (!isAdded || context == null) return
+        if (!isAdded || context == null || currentOrganizationId == null) return
         progressBar.visibility = View.VISIBLE
-        db.collection("teachers").orderBy("teacherName").get()
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("teachers").orderBy("teacherName").get()
             .addOnSuccessListener { teacherSnap ->
                 if (!isAdded) return@addOnSuccessListener
                 progressBar.visibility = View.GONE
@@ -349,13 +545,14 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun moveStudentToNewClass(studentId: String, newTeacher: TeacherSpinnerItem) {
-        if (!isAdded) return
+        if (!isAdded || currentOrganizationId == null) return
         progressBar.visibility = View.VISIBLE
         val updates = mapOf(
             "teacherId" to newTeacher.id,
             "teacherName" to newTeacher.name
         )
-        db.collection("students").document(studentId).update(updates)
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId).update(updates)
             .addOnSuccessListener {
                 if (!isAdded) return@addOnSuccessListener
                 progressBar.visibility = View.GONE
@@ -371,13 +568,13 @@ class ManageClassFragment : Fragment() {
     }
 
     private fun loadStudentsForClass() {
-        if (currentTeacherId.isNullOrEmpty() || !isAdded) {
+        if (currentTeacherId.isNullOrEmpty() || currentOrganizationId.isNullOrEmpty() || !isAdded) {
             Log.w(TAG, "loadStudentsForClass skipped: conditions not met.")
             _swipeRefreshLayout?.isRefreshing = false
             return
         }
 
-        Log.d(TAG, "Executing loadStudentsForClass for teacher ID: $currentTeacherId")
+        Log.d(TAG, "Executing loadStudentsForClass for teacher ID: $currentTeacherId, Org ID: $currentOrganizationId")
 
         if (swipeRefreshLayout.isRefreshing == false) {
             progressBar.visibility = View.VISIBLE
@@ -385,7 +582,8 @@ class ManageClassFragment : Fragment() {
         tvNoStudents.visibility = View.GONE
         recyclerViewClassStudents.visibility = View.GONE
 
-        db.collection("students")
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students")
             .whereEqualTo("teacherId", currentTeacherId)
             .whereEqualTo("isActive", true)
             .orderBy("studentName")

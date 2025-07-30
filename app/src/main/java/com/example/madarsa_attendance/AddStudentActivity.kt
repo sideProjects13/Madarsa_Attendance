@@ -66,6 +66,9 @@ class AddStudentActivity : AppCompatActivity() {
     private lateinit var rgGender: RadioGroup
     private lateinit var etBirthDate: TextInputEditText
     private lateinit var etAdmissionDate: TextInputEditText
+    private lateinit var etMonthlyFee: TextInputEditText
+    private lateinit var tilMonthlyFee: TextInputLayout
+
 
     // Backend and data
     private lateinit var db: FirebaseFirestore
@@ -76,6 +79,7 @@ class AddStudentActivity : AppCompatActivity() {
     private var imageUri: Uri? = null
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
     private val UNSIGNED_UPLOAD_PRESET_STUDENT = "BIBI_AYESHA_MASJID"
+    private var currentOrganizationId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +89,15 @@ class AddStudentActivity : AppCompatActivity() {
 
         preselectedTeacherId = intent.getStringExtra("PRESELECTED_TEACHER_ID")
         preselectedTeacherName = intent.getStringExtra("PRESELECTED_TEACHER_NAME")
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
+
+        Log.d(TAG, "onCreate: Preselected Teacher ID = $preselectedTeacherId, Org ID: $currentOrganizationId")
+
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Organization data missing. Please log in again.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         val toolbar: MaterialToolbar = findViewById(R.id.add_student_toolbar)
         setSupportActionBar(toolbar)
@@ -110,6 +123,9 @@ class AddStudentActivity : AppCompatActivity() {
         rgGender = findViewById(R.id.rgGender)
         etBirthDate = findViewById(R.id.etBirthDate)
         etAdmissionDate = findViewById(R.id.etAdmissionDate)
+        etMonthlyFee = findViewById(R.id.etMonthlyFee)
+        tilMonthlyFee = findViewById(R.id.tilMonthlyFee)
+
 
         // Setup image picker
         imagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -141,19 +157,28 @@ class AddStudentActivity : AppCompatActivity() {
         btnSaveStudent.setOnClickListener { saveStudent() }
     }
 
-    // <<< MODIFIED: This function now just suggests the number but leaves the field editable >>>
     private fun fetchNextRegistrationNumber() {
-        tilRegNo.helperText = "Suggesting next number..."
-        etRegNo.isEnabled = false // Disable temporarily while fetching
+        if (currentOrganizationId == null) {
+            Log.e(TAG, "fetchNextRegistrationNumber: Aborting - currentOrganizationId is null.")
+            Toast.makeText(this, "Error: Organization data missing.", Toast.LENGTH_LONG).show()
+            tilRegNo.helperText = "Error loading. Please restart app."
+            etRegNo.isEnabled = false
+            return
+        }
 
-        db.collection("students")
-            .orderBy("regNo", Query.Direction.DESCENDING)
+        tilRegNo.helperText = "Suggesting next number..."
+        etRegNo.isEnabled = false
+
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students")
+            .orderBy("regNo", Query.Direction.DESCENDING) // Order by regNo
             .limit(1)
             .get()
             .addOnSuccessListener { documents ->
-                var nextRegNo = 101
+                var nextRegNo = 101 // Default starting Reg No
                 if (!documents.isEmpty) {
                     val lastRegNoStr = documents.documents[0].getString("regNo")
+                    // Attempt to parse existing regNo as Int, if not, use default or provide manual option
                     val lastRegNo = lastRegNoStr?.toIntOrNull()
                     if (lastRegNo != null) {
                         nextRegNo = lastRegNo + 1
@@ -161,39 +186,40 @@ class AddStudentActivity : AppCompatActivity() {
                 }
                 etRegNo.setText(nextRegNo.toString())
                 tilRegNo.helperText = "Next available number is suggested"
-                etRegNo.isEnabled = true // <<< THE FIX: Re-enable the field for editing
+                etRegNo.isEnabled = true
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Error fetching last registration number", e)
                 Toast.makeText(this, "Could not suggest next Reg No. Please enter manually.", Toast.LENGTH_LONG).show()
                 tilRegNo.helperText = "Enter registration number manually"
-                etRegNo.isEnabled = true // <<< THE FIX: Ensure it's enabled on failure
+                etRegNo.isEnabled = true
             }
     }
 
-    // <<< REVERTED: The logic for etRegNo is now simplified here >>>
     private fun setInputsEnabled(enabled: Boolean, showProgressForSpinner: Boolean = false) {
         progressBar.visibility = if (!enabled && !showProgressForSpinner) View.VISIBLE else View.GONE
         spinnerTeachers.isEnabled = enabled
         etStudentName.isEnabled = enabled
         etParentName.isEnabled = enabled
         etParentMobileNumber.isEnabled = enabled
-        etRegNo.isEnabled = enabled // <<< THE FIX: Always respects the 'enabled' parameter
+        etRegNo.isEnabled = enabled
         rgGender.isEnabled = enabled
         etBirthDate.isEnabled = enabled
         etAdmissionDate.isEnabled = enabled
+        etMonthlyFee.isEnabled = enabled
+        tilMonthlyFee.isEnabled = enabled
         btnSelectImageStudent.isEnabled = enabled
         btnSaveStudent.isEnabled = enabled
         cardViewProfileImage.isClickable = enabled
     }
 
-    // All other functions are unchanged from your original working code
     private fun validateStudentInputs(): Boolean {
         var isValid = true
         tilStudentName.error = null
         tilParentName.error = null
         tilParentMobileNumber.error = null
         tilRegNo.error = null
+        tilMonthlyFee.error = null
 
         if (selectedTeacher == null && preselectedTeacherId == null) {
             Toast.makeText(this, "Please select a teacher.", Toast.LENGTH_SHORT).show()
@@ -215,6 +241,15 @@ class AddStudentActivity : AppCompatActivity() {
         }
         if (rgGender.checkedRadioButtonId == -1) {
             Toast.makeText(this, "Please select a gender", Toast.LENGTH_SHORT).show(); isValid = false
+        }
+        val monthlyFeeText = etMonthlyFee.text.toString().trim()
+        if (monthlyFeeText.isEmpty()) {
+            tilMonthlyFee.error = "Monthly fee is required"; isValid = false
+        } else {
+            val monthlyFeeValue = monthlyFeeText.toDoubleOrNull()
+            if (monthlyFeeValue == null || monthlyFeeValue <= 0) {
+                tilMonthlyFee.error = "Enter a valid positive fee amount"; isValid = false
+            }
         }
         return isValid
     }
@@ -255,8 +290,16 @@ class AddStudentActivity : AppCompatActivity() {
     }
 
     private fun loadTeachersIntoSpinner() {
+        if (currentOrganizationId == null) {
+            Log.e(TAG, "loadTeachersIntoSpinner: Aborting - currentOrganizationId is null.")
+            Toast.makeText(this, "Error: Organization data missing. Cannot load teachers.", Toast.LENGTH_LONG).show()
+            setInputsEnabled(true)
+            return
+        }
+
         setInputsEnabled(false, showProgressForSpinner = true)
-        db.collection("teachers").orderBy("teacherName").get()
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("teachers").orderBy("teacherName").get()
             .addOnSuccessListener { documents ->
                 teacherList.clear()
                 teacherList.add(TeacherSpinnerItem("", "Select a Teacher", null))
@@ -292,44 +335,99 @@ class AddStudentActivity : AppCompatActivity() {
 
     private fun saveStudent() {
         if (!validateStudentInputs()) return
+        if (currentOrganizationId == null) {
+            Log.e(TAG, "saveStudent: currentOrganizationId is null. Aborting save.")
+            Toast.makeText(this, "Error: Organization data missing. Cannot save student.", Toast.LENGTH_LONG).show()
+            return
+        }
+
         setInputsEnabled(false)
 
         val studentName = etStudentName.text.toString().trim()
         val parentNameStr = etParentName.text.toString().trim()
         val parentMobileStr = etParentMobileNumber.text.toString().trim()
-        val teacherToAssignTo = selectedTeacher
+        val monthlyFee = etMonthlyFee.text.toString().trim().toDoubleOrNull() ?: 0.0
+        val regNo = etRegNo.text.toString().trim() // Get registration number here
+        val finalTeacher = selectedTeacher ?: TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
 
-        if (teacherToAssignTo == null && preselectedTeacherId == null) {
-            handleSaveFailure(Exception("Teacher not selected"), "Error: Teacher not selected.")
+        if (finalTeacher.id.isEmpty()) { // Ensure a teacher is selected/preselected
+            handleSaveFailure(Exception("No teacher assigned"), "Error: Please assign a teacher.")
             return
         }
 
-        val finalTeacher = teacherToAssignTo ?: TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
+        // NEW: Check for duplicate registration number BEFORE saving
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students")
+            .whereEqualTo("regNo", regNo)
+            .get()
+            .addOnSuccessListener { documents ->
+                if (documents.isEmpty) {
+                    // No existing student with this regNo, proceed to save
+                    uploadImageAndSaveStudent(
+                        studentName, parentNameStr, parentMobileStr, monthlyFee,
+                        regNo, finalTeacher,
+                        findViewById<RadioButton>(rgGender.checkedRadioButtonId).text.toString(),
+                        etBirthDate.text.toString().trim().ifEmpty { null },
+                        etAdmissionDate.text.toString().trim().ifEmpty { null }
+                    )
+                } else {
+                    // Student with this regNo already exists
+                    handleSaveFailure(
+                        Exception("Registration number '$regNo' already exists."),
+                        "Error: Student with this registration number already exists."
+                    )
+                }
+            }
+            .addOnFailureListener { e ->
+                handleSaveFailure(e, "Error checking registration number uniqueness.")
+            }
+    }
 
+    // NEW: Separated image upload and final save for clarity and to include all student fields
+    private fun uploadImageAndSaveStudent(
+        studentName: String, parentName: String, parentMobile: String, monthlyFee: Double,
+        regNo: String, teacher: TeacherSpinnerItem, gender: String, birthDate: String?, admissionDate: String?
+    ) {
         if (imageUri != null) {
             MediaManager.get().upload(imageUri).unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT)
                 .option("folder", "student_profiles").callback(object : UploadCallback {
                     override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
                         val imageUrl = resultData?.get("secure_url") as? String
-                        saveStudentDataToFirestore(studentName, parentNameStr, parentMobileStr, finalTeacher, imageUrl)
+                        saveStudentDataToFirestore(
+                            studentName, parentName, parentMobile, monthlyFee,
+                            regNo, teacher, gender, birthDate, admissionDate, imageUrl
+                        )
                     }
                     override fun onError(requestId: String?, error: ErrorInfo?) {
                         Toast.makeText(this@AddStudentActivity, "Image upload failed, saving without image.", Toast.LENGTH_LONG).show()
-                        saveStudentDataToFirestore(studentName, parentNameStr, parentMobileStr, finalTeacher, null)
+                        saveStudentDataToFirestore(
+                            studentName, parentName, parentMobile, monthlyFee,
+                            regNo, teacher, gender, birthDate, admissionDate, null
+                        )
                     }
                     override fun onStart(requestId: String?) {}
                     override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
                     override fun onReschedule(requestId: String?, error: ErrorInfo?) {}
                 }).dispatch()
         } else {
-            saveStudentDataToFirestore(studentName, parentNameStr, parentMobileStr, finalTeacher, null)
+            saveStudentDataToFirestore(
+                studentName, parentName, parentMobile, monthlyFee,
+                regNo, teacher, gender, birthDate, admissionDate, null
+            )
         }
     }
 
     private fun saveStudentDataToFirestore(
         studentName: String, parentName: String, parentMobile: String,
-        teacher: TeacherSpinnerItem, profileImageUrl: String?
+        monthlyFee: Double, regNo: String,
+        teacher: TeacherSpinnerItem, gender: String, birthDate: String?, admissionDate: String?,
+        profileImageUrl: String?
     ) {
+        if (currentOrganizationId == null) {
+            handleSaveFailure(Exception("Organization ID is null"), "Internal Error: Organization data missing.")
+            return
+        }
+
         val studentData = hashMapOf(
             "studentName" to studentName,
             "parentName" to parentName,
@@ -338,19 +436,21 @@ class AddStudentActivity : AppCompatActivity() {
             "teacherName" to teacher.name,
             "profileImageUrl" to (profileImageUrl ?: ""),
             "createdAt" to FieldValue.serverTimestamp(),
-            "regNo" to etRegNo.text.toString().trim(),
-            "gender" to findViewById<RadioButton>(rgGender.checkedRadioButtonId).text.toString(),
-            "birthDate" to etBirthDate.text.toString().trim().ifEmpty { null },
-            "admissionDate" to etAdmissionDate.text.toString().trim().ifEmpty { null },
+            "regNo" to regNo, // Save registration number
+            "gender" to gender, // Save gender
+            "birthDate" to birthDate, // Save birth date
+            "admissionDate" to admissionDate, // Save admission date
+            "monthlyFee" to monthlyFee,
             "isActive" to true
         )
 
-        db.collection("students").add(studentData).addOnSuccessListener {
-            setInputsEnabled(true)
-            Toast.makeText(this, "'$studentName' added!", Toast.LENGTH_LONG).show()
-            setResult(Activity.RESULT_OK)
-            finish()
-        }.addOnFailureListener { e -> handleSaveFailure(e, "Failed to save data") }
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").add(studentData).addOnSuccessListener {
+                setInputsEnabled(true)
+                Toast.makeText(this, "'$studentName' added!", Toast.LENGTH_LONG).show()
+                setResult(Activity.RESULT_OK)
+                finish()
+            }.addOnFailureListener { e -> handleSaveFailure(e, "Failed to save data") }
     }
 
     private fun handleSaveFailure(e: Exception, message: String) {

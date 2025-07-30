@@ -1,15 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- src/main/res/menu/bottom_navigation_menu.xml -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <item
-        android:id="@+id/navigation_dashboard"
-        android:icon="@drawable/ic_dashboard"
-        android:title="Dashboard" />
-
-    <item
-        android:id="@+id/navigation_leaderboard"
-        android:icon="@drawable/ic_leaderboard"
-        android:title="LeaderBoard" />
 
     <item
         android:id="@+id/navigation_manage_teachers"
@@ -17,7 +8,25 @@
         android:title="Teachers" />
 
     <item
+        android:id="@+id/navigation_leaderboard"
+        android:icon="@drawable/ic_leaderboard"
+        android:title="LeaderBoard" />
+    <item
         android:id="@+id/navigation_exam"
         android:icon="@drawable/ic_exam"
         android:title="Exam" />
+    <item
+        android:id="@+id/navigation_inactive_students"
+        android:icon="@drawable/ic_person_off"
+        android:title="Inactive" />
+    <item
+        android:id="@+id/navigation_dashboard"
+        android:icon="@drawable/ic_dashboard"
+        android:title="Dashboard" />
+
+
+
+
+    <!-- NEW ITEM FOR INACTIVE STUDENTS -->
+
 </menu>

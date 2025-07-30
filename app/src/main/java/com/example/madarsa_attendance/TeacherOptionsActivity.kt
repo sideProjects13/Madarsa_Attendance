@@ -37,6 +37,8 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
     private var currentTeacherName: String? = null
     private var currentTeacherEmail: String? = null
     private var currentTeacherProfileUrl: String? = null
+    private var currentOrganizationId: String? = null // NEW: Organization ID
+
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var drawerLayout: DrawerLayout
@@ -52,29 +54,27 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // CHANGE 1: Enable edge-to-edge display for this activity.
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContentView(R.layout.activity_teacher_options)
 
         db = FirebaseFirestore.getInstance()
 
-        // --- Find all views ---
         toolbar = findViewById(R.id.teacher_options_toolbar)
         drawerLayout = findViewById(R.id.drawer_layout_teacher_options)
         navigationView = findViewById(R.id.navigation_view_teacher_options)
         tabLayout = findViewById(R.id.tabLayoutTeacherOptions)
         viewPager = findViewById(R.id.viewPagerTeacherOptions)
 
-        // CHANGE 2: Apply window insets to add padding for system bars.
         applyWindowInsets()
 
-        // --- The rest of your original onCreate logic ---
         setSupportActionBar(toolbar)
 
         val intentTeacherId = intent.getStringExtra(EXTRA_TEACHER_ID)
         val intentTeacherName = intent.getStringExtra(EXTRA_TEACHER_NAME)
         val intentTeacherImageUrl = intent.getStringExtra(EXTRA_TEACHER_IMAGE_URL)
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+
 
         if (intentTeacherId == null || intentTeacherName == null) {
             Log.e(TAG, "Critical: Teacher ID or Name not passed. Finishing.")
@@ -82,6 +82,12 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
             finish()
             return
         }
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
 
         currentTeacherId = intentTeacherId
         currentTeacherName = intentTeacherName
@@ -96,24 +102,28 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
         fetchTeacherDetailsFromFirestore(currentTeacherId!!)
     }
 
-    // CHANGE 3: New function to handle insets and add appropriate padding.
     private fun applyWindowInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(drawerLayout) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-            // Apply top padding to the toolbar to push its content down from the status bar.
             toolbar.updatePadding(top = insets.top)
 
-            // Apply bottom padding to the main content area to avoid the gesture navigation bar.
             viewPager.updatePadding(bottom = insets.bottom)
 
-            // Return the insets so the NavigationView can use them correctly for its header.
             windowInsets
         }
     }
 
     private fun fetchTeacherDetailsFromFirestore(teacherIdToFetch: String) {
-        db.collection("teachers").document(teacherIdToFetch).get()
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Log.e(TAG, "fetchTeacherDetailsFromFirestore: Org ID is null, cannot fetch teacher details.")
+            Toast.makeText(this, "Organization context missing for teacher profile.", Toast.LENGTH_LONG).show()
+            initializeUiElements() // Still try to initialize UI
+            return
+        }
+        // NEW: Scope query to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("teachers").document(teacherIdToFetch).get()
             .addOnSuccessListener { document ->
                 if (isDestroyed || isFinishing) return@addOnSuccessListener
                 if (document != null && document.exists()) {
@@ -151,9 +161,9 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
 
         if (!currentTeacherProfileUrl.isNullOrEmpty()) {
             Glide.with(this).load(currentTeacherProfileUrl).circleCrop()
-                .placeholder(R.drawable.logo).error(R.drawable.logo).into(navHeaderProfileImage)
+                .placeholder(R.drawable.molana).error(R.drawable.molana).into(navHeaderProfileImage)
         } else {
-            navHeaderProfileImage.setImageResource(R.drawable.logo)
+            navHeaderProfileImage.setImageResource(R.drawable.molana)
         }
     }
 
@@ -170,8 +180,8 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
-        if (currentTeacherId == null || currentTeacherName == null) {
-            Toast.makeText(this, "Error: Teacher context lost.", Toast.LENGTH_SHORT).show()
+        if (currentTeacherId == null || currentTeacherName == null || currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Error: Teacher or Organization context lost.", Toast.LENGTH_SHORT).show()
             drawerLayout.closeDrawer(GravityCompat.START)
             return true
         }
@@ -194,13 +204,15 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
                 }
                 startActivity(intent)
             }
-            R.id.nav_inactive_students -> {
-                val intent = Intent(this, InactiveStudentsActivity::class.java).apply {
-                    putExtra("TEACHER_ID", currentTeacherId)
-                    putExtra("TEACHER_NAME", currentTeacherName)
-                }
-                startActivity(intent)
-            }
+//            R.id.nav_inactive_students -> {
+//                // If you are using InactiveStudentsFragment, this link should probably open the main app with the fragment selected
+//                // But if InactiveStudentsActivity is still temporary in use for a specific teacher, keep this for now.
+//                val intent = Intent(this, InactiveStudentsActivity::class.java).apply {
+//                    putExtra("TEACHER_ID", currentTeacherId)
+//                    putExtra("TEACHER_NAME", currentTeacherName)
+//                }
+//                startActivity(intent)
+//            }
             R.id.nav_profile -> {
                 val profileIntent = Intent(this, EditTeacherActivity::class.java).apply {
                     putExtra("TEACHER_ID", currentTeacherId)
@@ -213,12 +225,14 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
     }
 
     private fun showExamSelectionDialog() {
-        if (currentTeacherId == null) return
+        if (currentTeacherId == null || currentOrganizationId == null) return // NEW: Check organization ID
 
         val examsList = mutableListOf<Exam>()
         val examNames = mutableListOf<String>()
 
-        db.collection("exams").orderBy("name").get()
+        // NEW: Scope query to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("exams").orderBy("name").get()
             .addOnSuccessListener { documents ->
                 if (documents.isEmpty) {
                     Toast.makeText(this, "No exams found. Add an exam first.", Toast.LENGTH_LONG).show()
@@ -243,7 +257,7 @@ class TeacherOptionsActivity : AppCompatActivity(), NavigationView.OnNavigationI
                     .show()
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "Error fetching exams", e)
+                Log.e(TAG, "Error fetching exams for Org ID: $currentOrganizationId", e)
                 Toast.makeText(this, "Error fetching exams.", Toast.LENGTH_SHORT).show()
             }
     }

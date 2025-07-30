@@ -2,7 +2,6 @@ package com.example.madarsa_attendance
 
 import android.app.Activity
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -13,6 +12,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
@@ -37,6 +37,7 @@ class ManageTeachersActivity : AppCompatActivity() {
     private lateinit var tvNoTeachers: TextView
     private lateinit var db: FirebaseFirestore
     private lateinit var storage: FirebaseStorage
+    private var currentOrganizationId: String? = null // NEW: Organization ID
 
     private val teacherDisplayList = mutableListOf<TeacherSpinnerItem>()
 
@@ -61,6 +62,13 @@ class ManageTeachersActivity : AppCompatActivity() {
 
         db = FirebaseFirestore.getInstance()
         storage = FirebaseStorage.getInstance()
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         val toolbar: MaterialToolbar = findViewById(R.id.manage_teachers_toolbar)
         setSupportActionBar(toolbar)
@@ -93,6 +101,10 @@ class ManageTeachersActivity : AppCompatActivity() {
     }
 
     private fun launchAddTeacherActivity() {
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Cannot add teacher: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            return
+        }
         val intent = Intent(this, AddTeacherActivity::class.java)
         teacherActionLauncher.launch(intent)
         if (!isFinishing && !isDestroyed && ::fabAddTeacher.isInitialized) {
@@ -157,7 +169,7 @@ class ManageTeachersActivity : AppCompatActivity() {
                 startActivity(intent)
             },
             onEditTeacherClick = { selectedTeacher ->
-                    Log.d(TAG, "Edit menu clicked for teacher: ${selectedTeacher.id}")
+                Log.d(TAG, "Edit menu clicked for teacher: ${selectedTeacher.id}")
                 val intent = Intent(this, EditTeacherActivity::class.java).apply {
                     putExtra("TEACHER_ID", selectedTeacher.id)
                 }
@@ -173,8 +185,8 @@ class ManageTeachersActivity : AppCompatActivity() {
         Log.d(TAG, "RecyclerView adapter set.")
     }
 
-    // confirmDeleteTeacher and deleteTeacherFromFirestore methods remain the same as previous response
     private fun confirmDeleteTeacher(teacher: TeacherSpinnerItem) {
+        if (!::progressBar.isInitialized || currentOrganizationId == null) return // NEW: Check organization ID
         AlertDialog.Builder(this, R.style.AlertDialog_App_Monochrome)
             .setTitle("Delete Teacher")
             .setMessage("Are you sure you want to delete ${teacher.name}?\n\nWARNING: This will delete the teacher permanently. Associated students and attendance records will NOT be automatically reassigned or deleted by this action and might become orphaned.")
@@ -186,7 +198,7 @@ class ManageTeachersActivity : AppCompatActivity() {
     }
 
     private fun deleteTeacherFromFirestore(teacher: TeacherSpinnerItem) {
-        if (!::progressBar.isInitialized) return
+        if (!::progressBar.isInitialized || currentOrganizationId == null) return // NEW: Check organization ID
         progressBar.visibility = View.VISIBLE
 
         if (!teacher.profileImageUrl.isNullOrEmpty()) {
@@ -210,32 +222,39 @@ class ManageTeachersActivity : AppCompatActivity() {
     }
 
     private fun deleteTeacherDocument(teacherId: String) {
-        db.collection("teachers").document(teacherId)
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Cannot delete teacher: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            if (::progressBar.isInitialized) progressBar.visibility = View.GONE
+            return
+        }
+        // NEW: Scope deletion to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("teachers").document(teacherId)
             .delete()
             .addOnSuccessListener {
                 if (!::progressBar.isInitialized) return@addOnSuccessListener
                 progressBar.visibility = View.GONE
                 Toast.makeText(this, "Teacher deleted successfully", Toast.LENGTH_SHORT).show()
-                Log.d(TAG, "Teacher $teacherId deleted from Firestore.")
+                Log.d(TAG, "Teacher $teacherId deleted from Firestore in Org ID: $currentOrganizationId.")
                 loadTeachers()
             }
             .addOnFailureListener { e ->
-                if (!::progressBar.isInitialized) return@addOnFailureListener
+                if (!::progressBar.isInitialized)
                 progressBar.visibility = View.GONE
                 Toast.makeText(this, "Error deleting teacher: ${e.message}", Toast.LENGTH_LONG).show()
-                Log.e(TAG, "Error deleting teacher $teacherId from Firestore", e)
+                Log.e(TAG, "Error deleting teacher $teacherId from Firestore in Org ID: $currentOrganizationId", e)
             }
     }
 
-
     private fun loadTeachers() {
-        // ... (This method remains the same as your provided correct version)
-        if (!::progressBar.isInitialized) return
+        if (!::progressBar.isInitialized || currentOrganizationId == null) return // NEW: Check organization ID
         progressBar.visibility = View.VISIBLE
         tvNoTeachers.visibility = View.GONE
         recyclerViewManageTeachers.visibility = View.GONE
 
-        db.collection("teachers")
+        // NEW: Scope query to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("teachers")
             .orderBy("teacherName", Query.Direction.ASCENDING)
             .get()
             .addOnSuccessListener { querySnapshot: QuerySnapshot? ->
@@ -243,32 +262,32 @@ class ManageTeachersActivity : AppCompatActivity() {
                 progressBar.visibility = View.GONE
                 teacherDisplayList.clear()
                 if (querySnapshot != null && !querySnapshot.isEmpty) {
-                    Log.d(TAG, "loadTeachers: Found ${querySnapshot.size()} teachers.")
+                    Log.d(TAG, "loadTeachers: Found ${querySnapshot.size()} teachers in Org ID: $currentOrganizationId.")
                     for (document in querySnapshot.documents) {
                         val teacherName = document.getString("teacherName")
                         val imageUrl = document.getString("profileImageUrl")
                         if (teacherName != null) {
                             teacherDisplayList.add(TeacherSpinnerItem(document.id, teacherName, imageUrl))
                         } else {
-                            Log.w(TAG, "loadTeachers: Document ${document.id} missing teacherName field.")
+                            Log.w(TAG, "loadTeachers: Document ${document.id} missing teacherName field in Org ID: $currentOrganizationId.")
                         }
                     }
                     recyclerViewManageTeachers.visibility = View.VISIBLE
                 } else {
-                    Log.d(TAG, "loadTeachers: No teachers found in Firestore.")
+                    Log.d(TAG, "loadTeachers: No teachers found in Firestore for Org ID: $currentOrganizationId.")
                     tvNoTeachers.visibility = View.VISIBLE
                 }
                 if(::manageTeachersAdapter.isInitialized) manageTeachersAdapter.updateData(teacherDisplayList)
             }
             .addOnFailureListener { e ->
-                if (!::progressBar.isInitialized) return@addOnFailureListener
+                if (!::progressBar.isInitialized)
                 progressBar.visibility = View.GONE
                 tvNoTeachers.text = "Error loading teachers."
                 tvNoTeachers.visibility = View.VISIBLE
                 recyclerViewManageTeachers.visibility = View.GONE
                 if(::manageTeachersAdapter.isInitialized) manageTeachersAdapter.updateData(emptyList())
                 Toast.makeText(this, "Error loading teachers: ${e.message}", Toast.LENGTH_LONG).show()
-                Log.e(TAG, "Error fetching teachers", e)
+                Log.e(TAG, "Error fetching teachers for Org ID: $currentOrganizationId", e)
             }
     }
 }

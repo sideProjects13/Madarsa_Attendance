@@ -23,6 +23,15 @@
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
         <activity
+            android:name=".BulkAddStudentsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".RegisterActivity"
+            android:exported="false" />
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
+        <activity
             android:name=".InactiveStudentsActivity"
             android:exported="false" />
         <activity
@@ -56,9 +65,6 @@
         -->
         <activity
             android:name=".ManageTeachersActivity"
-            android:exported="false" />
-        <activity
-            android:name=".LoginActivity"
             android:exported="false" />
         <activity
             android:name=".EditTeacherActivity"

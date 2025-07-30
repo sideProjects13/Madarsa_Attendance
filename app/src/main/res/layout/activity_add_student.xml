@@ -194,6 +194,24 @@
                     android:clickable="true"/>
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- NEW FIELD: Monthly Fee -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilMonthlyFee"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Monthly Fee Amount (e.g., 500)"
+                app:prefixText="₹"
+                app:suffixText=" per month">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etMonthlyFee"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"
+                    android:maxLength="7"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
             <!-- Save Button -->
             <FrameLayout
                 android:layout_width="match_parent"

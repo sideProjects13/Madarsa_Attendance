@@ -130,6 +130,18 @@
                     android:padding="12dp" />
 
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- NEW: Logout Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLogout"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:layout_marginBottom="16dp"
+                android:text="Logout"
+                app:icon="@drawable/ic_logout" />
+
         </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

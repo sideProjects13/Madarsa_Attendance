@@ -8,24 +8,26 @@
     android:fitsSystemWindows="false"
     tools:context=".MainActivity">
 
-<androidx.fragment.app.FragmentContainerView
-android:id="@+id/fragment_container"
-android:layout_width="match_parent"
-android:layout_height="match_parent"
-android:layout_above="@id/bottom_navigation"
-android:fitsSystemWindows="false" /> <!-- ADD THIS LINE -->
+    <!-- The FragmentContainerView will now occupy the space from the top of the screen -->
+    <!-- Its top padding will be adjusted programmatically in MainActivity.kt -->
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/bottom_navigation"
+        android:fitsSystemWindows="false" />
 
-<com.google.android.material.bottomnavigation.BottomNavigationView
-android:id="@+id/bottom_navigation"
-android:layout_width="match_parent"
-android:layout_height="wrap_content"
-android:layout_alignParentBottom="true"
-android:background="?android:attr/windowBackground"
-android:elevation="8dp"
-android:fitsSystemWindows="false"
-    app:labelVisibilityMode="labeled"
-    app:itemIconTint="@color/bottom_nav_color_selector"
-    app:itemTextColor="@color/bottom_nav_color_selector"
-    app:menu="@menu/bottom_nav_menu" />
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="?android:attr/windowBackground"
+        android:elevation="8dp"
+        android:fitsSystemWindows="false"
+        app:labelVisibilityMode="labeled"
+        app:itemIconTint="@color/bottom_nav_color_selector"
+        app:itemTextColor="@color/bottom_nav_color_selector"
+        app:menu="@menu/bottom_nav_menu" />
 
-    </RelativeLayout>
+</RelativeLayout>

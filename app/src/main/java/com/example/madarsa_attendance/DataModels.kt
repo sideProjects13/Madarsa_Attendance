@@ -18,15 +18,16 @@ data class StudentDetailsItem(
     val studentName: String = "",
     val teacherId: String = "",
     val teacherName: String? = null,
-    val parentName: String? = null, // Corrected from String
-    val parentMobileNumber: String? = null, // Corrected from String
+    val parentName: String? = null,
+    val parentMobileNumber: String? = null,
     val profileImageUrl: String? = null,
     val createdAt: Timestamp? = null,
     val regNo: String? = null,
     val gender: String? = null,
     val admissionDate: String? = null,
     val birthDate: String? = null,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val monthlyFee: Double? = null // <<< NEW FIELD ADDED HERE
 )
 
 data class StudentAttendanceItem(
@@ -54,14 +55,14 @@ data class StudentPaymentSummaryItem(
     val profileImageUrl: String? = null
 )
 
-data class FeePaymentItem(
-    @DocumentId val id: String = "",
-    val paymentAmount: Double = 0.0,
-    val paymentDate: String = "",
-    val paymentMode: String? = null,
-    val notes: String? = null,
-    val recordedAt: Timestamp? = null
-)
+//data class FeePaymentItem(
+//    @DocumentId val id: String = "",
+//    val paymentAmount: Double = 0.0,
+//    val paymentDate: String = "",
+//    val paymentMode: String? = null,
+//    val notes: String? = null,
+//    val recordedAt: Timestamp? = null
+//)
 
 data class DailyAttendanceStatus(
     val date: String,

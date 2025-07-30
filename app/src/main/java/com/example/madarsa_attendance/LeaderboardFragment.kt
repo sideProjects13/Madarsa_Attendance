@@ -8,6 +8,7 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast // Added for organizationId check
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -18,7 +19,6 @@ class LeaderboardFragment : Fragment() {
 
     private val viewModel: LeaderboardViewModel by viewModels()
 
-    // CHANGED: From Spinner to AutoCompleteTextView
     private lateinit var spinnerYear: AutoCompleteTextView
     private lateinit var recyclerViewLeaderboard: RecyclerView
     private lateinit var leaderboardAdapter: LeaderboardAdapter
@@ -42,6 +42,15 @@ class LeaderboardFragment : Fragment() {
         progressBar = view.findViewById(R.id.progressBarLeaderboard)
         tvNoData = view.findViewById(R.id.tvNoDataLeaderboard)
 
+        // NEW: Check for organization ID before proceeding
+        if (FirebaseAuthManager.getOrganizationId(requireContext()) == null) {
+            Toast.makeText(context, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            progressBar.visibility = View.GONE
+            tvNoData.text = "Error: Organization not found."
+            tvNoData.visibility = View.VISIBLE
+            return
+        }
+
         // Setup UI components
         setupRecyclerView()
         setupSpinner()
@@ -56,10 +65,8 @@ class LeaderboardFragment : Fragment() {
         val yearAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, years)
         spinnerYear.setAdapter(yearAdapter)
 
-        // Set initial text without triggering listener or showing dropdown
         spinnerYear.setText(selectedYear.toString(), false)
 
-        // CHANGED: Use setOnItemClickListener for AutoCompleteTextView
         spinnerYear.setOnItemClickListener { _, _, position, _ ->
             val year = years[position].toInt()
             if (selectedYear != year) {
@@ -68,14 +75,13 @@ class LeaderboardFragment : Fragment() {
             }
         }
 
-        // Load initial data only if it hasn't been loaded before
         if (viewModel.leaderboardData.value.isNullOrEmpty()) {
             viewModel.loadLeaderboardForYear(selectedYear)
         }
     }
 
     private fun setupRecyclerView() {
-        leaderboardAdapter = LeaderboardAdapter(emptyList()) // Start with an empty list
+        leaderboardAdapter = LeaderboardAdapter(emptyList())
         recyclerViewLeaderboard.layoutManager = LinearLayoutManager(requireContext())
         recyclerViewLeaderboard.adapter = leaderboardAdapter
     }

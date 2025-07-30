@@ -2,15 +2,11 @@ package com.example.madarsa_attendance
 
 import android.Manifest
 import android.app.Activity
-import android.content.ContentValues
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
@@ -30,22 +26,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton // Import for FAB
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-//   import org.jetbrains.kotlinx.coroutines.tasks.await // For .await()
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Locale
 
 class PaymentSummaryFragment : Fragment() {
 
@@ -80,7 +72,6 @@ class PaymentSummaryFragment : Fragment() {
     private var _searchViewPaymentSummary: SearchView? = null
     private val searchViewPaymentSummary get() = _searchViewPaymentSummary!!
 
-    // Changed from Button to ExtendedFloatingActionButton
     private var _fabGenerateReport: ExtendedFloatingActionButton? = null
     private val fabGenerateReport get() = _fabGenerateReport!!
 
@@ -88,6 +79,8 @@ class PaymentSummaryFragment : Fragment() {
     private lateinit var db: FirebaseFirestore
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
+    private var currentOrganizationId: String? = null // NEW: Organization ID
+
 
     private val studentDetailsMap = mutableMapOf<String, StudentDetailsItem>()
     private val paymentSummaryDisplayList = mutableListOf<StudentPaymentSummaryItem>()
@@ -101,12 +94,10 @@ class PaymentSummaryFragment : Fragment() {
     private lateinit var teacherDataViewModel: TeacherDataViewModel
     private lateinit var studentPaymentHistoryLauncher: ActivityResultLauncher<Intent>
 
-    // For PDF generation options
     private var reportTypeSelected: String = "Monthly" // Default
     private var reportYearSelected: Int = Calendar.getInstance().get(Calendar.YEAR)
     private var reportMonthSelected: Int = Calendar.getInstance().get(Calendar.MONTH)
 
-    // Permission Launcher
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             if (isGranted) {
@@ -125,6 +116,7 @@ class PaymentSummaryFragment : Fragment() {
         }
         db = FirebaseFirestore.getInstance()
         teacherDataViewModel = ViewModelProvider(requireActivity()).get(TeacherDataViewModel::class.java)
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext()) // NEW: Get organization ID
 
         studentPaymentHistoryLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
@@ -137,7 +129,7 @@ class PaymentSummaryFragment : Fragment() {
                 Log.d(TAG, "Returned from StudentPaymentHistoryActivity with result code: ${result.resultCode}")
             }
         }
-        Log.d(TAG, "onCreate: Initial selectedMonth=$selectedMonth, selectedYear=$selectedYear")
+        Log.d(TAG, "onCreate: Initial selectedMonth=$selectedMonth, selectedYear=$selectedYear, Org ID: $currentOrganizationId")
     }
 
     override fun onCreateView(
@@ -151,22 +143,22 @@ class PaymentSummaryFragment : Fragment() {
         _progressBar = view.findViewById(R.id.progressBarPaymentSummaryFrag)
         _tvNoData = view.findViewById(R.id.tvNoPaymentDataFrag)
         _searchViewPaymentSummary = view.findViewById(R.id.searchViewPaymentSummary)
-        _fabGenerateReport = view.findViewById(R.id.fabGenerateReport) // Initialize FAB
+        _fabGenerateReport = view.findViewById(R.id.fabGenerateReport)
         Log.d(TAG, "onCreateView completed")
         return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        Log.d(TAG, "onViewCreated: TeacherID: $currentTeacherId")
-        if (currentTeacherId == null) {
-            Toast.makeText(context, "Teacher info missing.", Toast.LENGTH_LONG).show(); return
+        Log.d(TAG, "onViewCreated: TeacherID: $currentTeacherId, Org ID: $currentOrganizationId")
+        if (currentTeacherId == null || currentOrganizationId == null) {
+            Toast.makeText(context, "Teacher or Organization info missing.", Toast.LENGTH_LONG).show(); return
         }
         setupRecyclerView()
         setupSpinners(view)
         setupSearchView()
 
-        fabGenerateReport.setOnClickListener { // Set listener on FAB
+        fabGenerateReport.setOnClickListener {
             checkAndRequestStoragePermission()
         }
 
@@ -182,6 +174,9 @@ class PaymentSummaryFragment : Fragment() {
                 }
             }
         }
+        if (!isCurrentPeriodDataLoaded) {
+            Log.d(TAG, "onViewCreated: Data not yet loaded, will be handled by lifecycle or spinner init.")
+        }
         Log.d(TAG, "onViewCreated completed")
     }
 
@@ -194,8 +189,8 @@ class PaymentSummaryFragment : Fragment() {
     }
 
     private fun checkPreConditionsAndLoad(calledFrom: String = "unknown"): Boolean {
-        Log.d(TAG, "checkPreConditionsAndLoad (from $calledFrom): currentTeacherId=$currentTeacherId, !isCurrentPeriodDataLoaded=${!isCurrentPeriodDataLoaded}, spinnersFullyInitialized=$spinnersFullyInitializedPayment, isVisible=$isFragmentVisibleToUser")
-        if (currentTeacherId != null && !isCurrentPeriodDataLoaded && spinnersFullyInitializedPayment && isFragmentVisibleToUser) {
+        Log.d(TAG, "checkPreConditionsAndLoad (from $calledFrom): currentTeacherId=$currentTeacherId, currentOrganizationId=$currentOrganizationId, !isCurrentPeriodDataLoaded=${!isCurrentPeriodDataLoaded}, spinnersFullyInitialized=$spinnersFullyInitializedPayment, isVisible=$isFragmentVisibleToUser")
+        if (currentTeacherId != null && currentOrganizationId != null && !isCurrentPeriodDataLoaded && spinnersFullyInitializedPayment && isFragmentVisibleToUser) {
             loadPaymentSummaryData()
             return true
         }
@@ -213,7 +208,7 @@ class PaymentSummaryFragment : Fragment() {
         _paymentSummaryAdapter = null; _progressBar = null; _tvNoData = null
         _searchViewPaymentSummary?.setOnQueryTextListener(null)
         _searchViewPaymentSummary = null
-        _fabGenerateReport = null // Clear FAB reference
+        _fabGenerateReport = null
         Log.d(TAG, "onDestroyView")
     }
 
@@ -236,14 +231,17 @@ class PaymentSummaryFragment : Fragment() {
     }
 
     private fun setupSpinners(fragmentView: View) {
-        if (!isAdded || context == null) { Log.w(TAG, "setupSpinners: Fragment not added or context null"); return }
+        if (!isAdded || context == null || currentOrganizationId == null) {
+            Log.w(TAG, "setupSpinners: Fragment not added, context null, or org ID null"); return
+        }
         spinnersFullyInitializedPayment = false
         val staticSpinnerTextColor = ContextCompat.getColor(requireContext(), R.color.mono_palette_black)
 
         val months = SimpleDateFormat("MMMM", Locale.getDefault()).let { sdf ->
             (0..11).map { val cal = Calendar.getInstance(); cal.set(Calendar.MONTH, it); sdf.format(cal.time) }
         }
-        val monthAdapter = ColorableSpinnerAdapter(requireContext(), months, staticSpinnerTextColor)
+        val monthAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, months)
+        monthAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerMonth.adapter = monthAdapter
         spinnerMonth.setSelection(selectedMonth, false)
 
@@ -309,12 +307,12 @@ class PaymentSummaryFragment : Fragment() {
 
     private fun loadPaymentSummaryData() {
         Log.i(TAG, "loadPaymentSummaryData: CALLED for $selectedMonth/$selectedYear. isCurrentPeriodDataLoaded was false.")
-        if (currentTeacherId == null || !isAdded || _progressBar == null || _tvNoData == null || _recyclerViewPayments == null || _paymentSummaryAdapter == null) {
+        if (currentTeacherId == null || currentOrganizationId == null || !isAdded || _progressBar == null || _tvNoData == null || _recyclerViewPayments == null || _paymentSummaryAdapter == null) {
             Log.e(TAG, "loadPaymentSummaryData: CRITICAL PRE-CONDITIONS NOT MET. Aborting. " +
-                    "teacherId=$currentTeacherId, isAdded=$isAdded, adapterNull=${_paymentSummaryAdapter==null}")
+                    "teacherId=$currentTeacherId, orgId=$currentOrganizationId, isAdded=$isAdded, adapterNull=${_paymentSummaryAdapter==null}")
             if(isAdded) {
                 _progressBar?.visibility = View.GONE
-                _tvNoData?.text = "Error: Components not ready."
+                _tvNoData?.text = "Error: Components not ready or organization info missing."
                 _tvNoData?.visibility = View.VISIBLE
                 _recyclerViewPayments?.visibility = View.GONE
             }
@@ -328,15 +326,16 @@ class PaymentSummaryFragment : Fragment() {
 
         val calendar = Calendar.getInstance(); calendar.set(selectedYear, selectedMonth, 1)
         val targetMonthYearStr = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(calendar.time)
-        Log.d(TAG, "loadPaymentSummaryData: Target month/year string: $targetMonthYearStr for teacher: $currentTeacherId")
+        Log.d(TAG, "loadPaymentSummaryData: Target month/year string: $targetMonthYearStr for teacher: $currentTeacherId, Org ID: $currentOrganizationId")
 
         studentDetailsMap.clear()
         val studentMonthlyPaymentDetails = mutableMapOf<String, Pair<Double, Int>>()
 
-        db.collection("students").whereEqualTo("teacherId", currentTeacherId).orderBy("studentName").get()
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").whereEqualTo("teacherId", currentTeacherId).orderBy("studentName").get()
             .addOnSuccessListener { studentsSnapshot ->
                 if (!isAdded) { Log.w(TAG, "Students fetched, but fragment not added."); isCurrentPeriodDataLoaded = false; return@addOnSuccessListener }
-                Log.d(TAG, "Fetched ${studentsSnapshot.size()} student documents for teacher $currentTeacherId.")
+                Log.d(TAG, "Fetched ${studentsSnapshot.size()} student documents for teacher $currentTeacherId in Org ID: $currentOrganizationId.")
 
                 if (studentsSnapshot.isEmpty) {
                     progressBar.visibility = View.GONE
@@ -362,7 +361,8 @@ class PaymentSummaryFragment : Fragment() {
                 }
                 Log.d(TAG, "Populated studentDetailsMap with ${studentDetailsMap.size} students.")
 
-                db.collection("feePayments")
+                db.collection("organizations").document(currentOrganizationId!!)
+                    .collection("feePayments")
                     .whereEqualTo("teacherId", currentTeacherId)
                     .whereEqualTo("paymentMonth", targetMonthYearStr)
                     .get()
@@ -370,7 +370,7 @@ class PaymentSummaryFragment : Fragment() {
                         if (!isAdded) { Log.w(TAG, "Payments fetched, but fragment not added."); isCurrentPeriodDataLoaded = false; return@addOnSuccessListener }
 
                         if (!paymentsSnap.isEmpty) {
-                            Log.d(TAG, "Fetched ${paymentsSnap.size()} payments for $targetMonthYearStr.")
+                            Log.d(TAG, "Fetched ${paymentsSnap.size()} payments for $targetMonthYearStr in Org ID: $currentOrganizationId.")
                             paymentsSnap.forEach { pDoc ->
                                 val sId = pDoc.getString("studentId")
                                 val amt = pDoc.getDouble("paymentAmount") ?: 0.0
@@ -378,17 +378,17 @@ class PaymentSummaryFragment : Fragment() {
                                     val currentDetails = studentMonthlyPaymentDetails[sId]!!
                                     studentMonthlyPaymentDetails[sId] = Pair(currentDetails.first + amt, currentDetails.second + 1)
                                 } else {
-                                    Log.w(TAG, "Payment found for studentId '$sId' not in current class map, or sId is null. PaymentMonth: $targetMonthYearStr")
+                                    Log.w(TAG, "Payment found for studentId '$sId' not in current class map, or sId is null. PaymentMonth: $targetMonthYearStr, Org ID: $currentOrganizationId")
                                 }
                             }
                         } else {
-                            Log.d(TAG, "No payments found for $targetMonthYearStr.")
+                            Log.d(TAG, "No payments found for $targetMonthYearStr in Org ID: $currentOrganizationId.")
                         }
                         processAndDisplaySummary(studentMonthlyPaymentDetails)
                         isCurrentPeriodDataLoaded = true
                     }.addOnFailureListener { e ->
-                        if (!isAdded) return@addOnFailureListener
-                        Log.e(TAG, "Error loading payments for $targetMonthYearStr:", e)
+                        if (!isAdded)
+                        Log.e(TAG, "Error loading payments for $targetMonthYearStr in Org ID: $currentOrganizationId:", e)
                         progressBar.visibility = View.GONE
                         tvNoData.text = "Error loading payments: ${e.message}"
                         tvNoData.visibility = View.VISIBLE
@@ -396,8 +396,8 @@ class PaymentSummaryFragment : Fragment() {
                         isCurrentPeriodDataLoaded = false
                     }
             }.addOnFailureListener { e ->
-                if (!isAdded) return@addOnFailureListener
-                Log.e(TAG, "Error loading students for teacher $currentTeacherId:", e)
+                if (!isAdded)
+                Log.e(TAG, "Error loading students for teacher $currentTeacherId in Org ID: $currentOrganizationId:", e)
                 progressBar.visibility = View.GONE
                 tvNoData.text = "Error loading students: ${e.message}"
                 tvNoData.visibility = View.VISIBLE
@@ -422,10 +422,8 @@ class PaymentSummaryFragment : Fragment() {
             val paymentInfo = studentMonthlyPaymentDetails[studentDetail.id] ?: Pair(0.0, 0)
             paymentSummaryDisplayList.add(
                 StudentPaymentSummaryItem(
-                    studentId = studentDetail.id,
-                    studentName = studentDetail.studentName,
-                    totalPaidThisMonth = paymentInfo.first,
-                    paymentCountThisMonth = paymentInfo.second,
+                    studentId = studentDetail.id, studentName = studentDetail.studentName,
+                    totalPaidThisMonth = paymentInfo.first, paymentCountThisMonth = paymentInfo.second,
                     profileImageUrl = studentDetail.profileImageUrl
                 )
             )
@@ -438,7 +436,7 @@ class PaymentSummaryFragment : Fragment() {
             tvNoData.visibility = View.VISIBLE
             recyclerViewPayments.visibility = View.GONE
         } else if (paymentSummaryDisplayList.isEmpty() && studentDetailsMap.isNotEmpty()){
-            tvNoData.text = "No students found (after processing). Check logs."
+            tvNoData.text = "No payments found for the selected period." // Changed message
             tvNoData.visibility = View.VISIBLE
             recyclerViewPayments.visibility = View.GONE
         }
@@ -489,8 +487,9 @@ class PaymentSummaryFragment : Fragment() {
     }
 
     private fun showReportOptionsDialog() {
-        if (!isAdded || context == null) {
-            Log.w(TAG, "showReportOptionsDialog: Fragment not added or context is null.")
+        if (!isAdded || context == null || currentOrganizationId == null) {
+            Log.w(TAG, "showReportOptionsDialog: Fragment not added, context null, or organization ID missing.")
+            Toast.makeText(context, "Cannot generate report: Organization information missing.", Toast.LENGTH_SHORT).show()
             return
         }
         val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_report_options, null)
@@ -538,11 +537,13 @@ class PaymentSummaryFragment : Fragment() {
             .setView(dialogView)
             .setPositiveButton("Generate") { _, _ ->
                 reportYearSelected = spinnerReportYear.selectedItem.toString().toInt()
-                if (reportTypeSelected == "Monthly") {
+                if (reportTypeSelected == "Monthly" && currentOrganizationId != null) {
                     reportMonthSelected = spinnerReportMonth.selectedItemPosition
                     fetchDataAndGeneratePdf(reportTypeSelected, reportYearSelected, reportMonthSelected)
-                } else {
+                } else if (currentOrganizationId != null) {
                     fetchDataAndGeneratePdf(reportTypeSelected, reportYearSelected)
+                } else {
+                    Toast.makeText(context, "Cannot generate report: Organization ID missing.", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -551,8 +552,8 @@ class PaymentSummaryFragment : Fragment() {
     }
 
     private fun fetchDataAndGeneratePdf(type: String, year: Int, month: Int? = null) {
-        if (!isAdded || context == null || currentTeacherId == null || currentTeacherName == null) {
-            Toast.makeText(context, "Class information is missing or fragment not ready.", Toast.LENGTH_SHORT).show()
+        if (!isAdded || context == null || currentTeacherId == null || currentTeacherName == null || currentOrganizationId == null) {
+            Toast.makeText(context, "Class or Organization information is missing or fragment not ready.", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -561,9 +562,9 @@ class PaymentSummaryFragment : Fragment() {
         lifecycleScope.launch {
             try {
                 val reportData: List<StudentPaymentSummaryItem> = if (type == "Monthly" && month != null) {
-                    fetchReportDataForMonth(currentTeacherId!!, year, month)
+                    fetchReportDataForMonth(currentTeacherId!!, currentOrganizationId!!, year, month)
                 } else {
-                    fetchReportDataForYear(currentTeacherId!!, year)
+                    fetchReportDataForYear(currentTeacherId!!, currentOrganizationId!!, year)
                 }
                 dialogProgressBar.dismiss()
 
@@ -572,7 +573,7 @@ class PaymentSummaryFragment : Fragment() {
                     return@launch
                 }
 
-                val madarsaName = "Your Madarsa Name" // Replace with actual or fetch from settings
+                val madarsaName = FirebaseAuthManager.getOrganizationName(requireContext()) ?: "Your Madarsa Name"
 
                 val pdfUri = if (type == "Monthly" && month != null) {
                     PdfGenerator.createMonthlyReportPdf(
@@ -595,8 +596,6 @@ class PaymentSummaryFragment : Fragment() {
 
                 if (pdfUri != null) {
                     Toast.makeText(context, "Report saved. Check Documents/MadarsaReports.", Toast.LENGTH_LONG).show()
-                    // Optionally, offer to open or share the PDF
-                    // tryOpenPdf(pdfUri)
                 } else {
                     Toast.makeText(context, "Failed to generate PDF report.", Toast.LENGTH_LONG).show()
                 }
@@ -622,7 +621,7 @@ class PaymentSummaryFragment : Fragment() {
             val tv = TextView(context).apply {
                 text = message
                 setPadding(32,0,0,0)
-                textSize = 16f // Make text a bit larger
+                textSize = 16f
             }
             addView(tv)
         }
@@ -633,12 +632,14 @@ class PaymentSummaryFragment : Fragment() {
             .show()
     }
 
-    private suspend fun fetchReportDataForMonth(teacherId: String, year: Int, month: Int): List<StudentPaymentSummaryItem> {
+    private suspend fun fetchReportDataForMonth(teacherId: String, organizationId: String, year: Int, month: Int): List<StudentPaymentSummaryItem> {
         val studentDetailsMap = mutableMapOf<String, StudentDetailsItem>()
         val studentMonthlyPaymentDetails = mutableMapOf<String, Pair<Double, Int>>()
         val reportList = mutableListOf<StudentPaymentSummaryItem>()
 
-        val studentsSnapshot = db.collection("students")
+        // NEW: Scope query to the organization
+        val studentsSnapshot = db.collection("organizations").document(organizationId)
+            .collection("students")
             .whereEqualTo("teacherId", teacherId)
             .orderBy("studentName").get().await()
 
@@ -657,7 +658,9 @@ class PaymentSummaryFragment : Fragment() {
         val calendar = Calendar.getInstance(); calendar.set(year, month, 1)
         val targetMonthYearStr = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(calendar.time)
 
-        val paymentsSnap = db.collection("feePayments")
+        // NEW: Scope query to the organization
+        val paymentsSnap = db.collection("organizations").document(organizationId)
+            .collection("feePayments")
             .whereEqualTo("teacherId", teacherId)
             .whereEqualTo("paymentMonth", targetMonthYearStr)
             .get().await()
@@ -686,12 +689,14 @@ class PaymentSummaryFragment : Fragment() {
         return reportList
     }
 
-    private suspend fun fetchReportDataForYear(teacherId: String, year: Int): List<StudentPaymentSummaryItem> {
+    private suspend fun fetchReportDataForYear(teacherId: String, organizationId: String, year: Int): List<StudentPaymentSummaryItem> {
         val studentDetailsMap = mutableMapOf<String, StudentDetailsItem>()
         val studentYearlyPaymentDetails = mutableMapOf<String, Pair<Double, Int>>()
         val reportList = mutableListOf<StudentPaymentSummaryItem>()
 
-        val studentsSnapshot = db.collection("students")
+        // NEW: Scope query to the organization
+        val studentsSnapshot = db.collection("organizations").document(organizationId)
+            .collection("students")
             .whereEqualTo("teacherId", teacherId)
             .orderBy("studentName").get().await()
 
@@ -707,7 +712,9 @@ class PaymentSummaryFragment : Fragment() {
             studentYearlyPaymentDetails[studentId] = Pair(0.0, 0)
         }
 
-        val paymentsSnap = db.collection("feePayments")
+        // NEW: Scope query to the organization
+        val paymentsSnap = db.collection("organizations").document(organizationId)
+            .collection("feePayments")
             .whereEqualTo("teacherId", teacherId)
             .whereEqualTo("paymentYear", year)
             .get().await()
@@ -736,16 +743,14 @@ class PaymentSummaryFragment : Fragment() {
         return reportList
     }
 
-    // Optional: Helper function to try opening the PDF
     private fun tryOpenPdf(uri: Uri) {
         if (!isAdded || context == null) return
         try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/pdf")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) // Important for content URIs
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
             }
-            // Verify that an app exists to receive the intent
             if (intent.resolveActivity(requireActivity().packageManager) != null) {
                 startActivity(intent)
             } else {

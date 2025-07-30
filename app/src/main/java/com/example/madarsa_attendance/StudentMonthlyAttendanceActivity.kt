@@ -33,9 +33,10 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
     private lateinit var db: FirebaseFirestore
     private var studentId: String? = null
     private var studentName: String? = null
-    private var teacherId: String? = null // To query specific teacher's attendance records
+    private var teacherId: String? = null
     private var targetYear: Int = 0
-    private var targetMonth: Int = 0 // 0-indexed
+    private var targetMonth: Int = 0
+    private var currentOrganizationId: String? = null // NEW: Organization ID
 
     private val dailyAttendanceList = mutableListOf<DailyAttendanceStatus>()
 
@@ -48,7 +49,9 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
         studentName = intent.getStringExtra("STUDENT_NAME")
         teacherId = intent.getStringExtra("TEACHER_ID")
         targetYear = intent.getIntExtra("TARGET_YEAR", Calendar.getInstance().get(Calendar.YEAR))
-        targetMonth = intent.getIntExtra("TARGET_MONTH", Calendar.getInstance().get(Calendar.MONTH)) // 0-indexed
+        targetMonth = intent.getIntExtra("TARGET_MONTH", Calendar.getInstance().get(Calendar.MONTH))
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+
 
         toolbar = findViewById(R.id.student_monthly_attendance_toolbar)
         setSupportActionBar(toolbar)
@@ -68,6 +71,12 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
             finish()
             return
         }
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
 
         tvStudentNameHeader.text = "Student: ${studentName ?: "N/A"}"
         val monthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(
@@ -86,8 +95,8 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
     }
 
     private fun loadMonthlyAttendance() {
-        if (studentId == null || teacherId == null) return
-        Log.d(TAG, "Loading monthly attendance for Student: $studentId, Teacher: $teacherId, Year: $targetYear, Month: ${targetMonth + 1}")
+        if (studentId == null || teacherId == null || currentOrganizationId == null) return // NEW: Check organization ID
+        Log.d(TAG, "Loading monthly attendance for Student: $studentId, Teacher: $teacherId, Year: $targetYear, Month: ${targetMonth + 1}, Org ID: $currentOrganizationId")
 
         progressBar.visibility = View.VISIBLE
         tvNoData.visibility = View.GONE
@@ -100,22 +109,23 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
         val lastDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
         val lastDayOfMonth = "$monthYearStr-${String.format(Locale.getDefault(), "%02d", lastDay)}"
 
-        db.collection("attendanceRecords")
+        // NEW: Scope query to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("attendanceRecords")
             .whereEqualTo("teacherId", teacherId)
             .whereGreaterThanOrEqualTo("date", firstDayOfMonth)
             .whereLessThanOrEqualTo("date", lastDayOfMonth)
-            .orderBy("date", Query.Direction.ASCENDING) // Order by date
+            .orderBy("date", com.google.firebase.firestore.Query.Direction.ASCENDING)
             .get()
             .addOnSuccessListener { recordsSnapshot ->
                 progressBar.visibility = View.GONE
                 dailyAttendanceList.clear()
 
                 if (recordsSnapshot.isEmpty) {
-                    Log.d(TAG, "No attendance records found for this teacher in $monthYearStr")
-                    // We will still show all days of the month, marking them as "Not Marked"
+                    Log.d(TAG, "No attendance records found for this teacher in $monthYearStr for Org ID: $currentOrganizationId")
                 }
 
-                val attendanceMap = mutableMapOf<String, String>() // Date -> Status
+                val attendanceMap = mutableMapOf<String, String>()
                 recordsSnapshot.forEach { doc ->
                     val date = doc.getString("date")
                     val studentAttendances = doc.get("studentAttendances") as? List<Map<String, Any>>
@@ -127,7 +137,6 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
                     }
                 }
 
-                // Generate entries for all days of the month
                 val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
                 for (day in 1..daysInMonth) {
                     val dateStr = "$monthYearStr-${String.format(Locale.getDefault(), "%02d", day)}"
@@ -135,7 +144,7 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
                     dailyAttendanceList.add(DailyAttendanceStatus(dateStr, status))
                 }
 
-                if (dailyAttendanceList.isEmpty()) { // Should not happen if we generate all days
+                if (dailyAttendanceList.isEmpty()) {
                     tvNoData.visibility = View.VISIBLE
                     recyclerView.visibility = View.GONE
                 } else {
@@ -148,7 +157,7 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
                 progressBar.visibility = View.GONE
                 tvNoData.text = "Error loading attendance."
                 tvNoData.visibility = View.VISIBLE
-                Log.e(TAG, "Error fetching monthly attendance", e)
+                Log.e(TAG, "Error fetching monthly attendance for Org ID: $currentOrganizationId", e)
                 Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }

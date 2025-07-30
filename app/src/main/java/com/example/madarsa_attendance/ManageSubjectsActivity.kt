@@ -22,17 +22,16 @@ class ManageSubjectsActivity : AppCompatActivity() {
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var recyclerView: RecyclerView
-    private lateinit var adapter: SubjectAdapter // Adapter instance
+    private lateinit var adapter: SubjectAdapter
     private lateinit var fabAddSubject: FloatingActionButton
     private lateinit var progressBar: ProgressBar
     private lateinit var tvNoSubjects: TextView
 
     private lateinit var db: FirebaseFirestore
-    // This list is primarily for the adapter's initial construction.
-    // The adapter will maintain its own internal list copy after updateData is called.
     private val initialSubjectListForAdapter = mutableListOf<SubjectItem>()
     private var currentTeacherIdForContext: String? = null
     private var currentTeacherNameForContext: String? = null
+    private var currentOrganizationId: String? = null // NEW: Organization ID
 
 
     companion object {
@@ -56,8 +55,10 @@ class ManageSubjectsActivity : AppCompatActivity() {
         db = FirebaseFirestore.getInstance()
         currentTeacherIdForContext = intent.getStringExtra(EXTRA_TEACHER_ID_CONTEXT)
         currentTeacherNameForContext = intent.getStringExtra(EXTRA_TEACHER_NAME_CONTEXT)
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
 
-        Log.d(TAG, "onCreate: currentTeacherIdForContext = $currentTeacherIdForContext, currentTeacherNameForContext = $currentTeacherNameForContext")
+
+        Log.d(TAG, "onCreate: currentTeacherIdForContext = $currentTeacherIdForContext, currentTeacherNameForContext = $currentTeacherNameForContext, Org ID = $currentOrganizationId")
 
         if (currentTeacherIdForContext == null) {
             Log.e(TAG, "CRITICAL ERROR: ManageSubjectsActivity launched without EXTRA_TEACHER_ID_CONTEXT. This screen requires a teacher context.")
@@ -65,9 +66,13 @@ class ManageSubjectsActivity : AppCompatActivity() {
             finish()
             return
         }
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         if (currentTeacherNameForContext == null) {
             Log.w(TAG, "Warning: Teacher name context is missing, toolbar title might be generic.")
-            // Potentially finish() if name is also critical for user understanding
         }
 
         toolbar = findViewById(R.id.manage_subjects_toolbar)
@@ -82,10 +87,9 @@ class ManageSubjectsActivity : AppCompatActivity() {
 
         toolbar.title = "Subjects for ${currentTeacherNameForContext ?: "Class"}"
 
-        setupRecyclerView() // Initialize adapter here
+        setupRecyclerView()
 
         fabAddSubject.setOnClickListener {
-            // currentTeacherIdForContext is guaranteed to be non-null if we reached here
             val intent = Intent(this, AddEditSubjectActivity::class.java)
             intent.putExtra(AddEditSubjectActivity.EXTRA_TEACHER_ID_FOR_SUBJECT, currentTeacherIdForContext)
             Log.d(TAG, "Launching AddEditSubjectActivity to ADD for teacherId: $currentTeacherIdForContext")
@@ -96,11 +100,11 @@ class ManageSubjectsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume: Loading/refreshing subjects.")
-        if (currentTeacherIdForContext != null) {
+        if (currentTeacherIdForContext != null && currentOrganizationId != null) { // NEW: Check organization ID
             loadSubjects()
         } else {
-            Log.e(TAG, "onResume: currentTeacherIdForContext is null. Cannot load subjects. This should have been caught in onCreate.")
-            tvNoSubjects.text = "Error: Teacher context lost."
+            Log.e(TAG, "onResume: currentTeacherIdForContext or currentOrganizationId is null. Cannot load subjects. This should have been caught in onCreate.")
+            tvNoSubjects.text = "Error: Teacher or organization context lost."
             tvNoSubjects.visibility = View.VISIBLE
             recyclerView.visibility = View.GONE
             progressBar.visibility = View.GONE
@@ -108,9 +112,8 @@ class ManageSubjectsActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        // Initialize the adapter with an empty list or the initial placeholder list
         adapter = SubjectAdapter(
-            initialSubjectListForAdapter, // Pass a mutable list
+            initialSubjectListForAdapter,
             onEditClick = { subject ->
                 val intent = Intent(this, AddEditSubjectActivity::class.java).apply {
                     putExtra(AddEditSubjectActivity.EXTRA_SUBJECT_ID, subject.id)
@@ -127,32 +130,37 @@ class ManageSubjectsActivity : AppCompatActivity() {
             }
         )
         recyclerView.layoutManager = LinearLayoutManager(this)
-        recyclerView.adapter = adapter // Set the adapter to RecyclerView
+        recyclerView.adapter = adapter
         Log.d(TAG, "setupRecyclerView: Adapter initialized and set.")
     }
 
     private fun loadSubjects() {
-        Log.d(TAG, "loadSubjects: Called for teacherId: $currentTeacherIdForContext")
+        if (currentTeacherIdForContext == null || currentOrganizationId == null) { // NEW: Check organization ID
+            Log.w(TAG, "loadSubjects: Aborting. Teacher ID or Organization ID is null.")
+            return
+        }
+
+        Log.d(TAG, "loadSubjects: Called for teacherId: $currentTeacherIdForContext, Org ID: $currentOrganizationId")
         progressBar.visibility = View.VISIBLE
         tvNoSubjects.visibility = View.GONE
         recyclerView.visibility = View.GONE
 
-        // currentTeacherIdForContext should be non-null here due to checks in onResume/onCreate
-        db.collection("subjects")
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("subjects")
             .whereEqualTo("teacherId", currentTeacherIdForContext)
             .orderBy("subjectName", Query.Direction.ASCENDING)
             .get()
             .addOnSuccessListener { documents ->
                 progressBar.visibility = View.GONE
-                val newFetchedSubjects = mutableListOf<SubjectItem>() // Temporary list for fetched data
+                val newFetchedSubjects = mutableListOf<SubjectItem>()
 
                 if (documents.isEmpty) {
-                    Log.d(TAG, "loadSubjects: No subjects found for teacherId: $currentTeacherIdForContext")
+                    Log.d(TAG, "loadSubjects: No subjects found for teacherId: $currentTeacherIdForContext in Org ID: $currentOrganizationId")
                     tvNoSubjects.text = "No subjects added for this class yet."
                     tvNoSubjects.visibility = View.VISIBLE
                     recyclerView.visibility = View.GONE
                 } else {
-                    Log.d(TAG, "loadSubjects: Found ${documents.size()} subjects for teacherId: $currentTeacherIdForContext")
+                    Log.d(TAG, "loadSubjects: Found ${documents.size()} subjects for teacherId: $currentTeacherIdForContext in Org ID: $currentOrganizationId")
                     recyclerView.visibility = View.VISIBLE
                     tvNoSubjects.visibility = View.GONE
                     for (document in documents) {
@@ -161,7 +169,6 @@ class ManageSubjectsActivity : AppCompatActivity() {
                         Log.d(TAG, "loadSubjects: Fetched - Name: ${subject.subjectName}, DocTeacherId: ${subject.teacherId}, DocId: ${subject.id}")
                     }
                 }
-                // Update the adapter with the new list of fetched subjects
                 adapter.updateData(newFetchedSubjects)
                 Log.d(TAG, "loadSubjects: Adapter updated with ${newFetchedSubjects.size} items. Adapter's current itemCount: ${adapter.itemCount}")
 
@@ -171,7 +178,7 @@ class ManageSubjectsActivity : AppCompatActivity() {
                 tvNoSubjects.text = "Error loading subjects."
                 tvNoSubjects.visibility = View.VISIBLE
                 recyclerView.visibility = View.GONE
-                Log.e(TAG, "Error loading subjects for teacherId: $currentTeacherIdForContext", e)
+                Log.e(TAG, "Error loading subjects for teacherId: $currentTeacherIdForContext, Org ID: $currentOrganizationId", e)
                 Toast.makeText(this, "Error loading subjects: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
@@ -188,9 +195,14 @@ class ManageSubjectsActivity : AppCompatActivity() {
     }
 
     private fun deleteSubjectFromFirestore(subject: SubjectItem) {
-        Log.d(TAG, "deleteSubjectFromFirestore: Attempting to delete subjectId: ${subject.id} with name: ${subject.subjectName}")
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Cannot delete: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Log.d(TAG, "deleteSubjectFromFirestore: Attempting to delete subjectId: ${subject.id} with name: ${subject.subjectName} in Org ID: $currentOrganizationId")
         progressBar.visibility = View.VISIBLE
-        db.collection("subjects").document(subject.id)
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("subjects").document(subject.id)
             .delete()
             .addOnSuccessListener {
                 progressBar.visibility = View.GONE
@@ -201,7 +213,7 @@ class ManageSubjectsActivity : AppCompatActivity() {
             .addOnFailureListener { e ->
                 progressBar.visibility = View.GONE
                 Toast.makeText(this, "Error deleting subject: ${e.message}", Toast.LENGTH_LONG).show()
-                Log.e(TAG, "Error deleting subject ${subject.id}", e)
+                Log.e(TAG, "Error deleting subject ${subject.id} in Org ID: $currentOrganizationId", e)
             }
     }
 }

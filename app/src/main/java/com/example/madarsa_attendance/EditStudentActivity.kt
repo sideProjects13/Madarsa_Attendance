@@ -70,6 +70,8 @@ class EditStudentActivity : AppCompatActivity() {
     private lateinit var db: FirebaseFirestore
     private var studentId: String? = null
     private var currentTeacherNameFromIntent: String? = null
+    private var currentOrganizationId: String? = null // NEW: Organization ID
+
     private var imageUri: Uri? = null // This will hold the URI of a NEW image if selected
     private var existingProfileImageUrl: String? = null // This holds the student's current image URL
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
@@ -81,9 +83,15 @@ class EditStudentActivity : AppCompatActivity() {
         db = FirebaseFirestore.getInstance()
         studentId = intent.getStringExtra("STUDENT_ID")
         currentTeacherNameFromIntent = intent.getStringExtra("TEACHER_NAME")
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
 
         if (studentId == null) {
             Toast.makeText(this, "Student ID not found.", Toast.LENGTH_LONG).show(); finish(); return
+        }
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
         }
 
         initializeViews()
@@ -145,57 +153,66 @@ class EditStudentActivity : AppCompatActivity() {
     }
 
     private fun loadStudentDetails() {
-        setInputsEnabled(false, isInitialLoad = true)
-        db.collection("students").document(studentId!!).get().addOnSuccessListener { document ->
-            setInputsEnabled(true)
-            if (document != null && document.exists()) {
-                val student = document.toObject(StudentDetailsItem::class.java)
-                if (student != null) {
-                    etStudentName.setText(student.studentName)
-                    etParentName.setText(student.parentName)
-                    etParentMobile.setText(student.parentMobileNumber)
-                    etRegNo.setText(student.regNo)
-                    etBirthDate.setText(student.birthDate)
-                    etAdmissionDate.setText(student.admissionDate)
-
-                    when (student.gender) {
-                        "Male" -> rgGender.check(R.id.rbMaleEdit)
-                        "Female" -> rgGender.check(R.id.rbFemaleEdit)
-                    }
-
-                    existingProfileImageUrl = student.profileImageUrl
-                    // Load existing image if available
-                    if (!existingProfileImageUrl.isNullOrEmpty()) {
-                        Glide.with(this).load(existingProfileImageUrl).circleCrop().placeholder(R.drawable.student).into(ivProfileImage)
-                    } else {
-                        ivProfileImage.setImageResource(R.drawable.student)
-                    }
-                    tvCurrentTeacher.text = student.teacherName ?: currentTeacherNameFromIntent ?: "N/A"
-                }
-            } else {
-                Toast.makeText(this, "Student details not found.", Toast.LENGTH_SHORT).show(); finish()
-            }
-        }.addOnFailureListener { e ->
-            setInputsEnabled(true)
-            Toast.makeText(this, "Error loading details: ${e.message}", Toast.LENGTH_LONG).show(); finish()
+        if (studentId == null || currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Student or Organization ID missing.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
+        setInputsEnabled(false, isInitialLoad = true)
+        // NEW: Scope query to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId!!).get().addOnSuccessListener { document ->
+                setInputsEnabled(true)
+                if (document != null && document.exists()) {
+                    val student = document.toObject(StudentDetailsItem::class.java)
+                    if (student != null) {
+                        etStudentName.setText(student.studentName)
+                        etParentName.setText(student.parentName)
+                        etParentMobile.setText(student.parentMobileNumber)
+                        etRegNo.setText(student.regNo)
+                        etBirthDate.setText(student.birthDate)
+                        etAdmissionDate.setText(student.admissionDate)
+
+                        when (student.gender) {
+                            "Male" -> rgGender.check(R.id.rbMaleEdit)
+                            "Female" -> rgGender.check(R.id.rbFemaleEdit)
+                        }
+
+                        existingProfileImageUrl = student.profileImageUrl
+                        // Load existing image if available
+                        if (!existingProfileImageUrl.isNullOrEmpty()) {
+                            Glide.with(this).load(existingProfileImageUrl).circleCrop().placeholder(R.drawable.student).into(ivProfileImage)
+                        } else {
+                            ivProfileImage.setImageResource(R.drawable.student)
+                        }
+                        tvCurrentTeacher.text = student.teacherName ?: currentTeacherNameFromIntent ?: "N/A"
+                    }
+                } else {
+                    Toast.makeText(this, "Student details not found.", Toast.LENGTH_SHORT).show(); finish()
+                }
+            }.addOnFailureListener { e ->
+                setInputsEnabled(true)
+                Toast.makeText(this, "Error loading details: ${e.message}", Toast.LENGTH_LONG).show(); finish()
+            }
     }
 
     private fun validateAndUpdateStudentDetails() {
-        // Simple validation, can be expanded
         if (etStudentName.text.toString().trim().isEmpty()) {
             tilStudentName.error = "Student name cannot be empty"
             return
         } else {
             tilStudentName.error = null
         }
+        // NEW: Basic check for organization ID before proceeding
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Cannot save changes: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         setInputsEnabled(false)
         if (imageUri != null) {
-            // A new image was selected, so upload it first
             uploadImageAndUpdateStudent()
         } else {
-            // No new image selected, update Firestore with existing image URL
             updateStudentInFirestore(existingProfileImageUrl)
         }
     }
@@ -204,13 +221,11 @@ class EditStudentActivity : AppCompatActivity() {
         MediaManager.get().upload(imageUri).unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT)
             .option("folder", "student_profiles").callback(object : UploadCallback {
                 override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
-                    // Image uploaded successfully, get the new URL
                     val newImageUrl = resultData?.get("secure_url") as? String
                     updateStudentInFirestore(newImageUrl)
                 }
                 override fun onError(requestId: String?, error: ErrorInfo?) {
                     Toast.makeText(this@EditStudentActivity, "Image upload failed. Updating details without image change.", Toast.LENGTH_LONG).show()
-                    // If upload fails, proceed with the update using the old image URL
                     updateStudentInFirestore(existingProfileImageUrl)
                 }
                 override fun onStart(requestId: String?) {}
@@ -219,13 +234,16 @@ class EditStudentActivity : AppCompatActivity() {
             }).dispatch()
     }
 
-    // --- FUNCTION CORRECTED ---
     private fun updateStudentInFirestore(imageUrl: String?) {
+        if (studentId == null || currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Cannot update: Student or Organization ID missing.", Toast.LENGTH_SHORT).show()
+            setInputsEnabled(true)
+            return
+        }
+
         val selectedGenderId = rgGender.checkedRadioButtonId
         val gender = if (selectedGenderId != -1) findViewById<RadioButton>(selectedGenderId).text.toString() else null
 
-        // Use a mutable map to build the update data.
-        // This allows us to conditionally add the image URL.
         val studentUpdates = mutableMapOf<String, Any?>(
             "studentName" to etStudentName.text.toString().trim(),
             "parentName" to etParentName.text.toString().trim(),
@@ -237,14 +255,14 @@ class EditStudentActivity : AppCompatActivity() {
             "lastUpdatedAt" to FieldValue.serverTimestamp()
         )
 
-        // **THE FIX**: Only add the profileImageUrl to the map if it's not null.
-        // This prevents overwriting an existing URL with null or an empty string.
         if (imageUrl != null) {
             studentUpdates["profileImageUrl"] = imageUrl
         }
 
-        db.collection("students").document(studentId!!)
-            .set(studentUpdates, SetOptions.merge()) // Use merge to only update the specified fields
+        // NEW: Scope update to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId!!)
+            .set(studentUpdates, SetOptions.merge())
             .addOnSuccessListener {
                 Toast.makeText(this, "Details updated successfully.", Toast.LENGTH_SHORT).show()
                 setResult(Activity.RESULT_OK)

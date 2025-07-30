@@ -7,15 +7,6 @@
     android:orientation="vertical"
     tools:context=".StudentPaymentHistoryActivity">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/student_payment_history_toolbar"
-        android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
-        app:navigationIcon="@drawable/ic_arrow_back"
-        app:titleTextColor="?attr/colorOnPrimary"
-        tools:title="Payments: Student Name" />
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

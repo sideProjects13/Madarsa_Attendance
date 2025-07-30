@@ -1,3 +1,4 @@
+// src/main/java/com/example/madarsa_attendance/InactiveStudentAdapter.kt
 package com.example.madarsa_attendance
 
 import android.view.LayoutInflater
@@ -18,7 +19,7 @@ class InactiveStudentAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): InactiveViewHolder {
         val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_inactive_student, parent, false) // Use a dedicated layout for this
+            .inflate(R.layout.item_inactive_student, parent, false)
         return InactiveViewHolder(view)
     }
 
@@ -32,10 +33,12 @@ class InactiveStudentAdapter(
         private val parentInfoTextView: TextView = itemView.findViewById(R.id.tv_inactive_parent_info)
         private val profileImageView: ImageView = itemView.findViewById(R.id.iv_inactive_student_icon)
         private val reactivateButton: MaterialButton = itemView.findViewById(R.id.btn_reactivate)
+        private val teacherNameTextView: TextView = itemView.findViewById(R.id.tv_inactive_teacher_name) // NEW TextView
 
         fun bind(student: StudentDetailsItem, onReactivateClick: (StudentDetailsItem) -> Unit) {
             nameTextView.text = student.studentName
             parentInfoTextView.text = "Parent: ${student.parentName ?: "N/A"}"
+            teacherNameTextView.text = "Class: ${student.teacherName ?: "N/A"}" // Set teacher name
 
             if (!student.profileImageUrl.isNullOrEmpty()) {
                 Glide.with(itemView.context)
@@ -55,14 +58,26 @@ class InactiveStudentAdapter(
         }
     }
 
-    // DiffUtil helps ListAdapter determine which items have changed, improving performance
     class StudentDiffCallback : DiffUtil.ItemCallback<StudentDetailsItem>() {
         override fun areItemsTheSame(oldItem: StudentDetailsItem, newItem: StudentDetailsItem): Boolean {
             return oldItem.id == newItem.id
         }
 
         override fun areContentsTheSame(oldItem: StudentDetailsItem, newItem: StudentDetailsItem): Boolean {
+            // Note: Data class automatically implements equals/hashCode based on all properties
             return oldItem == newItem
         }
     }
 }
+
+// DiffUtil helps ListAdapter determine which items have changed, improving performanceclass StudentDiffCallback : DiffUtil.ItemCallback<StudentDetailsItem>() {
+//        override fun areItemsTheSame(oldItem: StudentDetailsItem, newItem: StudentDetailsItem): Boolean {
+//            return oldItem.id == newItem.id
+//        }
+//
+//        override fun areContentsTheSame(oldItem: StudentDetailsItem, newItem: StudentDetailsItem): Boolean {
+//            // Note: Data class automatically implements equals/hashCode based on all properties
+//            return oldItem == newItem
+//        }
+//    }
+//}

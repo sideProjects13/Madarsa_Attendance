@@ -46,19 +46,26 @@ class AddTeacherActivity : AppCompatActivity() {
     private lateinit var btnSaveTeacher: MaterialButton
     private lateinit var progressBar: ProgressBar
     private lateinit var db: FirebaseFirestore
+    private var currentOrganizationId: String? = null // NEW: Organization ID for multi-tenancy
 
     private var imageUri: Uri? = null
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
 
-    // --- VV THE ONLY CHANGE NEEDED FOR THIS SPECIFIC ERROR VV ---
-    private val UNSIGNED_UPLOAD_PRESET = "BIBI_AYESHA_MASJID" // <<< CORRECTED PRESET NAME
-    // --- ^^ THE ONLY CHANGE NEEDED FOR THIS SPECIFIC ERROR ^^ ---
+    private val UNSIGNED_UPLOAD_PRESET = "BIBI_AYESHA_MASJID"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_add_teacher)
 
         db = FirebaseFirestore.getInstance()
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+
+        // CRITICAL CHECK FOR ORGANIZATION ID
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Organization data missing. Please log in again.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         val toolbar: MaterialToolbar = findViewById(R.id.add_teacher_toolbar)
         setSupportActionBar(toolbar)
@@ -172,6 +179,12 @@ class AddTeacherActivity : AppCompatActivity() {
         if (!validateInputs()) {
             return
         }
+        if (currentOrganizationId == null) { // NEW: Check organization ID
+            Log.e(TAG, "saveTeacher: currentOrganizationId is null. Aborting save.")
+            Toast.makeText(this, "Error: Organization data missing. Cannot save teacher.", Toast.LENGTH_LONG).show()
+            return
+        }
+
         setInputsEnabled(false)
 
         val teacherName = etTeacherName.text.toString().trim()
@@ -180,8 +193,8 @@ class AddTeacherActivity : AppCompatActivity() {
         if (imageUri != null) {
             Log.d(TAG, "Attempting to upload with preset: $UNSIGNED_UPLOAD_PRESET")
             MediaManager.get().upload(imageUri)
-                .unsigned(UNSIGNED_UPLOAD_PRESET) // Uses the corrected preset name
-                .option("folder", "photos") // This matches your preset's asset folder
+                .unsigned(UNSIGNED_UPLOAD_PRESET)
+                .option("folder", "photos")
                 .callback(object : UploadCallback {
                     override fun onStart(requestId: String) { Log.d(TAG, "Cloudinary: Upload started for $requestId with preset $UNSIGNED_UPLOAD_PRESET") }
                     override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) { /* Optional */ }
@@ -209,6 +222,11 @@ class AddTeacherActivity : AppCompatActivity() {
     }
 
     private fun saveTeacherDataToFirestore(name: String, mobile: String, imageUrl: String?) {
+        if (currentOrganizationId == null) { // NEW: Check organization ID again for safety
+            handleSaveFailure(Exception("Organization ID is null"), "Internal Error: Organization data missing.")
+            return
+        }
+
         val teacherData = hashMapOf(
             "teacherName" to name,
             "mobileNumber" to mobile,
@@ -217,7 +235,8 @@ class AddTeacherActivity : AppCompatActivity() {
             imageUrl?.let { put("profileImageUrl", it) }
         }
 
-        db.collection("teachers")
+        db.collection("organizations").document(currentOrganizationId!!) // NEW
+            .collection("teachers") // NEW
             .add(teacherData)
             .addOnSuccessListener {
                 Toast.makeText(this, "Teacher added successfully!", Toast.LENGTH_SHORT).show()

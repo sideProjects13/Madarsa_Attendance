@@ -1,4 +1,4 @@
-package com.example.madarsa_attendance // <<< YOUR PACKAGE NAME
+package com.example.madarsa_attendance
 
 import android.os.Bundle
 import android.util.Log
@@ -24,7 +24,6 @@ class ClassLeaderboardActivity : AppCompatActivity() {
     }
 
     private lateinit var toolbar: MaterialToolbar
-    // CHANGED: From Spinner to AutoCompleteTextView
     private lateinit var spinnerMonth: AutoCompleteTextView
     private lateinit var spinnerYear: AutoCompleteTextView
     private lateinit var recyclerViewLeaderboard: RecyclerView
@@ -35,6 +34,7 @@ class ClassLeaderboardActivity : AppCompatActivity() {
     private lateinit var db: FirebaseFirestore
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
+    private var currentOrganizationId: String? = null // NEW: Organization ID
 
     private val leaderboardList = mutableListOf<LeaderboardItem>()
 
@@ -43,12 +43,18 @@ class ClassLeaderboardActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Make sure your layout file name is correct here
         setContentView(R.layout.activity_class_leaderboard_with_filters)
 
         db = FirebaseFirestore.getInstance()
         currentTeacherId = intent.getStringExtra("TEACHER_ID")
         currentTeacherName = intent.getStringExtra("TEACHER_NAME")
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         toolbar = findViewById(R.id.class_leaderboard_toolbar)
         setSupportActionBar(toolbar)
@@ -64,8 +70,7 @@ class ClassLeaderboardActivity : AppCompatActivity() {
         tvNoDataLeaderboard = findViewById(R.id.tvNoDataLeaderboard)
 
         if (currentTeacherId == null) {
-            Toast.makeText(this, "Teacher info missing.", Toast.LENGTH_LONG).show()
-            finish(); return
+            Toast.makeText(this, "Teacher info missing.", Toast.LENGTH_LONG).show(); finish(); return
         }
 
         setupRecyclerView()
@@ -81,10 +86,8 @@ class ClassLeaderboardActivity : AppCompatActivity() {
         }
         val monthAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, months)
         spinnerMonth.setAdapter(monthAdapter)
-        // Set initial text without triggering listener
         spinnerMonth.setText(months[selectedMonth], false)
 
-        // CHANGED: Use setOnItemClickListener for AutoCompleteTextView
         spinnerMonth.setOnItemClickListener { _, _, position, _ ->
             if (selectedMonth != position) {
                 selectedMonth = position
@@ -97,10 +100,8 @@ class ClassLeaderboardActivity : AppCompatActivity() {
         val years = (currentYearValue - 5..currentYearValue + 1).map { it.toString() }.reversed()
         val yearAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, years)
         spinnerYear.setAdapter(yearAdapter)
-        // Set initial text without triggering listener
         spinnerYear.setText(selectedYear.toString(), false)
 
-        // CHANGED: Use setOnItemClickListener for AutoCompleteTextView
         spinnerYear.setOnItemClickListener { _, _, position, _ ->
             val year = years[position].toInt()
             if (selectedYear != year) {
@@ -109,7 +110,6 @@ class ClassLeaderboardActivity : AppCompatActivity() {
             }
         }
 
-        // Load data initially
         loadLeaderboardData()
     }
 
@@ -119,12 +119,9 @@ class ClassLeaderboardActivity : AppCompatActivity() {
         recyclerViewLeaderboard.adapter = leaderboardAdapter
     }
 
-    // The rest of your data loading logic remains the same.
-    // I have included it here for completeness without any changes to the logic itself.
-
     private fun loadLeaderboardData() {
-        if (currentTeacherId == null) {
-            Toast.makeText(this, "Teacher info missing.", Toast.LENGTH_SHORT).show()
+        if (currentTeacherId == null || currentOrganizationId == null) { // NEW: Check organization ID
+            Toast.makeText(this, "Teacher or Organization info missing.", Toast.LENGTH_SHORT).show()
             return
         }
         progressBar.visibility = View.VISIBLE
@@ -142,7 +139,10 @@ class ClassLeaderboardActivity : AppCompatActivity() {
         val studentAbsentDays = mutableMapOf<String, Int>()
         val studentTotalMarkedDays = mutableMapOf<String, Int>()
 
-        db.collection("students").whereEqualTo("teacherId", currentTeacherId).get()
+        // NEW: Scope queries to the organization
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students")
+            .whereEqualTo("teacherId", currentTeacherId).get()
             .addOnSuccessListener { studentsSnapshot ->
                 if (isFinishing || isDestroyed) return@addOnSuccessListener
                 if (studentsSnapshot.isEmpty) {
@@ -158,7 +158,9 @@ class ClassLeaderboardActivity : AppCompatActivity() {
                     studentPresentDays[studentId] = 0; studentAbsentDays[studentId] = 0; studentTotalMarkedDays[studentId] = 0
                 }
 
-                db.collection("attendanceRecords")
+                // NEW: Scope queries to the organization
+                db.collection("organizations").document(currentOrganizationId!!)
+                    .collection("attendanceRecords")
                     .whereEqualTo("teacherId", currentTeacherId)
                     .whereGreaterThanOrEqualTo("date", firstDayOfMonth)
                     .whereLessThanOrEqualTo("date", lastDayOfMonth).get()

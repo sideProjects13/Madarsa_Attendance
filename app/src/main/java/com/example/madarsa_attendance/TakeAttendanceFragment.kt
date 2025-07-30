@@ -15,7 +15,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout // <<< IMPORT THIS
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -60,13 +60,15 @@ class TakeAttendanceFragment : Fragment() {
     private val progressBar get() = _progressBar!!
     private var _tvNoStudents: TextView? = null
     private val tvNoStudents get() = _tvNoStudents!!
-    private var _swipeRefreshLayout: SwipeRefreshLayout? = null // <<< ADDED
+    private var _swipeRefreshLayout: SwipeRefreshLayout? = null
     private val swipeRefreshLayout get() = _swipeRefreshLayout!!
 
     // Backend & Data
     private lateinit var db: FirebaseFirestore
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
+    private var currentOrganizationId: String? = null // NEW: Organization ID
+
     private lateinit var dateForAttendance: String
     private var existingAttendanceDocId: String? = null
     private var isAttendanceDataLoadedForCurrentDate = false
@@ -81,6 +83,7 @@ class TakeAttendanceFragment : Fragment() {
         db = FirebaseFirestore.getInstance()
         dateForAttendance = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         teacherDataViewModel = ViewModelProvider(requireActivity()).get(TeacherDataViewModel::class.java)
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext()) // NEW: Get organization ID
     }
 
     override fun onCreateView(
@@ -95,14 +98,14 @@ class TakeAttendanceFragment : Fragment() {
         _btnSaveAttendance = view.findViewById(R.id.btnSaveAttendance)
         _progressBar = view.findViewById(R.id.progressBarTakeAttendance)
         _tvNoStudents = view.findViewById(R.id.tvNoStudentsForAttendance)
-        _swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout_attendance) // <<< INITIALIZE
+        _swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout_attendance)
         return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        if (currentTeacherId == null) {
-            Toast.makeText(context, "Teacher info missing.", Toast.LENGTH_LONG).show()
+        if (currentTeacherId == null || currentOrganizationId == null) {
+            Toast.makeText(context, "Teacher or Organization info missing.", Toast.LENGTH_LONG).show()
             btnChangeDate.isEnabled = false
             btnSaveAttendance.isEnabled = false
             return
@@ -110,7 +113,7 @@ class TakeAttendanceFragment : Fragment() {
         tvClassName.text = "Class: ${currentTeacherName ?: "Unknown"}"
         updateDateDisplay()
         setupRecyclerView()
-        setupSwipeToRefresh() // <<< CALL NEW FUNCTION
+        setupSwipeToRefresh()
         btnChangeDate.setOnClickListener { showDatePicker() }
         btnSaveAttendance.setOnClickListener { saveAttendance() }
 
@@ -127,7 +130,7 @@ class TakeAttendanceFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (currentTeacherId != null && !isAttendanceDataLoadedForCurrentDate && isFragmentVisibleToUser) {
+        if (currentTeacherId != null && currentOrganizationId != null && !isAttendanceDataLoadedForCurrentDate && isFragmentVisibleToUser) {
             loadStudentsAndCheckExistingAttendance()
         }
     }
@@ -140,25 +143,24 @@ class TakeAttendanceFragment : Fragment() {
         _tvClassName = null; _tvAttendanceDate = null; _btnChangeDate = null
         _recyclerViewStudents = null; _studentAdapter = null; _btnSaveAttendance = null
         _progressBar = null; _tvNoStudents = null
-        _swipeRefreshLayout?.setOnRefreshListener(null) // <<< CLEANUP
+        _swipeRefreshLayout?.setOnRefreshListener(null)
         _swipeRefreshLayout = null
     }
 
-    // <<< ADDED: New function to setup the refresh listener >>>
     private fun setupSwipeToRefresh() {
         swipeRefreshLayout.setOnRefreshListener {
             Log.d(TAG, "Swipe to refresh triggered for attendance.")
-            isAttendanceDataLoadedForCurrentDate = false // Force a reload from the server
+            isAttendanceDataLoadedForCurrentDate = false
             loadStudentsAndCheckExistingAttendance()
         }
     }
 
     private fun updateDateDisplay() {
-        tvAttendanceDate.text = "Date: $dateForAttendance"
+        tvAttendanceDate.text = "Date: ${SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateForAttendance) ?: Date())}"
     }
 
     private fun showDatePicker() {
-        if (!isAdded || context == null) return
+        if (!isAdded || context == null || currentOrganizationId == null) return
         val calendar = Calendar.getInstance()
         try {
             SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateForAttendance)?.let { calendar.time = it }
@@ -185,14 +187,13 @@ class TakeAttendanceFragment : Fragment() {
         recyclerViewStudents.adapter = studentAdapter
     }
 
-    // <<< MODIFIED: To handle SwipeRefreshLayout state >>>
     private fun loadStudentsAndCheckExistingAttendance() {
-        if (currentTeacherId == null || !isAdded) {
-            swipeRefreshLayout.isRefreshing = false // Stop spinner if it was running
+        if (currentTeacherId == null || currentOrganizationId == null || !isAdded) {
+            swipeRefreshLayout.isRefreshing = false
+            Log.w(TAG, "loadStudentsAndCheckExistingAttendance skipped: Teacher or Org ID missing, or fragment not added.")
             return
         }
 
-        // Show central progress bar ONLY if swipe-to-refresh is not already active
         if (!swipeRefreshLayout.isRefreshing) {
             progressBar.visibility = View.VISIBLE
         }
@@ -200,11 +201,14 @@ class TakeAttendanceFragment : Fragment() {
         recyclerViewStudents.visibility = View.GONE
         btnSaveAttendance.isEnabled = false
 
-        db.collection("attendanceRecords")
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("attendanceRecords")
             .whereEqualTo("teacherId", currentTeacherId)
             .whereEqualTo("date", dateForAttendance).limit(1).get()
             .addOnSuccessListener { attendanceSnapshot ->
+                // >>> CHANGE STARTS HERE <<<
                 if (!isAdded) return@addOnSuccessListener
+                // >>> CHANGE ENDS HERE <<<
                 val statuses = mutableMapOf<String, String>()
                 if (!attendanceSnapshot.isEmpty) {
                     existingAttendanceDocId = attendanceSnapshot.documents[0].id
@@ -219,29 +223,34 @@ class TakeAttendanceFragment : Fragment() {
                 fetchStudentsForClass(statuses)
             }
             .addOnFailureListener { e ->
+                // >>> CHANGE STARTS HERE <<<
                 if (!isAdded) return@addOnFailureListener
+                // >>> CHANGE ENDS HERE <<<
                 Log.e(TAG, "Error checking existing attendance: ", e)
                 Toast.makeText(context, "Could not check prior attendance. Marking fresh.", Toast.LENGTH_SHORT).show()
                 fetchStudentsForClass(mutableMapOf())
             }
     }
 
-    // <<< MODIFIED: To handle SwipeRefreshLayout state >>>
     private fun fetchStudentsForClass(statuses: Map<String, String>) {
-        if (currentTeacherId == null || !isAdded) {
+        if (currentTeacherId == null || currentOrganizationId == null || !isAdded) {
             progressBar.visibility = View.GONE
             swipeRefreshLayout.isRefreshing = false
+            Log.w(TAG, "fetchStudentsForClass skipped: Teacher or Org ID missing, or fragment not added.")
             return
         }
-        Log.d(TAG, "Fetching students for class: $currentTeacherId for attendance list")
+        Log.d(TAG, "Fetching students for class: $currentTeacherId for attendance list in Org ID: $currentOrganizationId")
 
-        db.collection("students").whereEqualTo("teacherId", currentTeacherId)
-            .whereEqualTo("isActive", true) // <<< IMPORTANT: only get active students
-            .orderBy("studentName", Query.Direction.ASCENDING).get()
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").whereEqualTo("teacherId", currentTeacherId)
+            .whereEqualTo("isActive", true)
+            .orderBy("studentName", com.google.firebase.firestore.Query.Direction.ASCENDING).get()
             .addOnSuccessListener { studentSnap ->
+                // >>> CHANGE STARTS HERE <<<
                 if (!isAdded) return@addOnSuccessListener
+                // >>> CHANGE ENDS HERE <<<
                 progressBar.visibility = View.GONE
-                swipeRefreshLayout.isRefreshing = false // Stop the swipe spinner
+                swipeRefreshLayout.isRefreshing = false
 
                 val list = mutableListOf<StudentAttendanceItem>()
                 if (!studentSnap.isEmpty) {
@@ -265,19 +274,20 @@ class TakeAttendanceFragment : Fragment() {
                 isAttendanceDataLoadedForCurrentDate = true
             }
             .addOnFailureListener { e ->
-                if (!isAdded) return@addOnFailureListener
+                // >>> CHANGE STARTS HERE <<<
+                if (!isAdded)
+                // >>> CHANGE ENDS HERE <<<
                 progressBar.visibility = View.GONE
-                swipeRefreshLayout.isRefreshing = false // Stop the swipe spinner
+                swipeRefreshLayout.isRefreshing = false
                 isAttendanceDataLoadedForCurrentDate = false
                 tvNoStudents.apply { text = "Error loading students."; visibility = View.VISIBLE }
                 btnSaveAttendance.isEnabled = false
-                Log.e(TAG, "Error fetching students for attendance list", e)
+                Log.e(TAG, "Error fetching students for attendance list in Org ID: $currentOrganizationId", e)
             }
     }
 
-    // saveAttendance function is unchanged.
     private fun saveAttendance() {
-        if (currentTeacherId == null || !isAdded) return
+        if (currentTeacherId == null || currentOrganizationId == null || !isAdded) return
         val data = studentAdapter.getAttendanceData()
         if (data.isEmpty()) {
             Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show(); return
@@ -300,19 +310,26 @@ class TakeAttendanceFragment : Fragment() {
             "lastUpdatedAt" to FieldValue.serverTimestamp()
         )
 
+        val attendanceRecordsCollectionRef = db.collection("organizations").document(currentOrganizationId!!)
+            .collection("attendanceRecords")
+
         val task = if (existingAttendanceDocId != null) {
-            db.collection("attendanceRecords").document(existingAttendanceDocId!!).set(record)
+            attendanceRecordsCollectionRef.document(existingAttendanceDocId!!).set(record)
         } else {
-            db.collection("attendanceRecords").add(record)
+            attendanceRecordsCollectionRef.add(record)
         }
 
         task.addOnSuccessListener {
+            // >>> CHANGE STARTS HERE <<<
             if (!isAdded) return@addOnSuccessListener
+            // >>> CHANGE ENDS HERE <<<
             progressBar.visibility = View.GONE
             btnSaveAttendance.isEnabled = true
             Toast.makeText(context, "Attendance for $dateForAttendance saved!", Toast.LENGTH_SHORT).show()
         }.addOnFailureListener { e ->
-            if (!isAdded) return@addOnFailureListener
+            // >>> CHANGE STARTS HERE <<<
+            if (!isAdded)
+            // >>> CHANGE ENDS HERE <<<
             progressBar.visibility = View.GONE
             btnSaveAttendance.isEnabled = true
             Toast.makeText(context, "Error saving: ${e.message}", Toast.LENGTH_LONG).show()

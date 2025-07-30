@@ -17,6 +17,10 @@ import kotlinx.coroutines.launch
 
 class ManageMarks : AppCompatActivity() {
 
+    private companion object {
+        private const val TAG = "ManageMarks"
+    }
+
     private lateinit var toolbar: MaterialToolbar
     private lateinit var recyclerView: RecyclerView
     private lateinit var progressBar: ProgressBar
@@ -27,6 +31,7 @@ class ManageMarks : AppCompatActivity() {
     private lateinit var reportCardGenerator: ReportCardGenerator
     private lateinit var teacherId: String
     private lateinit var examId: String
+    private var currentOrganizationId: String? = null // NEW: Organization ID
 
     private var allSubjects: List<SubjectItem> = emptyList()
     private var allStudentMarks: List<StudentMarks> = emptyList()
@@ -38,9 +43,15 @@ class ManageMarks : AppCompatActivity() {
         teacherId = intent.getStringExtra("EXTRA_TEACHER_ID") ?: ""
         examId = intent.getStringExtra("EXTRA_EXAM_ID") ?: ""
         val examName = intent.getStringExtra("EXTRA_EXAM_NAME") ?: "Enter Marks"
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
 
         if (teacherId.isEmpty() || examId.isEmpty()) {
             Toast.makeText(this, "Error: Missing data.", Toast.LENGTH_LONG).show(); finish(); return
+        }
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+            finish()
+            return
         }
 
         reportCardGenerator = ReportCardGenerator(this)
@@ -63,12 +74,19 @@ class ManageMarks : AppCompatActivity() {
     }
 
     private fun loadInitialData() {
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Cannot load data: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            progressBar.visibility = View.GONE
+            return
+        }
+
         progressBar.visibility = View.VISIBLE
         tvEmptyState.visibility = View.GONE
 
-        val studentsRef = db.collection("students").whereEqualTo("teacherId", teacherId)
-        val subjectsRef = db.collection("subjects").whereEqualTo("teacherId", teacherId)
-        val marksRef = db.collection("examResults").whereEqualTo("examId", examId).whereEqualTo("teacherId", teacherId)
+        // NEW: Scope all Firestore queries to the organization
+        val studentsRef = db.collection("organizations").document(currentOrganizationId!!).collection("students").whereEqualTo("teacherId", teacherId)
+        val subjectsRef = db.collection("organizations").document(currentOrganizationId!!).collection("subjects").whereEqualTo("teacherId", teacherId)
+        val marksRef = db.collection("organizations").document(currentOrganizationId!!).collection("examResults").whereEqualTo("examId", examId).whereEqualTo("teacherId", teacherId)
 
         subjectsRef.get().addOnSuccessListener { subjectSnapshot ->
             this.allSubjects = subjectSnapshot.toObjects(SubjectItem::class.java)
@@ -102,7 +120,7 @@ class ManageMarks : AppCompatActivity() {
 
                     val adapter = StudentMarksAdapter(allStudentMarks, allSubjects,
                         { studentMarksToSave -> saveSingleStudentMarks(studentMarksToSave) },
-                            { studentMarksToGenerate -> generateSinglePdf(studentMarksToGenerate) }
+                        { studentMarksToGenerate -> generateSinglePdf(studentMarksToGenerate) }
                     )
                     recyclerView.adapter = adapter
                     progressBar.visibility = View.GONE
@@ -116,7 +134,8 @@ class ManageMarks : AppCompatActivity() {
         val reportData = ReportCardGenerator.ReportData(studentMarks.student, toolbar.title.toString(), studentMarks.marks, allSubjects)
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
-            val result = reportCardGenerator.generateSingleReport(reportData, "Madarsa Aaisha Siddiqa talimul quran", "Sarni Society, Ahmedabad, Gujarat")
+            val organizationName = FirebaseAuthManager.getOrganizationName(this@ManageMarks) ?: "Your Madarsa Name"
+            val result = reportCardGenerator.generateSingleReport(reportData, organizationName, "Sarni Society, Ahmedabad, Gujarat")
             progressBar.visibility = View.GONE
             Toast.makeText(this@ManageMarks, result ?: "Failed to generate PDF.", Toast.LENGTH_LONG).show()
         }
@@ -129,16 +148,21 @@ class ManageMarks : AppCompatActivity() {
         val reportDataList = allStudentMarks.map { ReportCardGenerator.ReportData(it.student, toolbar.title.toString(), it.marks, allSubjects) }
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
-            val result = reportCardGenerator.generateBulkReport(reportDataList, "Madarsa Aaisha Siddiqa talimul quran", "Your Madarsa Address, City, State")
+            val organizationName = FirebaseAuthManager.getOrganizationName(this@ManageMarks) ?: "Your Madarsa Name"
+            val result = reportCardGenerator.generateBulkReport(reportDataList, organizationName, "Your Madarsa Address, City, State")
             progressBar.visibility = View.GONE
             Toast.makeText(this@ManageMarks, result ?: "Failed to generate PDF.", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun saveSingleStudentMarks(studentMark: StudentMarks) {
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Cannot save marks: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            return
+        }
         progressBar.visibility = View.VISIBLE
         val docId = "${examId}_${studentMark.student.id}"
-        val docRef = db.collection("examResults").document(docId)
+        val docRef = db.collection("organizations").document(currentOrganizationId!!).collection("examResults").document(docId)
         val data = hashMapOf(
             "examId" to examId,
             "teacherId" to teacherId,
