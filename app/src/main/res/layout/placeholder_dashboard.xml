@@ -17,23 +17,13 @@
         <View style="@style/PlaceholderCard" />
     </GridLayout>
 
-    <!-- Dummy section header -->
+    <!-- Dummy "Today's Attendance" Card -->
+    <View style="@style/PlaceholderHeader" android:layout_height="100dp" android:layout_width="match_parent"/>
+
+    <!-- Dummy "Students per Class" Header -->
     <View style="@style/PlaceholderHeader" />
 
-    <!-- Dummy horizontal list -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-        <View style="@style/PlaceholderItem" />
-        <View style="@style/PlaceholderItem" />
-        <View style="@style/PlaceholderItem" />
-    </LinearLayout>
-
-    <!-- Dummy section header -->
-    <View style="@style/PlaceholderHeader" />
-
-    <!-- Dummy Bar Chart Area -->
+    <!-- Dummy Pie Chart Area -->
     <View
         android:layout_width="match_parent"
         android:layout_height="300dp"

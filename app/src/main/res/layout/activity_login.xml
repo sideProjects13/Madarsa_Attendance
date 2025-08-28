@@ -12,9 +12,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:fitsSystemWindows="true"
-        app:liftOnScroll="true">
-
-    </com.google.android.material.appbar.AppBarLayout>
+        app:liftOnScroll="true" />
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
@@ -31,30 +29,47 @@
             <ImageView
                 android:layout_width="120dp"
                 android:layout_height="120dp"
-                android:layout_marginTop="100dp"
+                android:layout_marginTop="60dp"
                 android:src="@drawable/logo"
-                android:layout_marginBottom="48dp"
-                android:contentDescription="App Logo"
-                /> <!-- Example: tint with primary color -->
+                android:layout_marginBottom="24dp"
+                android:contentDescription="App Logo" />
 
+            <!-- NEW: Admin/Teacher Toggle -->
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/toggleLoginAs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:singleSelection="true"
+                app:checkedButton="@id/btnLoginAsAdmin">
+
+                <Button
+                    android:id="@+id/btnLoginAsAdmin"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Admin" />
+
+                <Button
+                    android:id="@+id/btnLoginAsTeacher"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Teacher" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilLoginEmail"
                 style="@style/Widget.App.TextInputLayout.PureMonochrome.Outlined"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Email Address"
-                app:startIconDrawable="@drawable/ic_email"
-                app:startIconTint="?attr/colorOnSurfaceVariant"
-                app:endIconMode="clear_text"
-                app:endIconTint="?attr/colorOnSurfaceVariant">
+                android:hint="Email Address">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etLoginEmail"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textEmailAddress"
-                    android:textColor="@color/mono_palette_black"
                     android:maxLines="1"/>
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -65,17 +80,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:hint="Password"
-                app:startIconDrawable="@drawable/ic_lock"
-                app:startIconTint="?attr/colorOnSurfaceVariant"
-                app:endIconMode="password_toggle"
-                app:endIconTint="?attr/colorOnSurfaceVariant">
+                app:endIconMode="password_toggle">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etLoginPassword"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textPassword"
-                    android:textColor="@color/mono_palette_black"
                     android:maxLines="1"/>
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -115,7 +126,6 @@
                 android:focusable="true"
                 android:background="?attr/selectableItemBackground"/>
 
-            <!-- Optional: Forgot Password -->
             <TextView
                 android:id="@+id/tvForgotPassword"
                 android:layout_width="wrap_content"

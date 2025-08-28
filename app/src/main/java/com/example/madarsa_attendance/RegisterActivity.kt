@@ -3,6 +3,7 @@ package com.example.madarsa_attendance
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -93,10 +94,11 @@ class RegisterActivity : AppCompatActivity() {
         val orgName = etOrganizationNameRegister.text.toString().trim()
         val adminName = etAdminNameRegister.text.toString().trim()
         val adminEmail = etAdminEmailRegister.text.toString().trim()
-        val adminMobile = etAdminMobileRegister.text.toString().trim() // Optional
+        val adminMobile = etAdminMobileRegister.text.toString().trim()
         val password = etPasswordRegister.text.toString().trim()
         val confirmPassword = etConfirmPasswordRegister.text.toString().trim()
 
+        // --- Input validation (remains the same) ---
         if (orgName.isEmpty()) {
             etOrganizationNameRegister.error = "Organization name is required"
             etOrganizationNameRegister.requestFocus()
@@ -107,13 +109,8 @@ class RegisterActivity : AppCompatActivity() {
             etAdminNameRegister.requestFocus()
             return
         }
-        if (adminEmail.isEmpty()) {
-            etAdminEmailRegister.error = "Email is required"
-            etAdminEmailRegister.requestFocus()
-            return
-        }
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(adminEmail).matches()) {
-            etAdminEmailRegister.error = "Invalid email format"
+        if (adminEmail.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(adminEmail).matches()) {
+            etAdminEmailRegister.error = "A valid email is required"
             etAdminEmailRegister.requestFocus()
             return
         }
@@ -130,66 +127,66 @@ class RegisterActivity : AppCompatActivity() {
 
         setLoading(true)
 
-        // 1. Register user with Firebase Authentication
         auth.createUserWithEmailAndPassword(adminEmail, password)
             .addOnCompleteListener(this) { authTask ->
                 if (authTask.isSuccessful) {
                     val firebaseUser = authTask.result?.user
                     firebaseUser?.let { user ->
-                        // 2. Create organization document in Firestore
                         val organization = Organization(
                             organizationName = orgName,
                             adminEmail = adminEmail,
                             adminName = adminName,
-                            adminMobile = adminMobile.ifEmpty { null }, // Save as null if empty
+                            adminMobile = adminMobile.ifEmpty { null },
                             createdAt = com.google.firebase.firestore.FieldValue.serverTimestamp()
                         )
 
-                        db.collection("organizations")
-                            .add(organization) // Let Firestore auto-generate the ID
+                        db.collection("organizations").add(organization)
                             .addOnSuccessListener { orgDocumentRef ->
                                 val organizationId = orgDocumentRef.id
-
-                                // 3. Create user mapping document in top-level 'users' collection
                                 val appUser = AppUser(
                                     organizationId = organizationId,
                                     role = "admin",
                                     email = adminEmail,
                                     name = adminName,
-                                    mobile = adminMobile.ifEmpty { null }
+                                    mobile = adminMobile.ifEmpty { null },
+//                                    organizationName = orgName // Also store org name in user doc for easy retrieval
                                 )
-                                db.collection("users").document(user.uid)
-                                    .set(appUser)
+                                db.collection("users").document(user.uid).set(appUser)
                                     .addOnSuccessListener {
-                                        setLoading(false)
-                                        // Save organization ID and Name to SharedPreferences immediately for seamless login
                                         saveOrganizationId(organizationId)
                                         saveOrganizationName(orgName)
 
-                                        Toast.makeText(this, "Organization & Admin Registered Successfully!", Toast.LENGTH_LONG).show()
-                                        // Optionally, sign in the user directly or redirect to login
-                                        startActivity(Intent(this, MainActivity::class.java)) // Go to main activity
-                                        finish()
+                                        StatusDialogFragment.newInstance(
+                                            isSuccess = true,
+                                            message = "Registration Successful!",
+                                            finishActivityOnDismiss = true
+                                        ).show(supportFragmentManager, "successDialog")
 
+                                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                            startActivity(Intent(this, MainActivity::class.java))
+                                            finish()
+                                        }, 1800)
                                     }
                                     .addOnFailureListener { e ->
-                                        setLoading(false)
-                                        // If user mapping fails, consider deleting Firebase Auth user and organization doc
                                         user.delete()
                                         orgDocumentRef.delete()
-                                        Toast.makeText(this, "Failed to create user data: ${e.message}. Please try again.", Toast.LENGTH_LONG).show()
+                                        setLoading(false)
+                                        StatusDialogFragment.newInstance(false, "Failed to Create User Data").show(supportFragmentManager, "failureDialog")
+                                        Log.e("RegisterActivity", "Error setting user data", e)
                                     }
                             }
                             .addOnFailureListener { e ->
-                                setLoading(false)
-                                // If organization creation fails, delete the Firebase Auth user
                                 user.delete()
-                                Toast.makeText(this, "Failed to create organization: ${e.message}. Please try again.", Toast.LENGTH_LONG).show()
+                                setLoading(false)
+                                StatusDialogFragment.newInstance(false, "Failed to Create Organization").show(supportFragmentManager, "failureDialog")
+                                Log.e("RegisterActivity", "Error creating organization", e)
                             }
                     }
                 } else {
                     setLoading(false)
-                    Toast.makeText(this, "Registration failed: ${authTask.exception?.message}", Toast.LENGTH_LONG).show()
+                    val errorMessage = authTask.exception?.message ?: "An unknown error occurred."
+                    StatusDialogFragment.newInstance(false, "Registration Failed").show(supportFragmentManager, "failureDialog")
+                    Log.w("RegisterActivity", "createUserWithEmail:failure", authTask.exception)
                 }
             }
     }

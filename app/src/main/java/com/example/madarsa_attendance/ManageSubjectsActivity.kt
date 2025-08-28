@@ -195,25 +195,25 @@ class ManageSubjectsActivity : AppCompatActivity() {
     }
 
     private fun deleteSubjectFromFirestore(subject: SubjectItem) {
-        if (currentOrganizationId == null) { // NEW: Check organization ID
+        if (currentOrganizationId == null) {
             Toast.makeText(this, "Cannot delete: Organization ID missing.", Toast.LENGTH_SHORT).show()
             return
         }
-        Log.d(TAG, "deleteSubjectFromFirestore: Attempting to delete subjectId: ${subject.id} with name: ${subject.subjectName} in Org ID: $currentOrganizationId")
         progressBar.visibility = View.VISIBLE
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("subjects").document(subject.id)
             .delete()
             .addOnSuccessListener {
-                progressBar.visibility = View.GONE
-                Toast.makeText(this, "'${subject.subjectName}' deleted successfully", Toast.LENGTH_SHORT).show()
+                // --- CHANGE ---
+                StatusDialogFragment.newInstance(true, "Subject Deleted").show(supportFragmentManager, "successDialog")
                 Log.d(TAG, "deleteSubjectFromFirestore: Deletion successful. Reloading list.")
-                loadSubjects()
+                loadSubjects() // Reloads the list, which will hide the progress bar
             }
             .addOnFailureListener { e ->
                 progressBar.visibility = View.GONE
-                Toast.makeText(this, "Error deleting subject: ${e.message}", Toast.LENGTH_LONG).show()
-                Log.e(TAG, "Error deleting subject ${subject.id} in Org ID: $currentOrganizationId", e)
+                // --- CHANGE ---
+                StatusDialogFragment.newInstance(false, "Deletion Failed").show(supportFragmentManager, "failureDialog")
+                Log.e(TAG, "Error deleting subject ${subject.id}", e)
             }
     }
 }

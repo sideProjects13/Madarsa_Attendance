@@ -23,6 +23,33 @@
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
         <activity
+            android:name=".BulkAddTeachersActivity"
+            android:exported="false" />
+        <activity
+            android:name=".TeacherDashboardActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MultiStudentReportActivity"
+            android:exported="false" />
+        <activity
+            android:name=".BulkImportActivity"
+            android:exported="false" />
+        <activity
+            android:name=".BulkAddOrgActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AbsenteesActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ReportGeneratorActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ExamsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".LeaderboardActivity"
+            android:exported="false" />
+        <activity
             android:name=".BulkAddStudentsActivity"
             android:exported="false" />
         <activity

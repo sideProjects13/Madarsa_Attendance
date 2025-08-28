@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Very Top Priority - Take Attendance -->
+    <item
+        android:id="@+id/nav_quick_attendance"
+        android:icon="@drawable/ic_event_available"
+        android:title="Take Attendance" />
+
+    <!-- Important Things - Dashboard and Leaderboard -->
+    <item
+        android:id="@+id/nav_dashboard"
+        android:icon="@drawable/ic_dashboard"
+        android:title="Dashboard" />
+    <item
+        android:id="@+id/nav_leaderboard"
+        android:icon="@drawable/ic_leaderboard"
+        android:title="Leaderboard" />
+
+    <!-- Student Management Category -->
+    <item android:title="Student Management" android:icon="@drawable/ic_student_management">
+        <menu>
+            <item android:id="@+id/nav_quick_add_student" android:title="Add Student" />
+            <item android:id="@+id/nav_edit_student" android:title="Edit Student" />
+            <item android:id="@+id/nav_delete_student" android:title="Delete Student" />
+            <item android:id="@+id/nav_inactivate_student" android:title="Inactivate a Student" />
+            <item android:id="@+id/nav_inactive_students_list" android:title="View Inactive Students" />
+            <item android:id="@+id/nav_move_student" android:title="Move Student to Class" />
+            <item android:id="@+id/nav_view_monthly_attendance" android:title="View Monthly Attendance" />
+            <item android:id="@+id/nav_manage_class" android:title="Class Management" />
+        </menu>
+    </item>
+
+    <!-- Teacher Management Category -->
+    <item android:title="Teacher Management" android:icon="@drawable/ic_teacher_management">
+        <menu>
+            <item android:id="@+id/nav_quick_add_teacher" android:title="Add Teacher" />
+            <item android:id="@+id/nav_edit_teacher" android:title="Edit Teacher" />
+            <item android:id="@+id/nav_delete_teacher" android:title="Delete Teacher" />
+            <item android:id="@+id/nav_manage_teachers" android:title="Manage Teachers" />
+            <!-- NEW ITEMS FOR TEACHER MANAGEMENT -->
+            <item android:id="@+id/nav_bulk_add_teachers" android:title="Bulk Add Teachers" />
+            <item android:id="@+id/nav_download_teacher_data" android:title="Download Teacher Data" />
+        </menu>
+    </item>
+
+    <!-- Fee Management Category -->
+    <item android:title="Fee Management" android:icon="@drawable/ic_fee_management">
+        <menu>
+            <item android:id="@+id/nav_record_student_fee" android:title="Record Student Fee" />
+            <item android:id="@+id/nav_student_fee_history" android:title="Student Fee History" />
+            <item android:id="@+id/nav_class_fee_summary" android:title="Class Fee Summary" />
+            <item android:id="@+id/nav_download_fees_report_class" android:title="Download Fees Report (Class)" />
+        </menu>
+    </item>
+
+    <!-- Bulk Actions and Sample Data Category -->
+    <item android:title="Bulk Actions and Samples" android:icon="@drawable/ic_upload_file">
+        <menu>
+            <item android:id="@+id/nav_bulk_add_class" android:title="Bulk Add Students to Class" />
+            <item android:id="@+id/nav_bulk_add_org" android:title="Bulk Add Students to Org" />
+            <item android:id="@+id/nav_download_class_sample" android:title="Download Class Sample CSV" />
+            <item android:id="@+id/nav_download_org_sample" android:title="Download Org Sample CSV" />
+            <!-- NEW ITEM FOR TEACHER SAMPLE -->
+            <item android:id="@+id/nav_download_teacher_sample" android:title="Download Teacher Sample CSV" />
+        </menu>
+    </item>
+
+    <!-- Download Data Category -->
+    <item android:title="Download Data" android:icon="@drawable/ic_download">
+        <menu>
+            <item android:id="@+id/nav_download_org_students" android:title="Download All Students (Org)" />
+            <item android:id="@+id/nav_download_class_students" android:title="Download Class Students" />
+        </menu>
+    </item>
+
+    <!-- Exams and Subjects Category -->
+    <item android:title="Exams and Subjects" android:icon="@drawable/ic_exams_subjects">
+        <menu>
+            <item android:id="@+id/nav_exams" android:title="Manage Exams" />
+            <item android:id="@+id/nav_add_update_marks" android:title="Add/Update Marks" />
+            <item android:id="@+id/nav_generate_student_result" android:title="Generate Student Result" />
+            <item android:id="@+id/nav_generate_class_result" android:title="Generate Class Result" />
+            <item android:id="@+id/nav_quick_add_subject" android:title="Add/Assign Subject" />
+            <item android:id="@+id/nav_manage_subjects" android:title="Manage Teacher's Subjects" />
+        </menu>
+    </item>
+
+    <!-- Prints Category -->
+    <item android:title="Prints" android:icon="@drawable/ic_prints">
+        <menu>
+            <item android:id="@+id/nav_student_reports" android:title="Student Info Reports" />
+            <item android:id="@+id/nav_custom_student_info_report" android:title="Custom Student Info Report" />
+        </menu>
+    </item>
+
+    <!-- Account (Bottom) -->
+    <item android:title="Account" android:icon="@drawable/ic_account">
+        <menu>
+            <item android:id="@+id/nav_logout" android:title="Logout" />
+        </menu>
+    </item>
+
+</menu>

@@ -1,17 +1,26 @@
 package com.example.madarsa_attendance
 
+import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Context
-import android.graphics.*
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.text.TextPaint
 import android.util.Log
+import android.widget.Toast
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.FileOutputStream
+import java.io.File
 
 class ReportCardGenerator(private val context: Context) {
 
@@ -26,59 +35,113 @@ class ReportCardGenerator(private val context: Context) {
     private val A4_HEIGHT = 842
     private val MARGIN = 40f
 
-    suspend fun generateBulkReport(reportDataList: List<ReportData>, madarsaName: String, madarsaAddress: String): String? {
+    // NEW: Organization details constants
+    private companion object {
+        private const val ORG_NAME_FULL = "Madarsa Aaisha Siddiqa Ta'alimul Quran"
+        private const val ORG_ADDRESS_FULL = "BIBI AAISHA MASJID SARNI SOCIETY AHMEDABAD"
+    }
+
+    suspend fun generateBulkReport(reportDataList: List<ReportData>, madarsaName: String, madarsaAddress: String) { // NEW: madarsaAddress parameter
+        if (reportDataList.isEmpty()) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "No student data to generate report.", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
         val document = PdfDocument()
+        val logo = withContext(Dispatchers.IO) { BitmapFactory.decodeResource(context.resources, R.drawable.logo) } // Load logo once
         reportDataList.forEachIndexed { index, reportData ->
             val pageInfo = PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, index + 1).create()
             val page = document.startPage(pageInfo)
-            drawReportPage(page.canvas, reportData, madarsaName, madarsaAddress)
+            // NEW: Pass madarsaAddress and logo
+            drawReportPage(page.canvas, reportData, madarsaName, madarsaAddress, logo)
             document.finishPage(page)
         }
-        return savePdf(document, "ClassReport_${reportDataList.first().examName}.pdf")
+        val examName = reportDataList.first().examName.replace(" ", "_")
+        val className = reportDataList.first().student.teacherName?.replace(" ", "_") ?: "Class"
+        saveAndOpenFile(document, "ClassReport_${className}_${examName}.pdf")
     }
 
-    suspend fun generateSingleReport(reportData: ReportData, madarsaName: String, madarsaAddress: String): String? {
+    suspend fun generateSingleReport(reportData: ReportData, madarsaName: String, madarsaAddress: String) { // NEW: madarsaAddress parameter
         val document = PdfDocument()
+        val logo = withContext(Dispatchers.IO) { BitmapFactory.decodeResource(context.resources, R.drawable.logo) } // Load logo once
         val pageInfo = PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create()
         val page = document.startPage(pageInfo)
-        drawReportPage(page.canvas, reportData, madarsaName, madarsaAddress)
+        // NEW: Pass madarsaAddress and logo
+        drawReportPage(page.canvas, reportData, madarsaName, madarsaAddress, logo)
         document.finishPage(page)
-        return savePdf(document, "Result_${reportData.student.studentName}.pdf")
+        val studentName = reportData.student.studentName.replace(" ", "_")
+        saveAndOpenFile(document, "Result_${studentName}.pdf")
     }
 
-    private suspend fun drawReportPage(canvas: Canvas, data: ReportData, madarsaName: String, madarsaAddress: String) {
-        val logo = withContext(Dispatchers.IO) { BitmapFactory.decodeResource(context.resources, R.drawable.logo) }
-
-        // <<< MODIFIED: This will now be nullable >>>
+    // NEW: Added logo parameter
+    private suspend fun drawReportPage(canvas: Canvas, data: ReportData, madarsaName: String, madarsaAddress: String, logo: Bitmap) {
         val studentPhoto: Bitmap? = withContext(Dispatchers.IO) {
             if (data.student.profileImageUrl.isNullOrEmpty()) {
-                null // Return null if there is no image URL
+                null
             } else {
                 try {
-                    Glide.with(context)
-                        .asBitmap()
-                        .load(data.student.profileImageUrl)
-                        .submit(100, 120)
-                        .get()
+                    Glide.with(context).asBitmap().load(data.student.profileImageUrl).submit(100, 120).get()
                 } catch (e: Exception) {
                     Log.e("ReportCardGenerator", "Failed to load student image", e)
-                    null // Return null on Glide error as well
+                    null
                 }
             }
         }
-
-        drawWatermark(canvas, logo)
+        drawWatermark(canvas, logo) // Ensure watermark is always drawn
+        // NEW: Pass madarsaAddress
         var currentY = drawHeader(canvas, logo, studentPhoto, madarsaName, madarsaAddress, data.examName)
         currentY = drawStudentDetails(canvas, data.student, currentY + 25f)
-        currentY = drawMarksTable(canvas, data, currentY + 25f)
+        drawMarksTable(canvas, data, currentY + 25f)
         drawFooter(canvas, A4_HEIGHT - MARGIN - 20f)
+    }
+
+    private suspend fun saveAndOpenFile(document: PdfDocument, fileName: String) {
+        var fileUri: Uri? = null
+        try {
+            val resolver = context.contentResolver
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + File.separator + "MadarsaReports") // Save to subfolder
+                }
+            }
+            fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            if (fileUri != null) {
+                resolver.openOutputStream(fileUri)?.use { document.writeTo(it) }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Report saved to Downloads/MadarsaReports.", Toast.LENGTH_LONG).show()
+                    openPdfFile(fileUri)
+                }
+            } else {
+                throw Exception("MediaStore returned null URI")
+            }
+        } catch (e: Exception) {
+            Log.e("ReportCardGenerator", "Error saving PDF", e)
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Error: Could not save PDF.", Toast.LENGTH_LONG).show()
+            }
+        } finally {
+            document.close()
+        }
+    }
+
+    private fun openPdfFile(uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.setDataAndType(uri, "application/pdf")
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            context.startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "No application found to open PDF files.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun drawWatermark(canvas: Canvas, logo: Bitmap) {
         val watermarkPaint = Paint().apply {
             alpha = 30
             isAntiAlias = true
-            isDither = true
         }
         val watermarkSize = A4_WIDTH / 2
         val scaledWatermark = Bitmap.createScaledBitmap(logo, watermarkSize, watermarkSize, true)
@@ -87,7 +150,7 @@ class ReportCardGenerator(private val context: Context) {
         canvas.drawBitmap(scaledWatermark, x, y, watermarkPaint)
     }
 
-    // <<< MODIFIED: Header function now accepts a nullable Bitmap for studentPhoto >>>
+    // NEW: Added madarsaAddress parameter
     private fun drawHeader(canvas: Canvas, logo: Bitmap, studentPhoto: Bitmap?, madarsaName: String, madarsaAddress: String, examName: String): Float {
         val titlePaint = TextPaint().apply { color = Color.BLACK; textSize = 20f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
         val addressPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 11f; textAlign = Paint.Align.CENTER }
@@ -97,41 +160,31 @@ class ReportCardGenerator(private val context: Context) {
         val scaledLogo = Bitmap.createScaledBitmap(logo, 70, 70, true)
         canvas.drawBitmap(scaledLogo, MARGIN, MARGIN, null)
 
-        // --- Student Photo (Rectangle) ---
         val photoWidth = 80f
         val photoHeight = 100f
         val photoX = A4_WIDTH - MARGIN - photoWidth
-
-        // <<< MODIFIED: Only draw the photo and its border if the bitmap is not null >>>
         studentPhoto?.let {
             val scaledPhoto = Bitmap.createScaledBitmap(it, photoWidth.toInt(), photoHeight.toInt(), true)
             canvas.drawBitmap(scaledPhoto, photoX, MARGIN, null)
             canvas.drawRect(photoX, MARGIN, photoX + photoWidth, MARGIN + photoHeight, photoBorderPaint)
         }
 
-        // --- Titles ---
         val textCenterX = (A4_WIDTH / 2).toFloat()
         canvas.drawText(madarsaName, textCenterX, MARGIN + 35f, titlePaint)
-        canvas.drawText(madarsaAddress, textCenterX, MARGIN + 55f, addressPaint)
+        canvas.drawText(madarsaAddress, textCenterX, MARGIN + 55f, addressPaint) // NEW: Draw address
         canvas.drawText("REPORT CARD - $examName", textCenterX, MARGIN + 95f, reportTitlePaint)
 
-        // --- Separator Line ---
         val lineY = MARGIN + 120f
         canvas.drawLine(MARGIN, lineY, A4_WIDTH - MARGIN, lineY, photoBorderPaint)
-
         return lineY
     }
-
-    // ... all other functions (drawStudentDetails, drawMarksTable, etc.) remain unchanged ...
 
     private fun drawStudentDetails(canvas: Canvas, student: StudentDetailsItem, startY: Float): Float {
         val labelPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 10f; }
         val valuePaint = TextPaint().apply { color = Color.BLACK; textSize = 11f; isFakeBoldText = true }
-
         val col1X = MARGIN + 5f
         val col2X = A4_WIDTH / 2f + 20f
         var currentY = startY
-
         val rowSpacing = 35f
 
         canvas.drawText("Registration No:", col1X, currentY, labelPaint)
@@ -220,25 +273,5 @@ class ReportCardGenerator(private val context: Context) {
         val signatureLineXEnd = A4_WIDTH - MARGIN
         canvas.drawLine(signatureLineXStart, startY, signatureLineXEnd, startY, linePaint)
         canvas.drawText("Principal's Signature", signatureLineXEnd, startY + 15, signaturePaint)
-    }
-
-    private fun savePdf(document: PdfDocument, fileName: String): String? {
-        try {
-            val resolver = context.contentResolver
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            }
-            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)?.let { uri ->
-                resolver.openOutputStream(uri)?.use { document.writeTo(it) }
-            }
-            document.close()
-            return "Saved to Downloads folder"
-        } catch (e: Exception) {
-            Log.e("PdfGenerator", "Error saving PDF", e)
-            document.close()
-            return "Error: Could not save PDF"
-        }
     }
 }

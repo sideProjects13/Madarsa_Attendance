@@ -19,6 +19,9 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
     private val _exams = MutableLiveData<List<Exam>>()
     val exams: LiveData<List<Exam>> = _exams
 
+    private val _operationStatus = MutableLiveData<Event<Pair<Boolean, String>>>()
+    val operationStatus: LiveData<Event<Pair<Boolean, String>>> = _operationStatus
+
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
 
@@ -63,40 +66,40 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addExam(examName: String) {
         if (examName.isBlank()) {
-            _toastMessage.value = "Exam name cannot be empty."
+            _operationStatus.value = Event(Pair(false, "Exam name cannot be empty."))
             return
         }
-        if (examsCollectionRef == null) { // NEW: Check if ref is initialized
-            _toastMessage.value = "Error: Cannot add exam, organization data missing."
+        if (examsCollectionRef == null) {
+            _operationStatus.value = Event(Pair(false, "Error: Organization data missing."))
             return
         }
 
         val exam = hashMapOf("name" to examName)
-        examsCollectionRef!!.add(exam) // NEW: Use the scoped reference
+        examsCollectionRef!!.add(exam)
             .addOnSuccessListener {
-                _toastMessage.value = "Exam added successfully."
+                _operationStatus.value = Event(Pair(true, "Exam Added Successfully!"))
             }
             .addOnFailureListener { e ->
                 Log.e("ExamViewModel", "Error adding exam", e)
-                _toastMessage.value = "Failed to add exam."
+                _operationStatus.value = Event(Pair(false, "Failed to Add Exam"))
             }
     }
 
     fun deleteExam(examId: String) {
-        if (examsCollectionRef == null) { // NEW: Check if ref is initialized
-            _toastMessage.value = "Error: Cannot delete exam, organization data missing."
+        if (examsCollectionRef == null) {
+            _operationStatus.value = Event(Pair(false, "Error: Organization data missing."))
             return
         }
 
-        examsCollectionRef!!.document(examId).delete() // NEW: Use the scoped reference
+        examsCollectionRef!!.document(examId).delete()
             .addOnSuccessListener {
-                _toastMessage.value = "Exam deleted."
+                _operationStatus.value = Event(Pair(true, "Exam Deleted!"))
             }
             .addOnFailureListener { e ->
                 Log.e("ExamViewModel", "Error deleting exam", e)
-                _toastMessage.value = "Failed to delete exam."
+                _operationStatus.value = Event(Pair(false, "Failed to Delete Exam"))
             }
-    }
+    } 
 
     fun onToastMessageShown() {
         _toastMessage.value = null

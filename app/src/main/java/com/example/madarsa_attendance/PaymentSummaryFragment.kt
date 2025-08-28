@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -26,11 +25,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout // NEW IMPORT
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -57,6 +58,9 @@ class PaymentSummaryFragment : Fragment() {
         }
     }
 
+    private var _swipeRefreshLayout: SwipeRefreshLayout? = null // NEW: SwipeRefreshLayout
+    private val swipeRefreshLayout get() = _swipeRefreshLayout!!
+
     private var _spinnerMonth: Spinner? = null
     private val spinnerMonth get() = _spinnerMonth!!
     private var _spinnerYear: Spinner? = null
@@ -79,7 +83,7 @@ class PaymentSummaryFragment : Fragment() {
     private lateinit var db: FirebaseFirestore
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
-    private var currentOrganizationId: String? = null // NEW: Organization ID
+    private var currentOrganizationId: String? = null
 
 
     private val studentDetailsMap = mutableMapOf<String, StudentDetailsItem>()
@@ -116,13 +120,12 @@ class PaymentSummaryFragment : Fragment() {
         }
         db = FirebaseFirestore.getInstance()
         teacherDataViewModel = ViewModelProvider(requireActivity()).get(TeacherDataViewModel::class.java)
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext()) // NEW: Get organization ID
-
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext())
         studentPaymentHistoryLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 Log.d(TAG, "Returned from StudentPaymentHistoryActivity with RESULT_OK. Refreshing payment summary.")
                 isCurrentPeriodDataLoaded = false
-                if (checkPreConditionsAndLoad()) {
+                if (checkPreConditionsAndLoad(calledFrom = "StudentPaymentHistoryLauncher")) { // Pass caller info
                     Log.d(TAG, "Launcher Result: Triggering data load.")
                 }
             } else {
@@ -137,6 +140,7 @@ class PaymentSummaryFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_payment_summary, container, false)
+        _swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout_payment_summary) // NEW: Initialize SwipeRefreshLayout
         _spinnerMonth = view.findViewById(R.id.spinnerMonthPaymentSummaryFrag)
         _spinnerYear = view.findViewById(R.id.spinnerYearPaymentSummaryFrag)
         _recyclerViewPayments = view.findViewById(R.id.recyclerViewPaymentSummaryFrag)
@@ -162,12 +166,26 @@ class PaymentSummaryFragment : Fragment() {
             checkAndRequestStoragePermission()
         }
 
+        // NEW: Setup SwipeRefreshListener
+        swipeRefreshLayout.setOnRefreshListener {
+            Log.d(TAG, "Swipe to refresh triggered for payment summary.")
+            isCurrentPeriodDataLoaded = false // Force reload
+            _searchViewPaymentSummary?.setQuery("", false) // Clear search on refresh
+            if (checkPreConditionsAndLoad(calledFrom = "SwipeRefresh")) {
+                Log.d(TAG, "SwipeRefresh: Triggering data load.")
+            } else {
+                // If pre-conditions aren't met, stop refreshing immediately
+                swipeRefreshLayout.isRefreshing = false
+            }
+        }
+
+
         teacherDataViewModel.studentsDataMightHaveChanged.observe(viewLifecycleOwner) { event ->
             event.getContentIfNotHandled()?.let {
                 Log.d(TAG, "Observer: studentsDataMightHaveChanged event received.")
                 isCurrentPeriodDataLoaded = false
                 _searchViewPaymentSummary?.setQuery("", false)
-                if (checkPreConditionsAndLoad()) {
+                if (checkPreConditionsAndLoad(calledFrom = "StudentsDataChangedObserver")) { // Pass caller info
                     Log.d(TAG, "Observer: Triggering data load due to student list change.")
                 } else {
                     Log.d(TAG, "Observer: student list change, but pre-conditions for load not met yet.")
@@ -209,6 +227,8 @@ class PaymentSummaryFragment : Fragment() {
         _searchViewPaymentSummary?.setOnQueryTextListener(null)
         _searchViewPaymentSummary = null
         _fabGenerateReport = null
+        _swipeRefreshLayout?.setOnRefreshListener(null) // NEW: Clear listener
+        _swipeRefreshLayout = null // NEW: Null out SwipeRefreshLayout
         Log.d(TAG, "onDestroyView")
     }
 
@@ -317,10 +337,14 @@ class PaymentSummaryFragment : Fragment() {
                 _recyclerViewPayments?.visibility = View.GONE
             }
             isCurrentPeriodDataLoaded = false
+            swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing on critical pre-condition failure
             return
         }
 
-        progressBar.visibility = View.VISIBLE
+        // Only show progress bar if not initiated by swipe refresh (which shows its own indicator)
+        if (!swipeRefreshLayout.isRefreshing) { // NEW: Conditional visibility
+            progressBar.visibility = View.VISIBLE
+        }
         tvNoData.visibility = View.GONE
         recyclerViewPayments.visibility = View.GONE
 
@@ -334,7 +358,12 @@ class PaymentSummaryFragment : Fragment() {
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("students").whereEqualTo("teacherId", currentTeacherId).orderBy("studentName").get()
             .addOnSuccessListener { studentsSnapshot ->
-                if (!isAdded) { Log.w(TAG, "Students fetched, but fragment not added."); isCurrentPeriodDataLoaded = false; return@addOnSuccessListener }
+                if (!isAdded) {
+                    Log.w(TAG, "Students fetched, but fragment not added.");
+                    isCurrentPeriodDataLoaded = false;
+                    swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing
+                    return@addOnSuccessListener
+                }
                 Log.d(TAG, "Fetched ${studentsSnapshot.size()} student documents for teacher $currentTeacherId in Org ID: $currentOrganizationId.")
 
                 if (studentsSnapshot.isEmpty) {
@@ -345,6 +374,7 @@ class PaymentSummaryFragment : Fragment() {
                     paymentSummaryAdapter.updateData(emptyList())
                     studentDetailsMap.clear()
                     isCurrentPeriodDataLoaded = true
+                    swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing
                     return@addOnSuccessListener
                 }
 
@@ -367,7 +397,12 @@ class PaymentSummaryFragment : Fragment() {
                     .whereEqualTo("paymentMonth", targetMonthYearStr)
                     .get()
                     .addOnSuccessListener { paymentsSnap ->
-                        if (!isAdded) { Log.w(TAG, "Payments fetched, but fragment not added."); isCurrentPeriodDataLoaded = false; return@addOnSuccessListener }
+                        if (!isAdded) {
+                            Log.w(TAG, "Payments fetched, but fragment not added.");
+                            isCurrentPeriodDataLoaded = false;
+                            swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing
+                            return@addOnSuccessListener
+                        }
 
                         if (!paymentsSnap.isEmpty) {
                             Log.d(TAG, "Fetched ${paymentsSnap.size()} payments for $targetMonthYearStr in Org ID: $currentOrganizationId.")
@@ -386,24 +421,27 @@ class PaymentSummaryFragment : Fragment() {
                         }
                         processAndDisplaySummary(studentMonthlyPaymentDetails)
                         isCurrentPeriodDataLoaded = true
+                        swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing on success
                     }.addOnFailureListener { e ->
                         if (!isAdded)
-                        Log.e(TAG, "Error loading payments for $targetMonthYearStr in Org ID: $currentOrganizationId:", e)
+                            Log.e(TAG, "Error loading payments for $targetMonthYearStr in Org ID: $currentOrganizationId:", e)
                         progressBar.visibility = View.GONE
                         tvNoData.text = "Error loading payments: ${e.message}"
                         tvNoData.visibility = View.VISIBLE
                         recyclerViewPayments.visibility = View.GONE
                         isCurrentPeriodDataLoaded = false
+                        swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing on failure
                     }
             }.addOnFailureListener { e ->
                 if (!isAdded)
-                Log.e(TAG, "Error loading students for teacher $currentTeacherId in Org ID: $currentOrganizationId:", e)
+                    Log.e(TAG, "Error loading students for teacher $currentTeacherId in Org ID: $currentOrganizationId:", e)
                 progressBar.visibility = View.GONE
                 tvNoData.text = "Error loading students: ${e.message}"
                 tvNoData.visibility = View.VISIBLE
                 recyclerViewPayments.visibility = View.GONE
                 paymentSummaryAdapter.updateData(emptyList())
                 isCurrentPeriodDataLoaded = false
+                swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing on failure
             }
     }
 
@@ -413,6 +451,7 @@ class PaymentSummaryFragment : Fragment() {
         if (!isAdded || _paymentSummaryAdapter == null) {
             Log.w(TAG, "processAndDisplaySummary: Fragment not added or adapter is null.")
             _progressBar?.visibility = View.GONE
+            swipeRefreshLayout.isRefreshing = false // NEW: Stop refreshing
             return
         }
         Log.d(TAG, "processAndDisplaySummary: Processing ${studentDetailsMap.size} students from map.")
@@ -429,14 +468,14 @@ class PaymentSummaryFragment : Fragment() {
             )
         }
         Log.d(TAG, "Constructed paymentSummaryDisplayList with ${paymentSummaryDisplayList.size} items.")
-        progressBar.visibility = View.GONE
+        progressBar.visibility = View.GONE // Ensure progress bar is hidden
 
         if (studentDetailsMap.isEmpty()) {
             tvNoData.text = "No students in this class."
             tvNoData.visibility = View.VISIBLE
             recyclerViewPayments.visibility = View.GONE
         } else if (paymentSummaryDisplayList.isEmpty() && studentDetailsMap.isNotEmpty()){
-            tvNoData.text = "No payments found for the selected period." // Changed message
+            tvNoData.text = "No payments found for the selected period."
             tvNoData.visibility = View.VISIBLE
             recyclerViewPayments.visibility = View.GONE
         }
@@ -553,11 +592,14 @@ class PaymentSummaryFragment : Fragment() {
 
     private fun fetchDataAndGeneratePdf(type: String, year: Int, month: Int? = null) {
         if (!isAdded || context == null || currentTeacherId == null || currentTeacherName == null || currentOrganizationId == null) {
-            Toast.makeText(context, "Class or Organization information is missing or fragment not ready.", Toast.LENGTH_SHORT).show()
+            StatusDialogFragment.newInstance(false, "Required data is missing.").show(parentFragmentManager, "failureDialog")
             return
         }
 
-        val dialogProgressBar = showLoadingDialog("Generating report data...")
+        val loadingDialog = StatusDialogFragment.newInstance(true, "Generating Report...").apply {
+            isCancelable = false
+        }
+        loadingDialog.show(parentFragmentManager, "loading")
 
         lifecycleScope.launch {
             try {
@@ -566,44 +608,32 @@ class PaymentSummaryFragment : Fragment() {
                 } else {
                     fetchReportDataForYear(currentTeacherId!!, currentOrganizationId!!, year)
                 }
-                dialogProgressBar.dismiss()
 
                 if (reportData.isEmpty()) {
-                    Toast.makeText(context, "No payment data found for the selected period.", Toast.LENGTH_LONG).show()
+                    loadingDialog.dismiss()
+                    StatusDialogFragment.newInstance(false, "No payment data found for this period.").show(parentFragmentManager, "failureDialog")
                     return@launch
                 }
 
-                val madarsaName = FirebaseAuthManager.getOrganizationName(requireContext()) ?: "Your Madarsa Name"
-
+                val madarsaName = FirebaseAuthManager.getOrganizationName(requireContext()) ?: "Madarsa Report"
                 val pdfUri = if (type == "Monthly" && month != null) {
-                    PdfGenerator.createMonthlyReportPdf(
-                        requireContext(),
-                        madarsaName,
-                        currentTeacherName!!,
-                        year,
-                        month,
-                        reportData
-                    )
+                    PdfGenerator.createMonthlyReportPdf(requireContext(), madarsaName, currentTeacherName!!, year, month, reportData)
                 } else {
-                    PdfGenerator.createYearlyReportPdf(
-                        requireContext(),
-                        madarsaName,
-                        currentTeacherName!!,
-                        year,
-                        reportData
-                    )
+                    PdfGenerator.createYearlyReportPdf(requireContext(), madarsaName, currentTeacherName!!, year, reportData)
                 }
 
+                loadingDialog.dismiss()
                 if (pdfUri != null) {
-                    Toast.makeText(context, "Report saved. Check Documents/MadarsaReports.", Toast.LENGTH_LONG).show()
+                    StatusDialogFragment.newInstance(true, "Report Generated Successfully!").show(parentFragmentManager, "successDialog")
+                    tryOpenPdf(pdfUri)
                 } else {
-                    Toast.makeText(context, "Failed to generate PDF report.", Toast.LENGTH_LONG).show()
+                    StatusDialogFragment.newInstance(false, "Failed to Create PDF").show(parentFragmentManager, "failureDialog")
                 }
 
             } catch (e: Exception) {
-                dialogProgressBar.dismiss()
+                loadingDialog.dismiss()
+                StatusDialogFragment.newInstance(false, "Report Generation Failed").show(parentFragmentManager, "failureDialog")
                 Log.e(TAG, "Error generating report: ", e)
-                Toast.makeText(context, "Error generating report: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -637,7 +667,6 @@ class PaymentSummaryFragment : Fragment() {
         val studentMonthlyPaymentDetails = mutableMapOf<String, Pair<Double, Int>>()
         val reportList = mutableListOf<StudentPaymentSummaryItem>()
 
-        // NEW: Scope query to the organization
         val studentsSnapshot = db.collection("organizations").document(organizationId)
             .collection("students")
             .whereEqualTo("teacherId", teacherId)
@@ -658,7 +687,6 @@ class PaymentSummaryFragment : Fragment() {
         val calendar = Calendar.getInstance(); calendar.set(year, month, 1)
         val targetMonthYearStr = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(calendar.time)
 
-        // NEW: Scope query to the organization
         val paymentsSnap = db.collection("organizations").document(organizationId)
             .collection("feePayments")
             .whereEqualTo("teacherId", teacherId)
@@ -694,7 +722,6 @@ class PaymentSummaryFragment : Fragment() {
         val studentYearlyPaymentDetails = mutableMapOf<String, Pair<Double, Int>>()
         val reportList = mutableListOf<StudentPaymentSummaryItem>()
 
-        // NEW: Scope query to the organization
         val studentsSnapshot = db.collection("organizations").document(organizationId)
             .collection("students")
             .whereEqualTo("teacherId", teacherId)
@@ -712,7 +739,6 @@ class PaymentSummaryFragment : Fragment() {
             studentYearlyPaymentDetails[studentId] = Pair(0.0, 0)
         }
 
-        // NEW: Scope query to the organization
         val paymentsSnap = db.collection("organizations").document(organizationId)
             .collection("feePayments")
             .whereEqualTo("teacherId", teacherId)

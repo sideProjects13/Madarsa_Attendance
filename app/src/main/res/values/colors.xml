@@ -115,4 +115,6 @@
     <color name="bw_theme_onSurfaceVariant">@color/mono_palette_grey_secondary_text</color> <!-- Darker grey for hints, secondary text on surfaces -->
 
     <color name="bw_theme_outline">@color/mono_palette_grey_borders</color> <!-- For outlines like text field borders -->
+    <color name="transparent">#00000000</color>
+
 </resources>

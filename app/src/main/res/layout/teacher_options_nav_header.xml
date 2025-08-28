@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="176dp"
+    android:background="?attr/colorPrimaryContainer"
+    android:gravity="bottom"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:theme="@style/ThemeOverlay.AppCompat.Dark">
+
+    <ImageView
+        android:id="@+id/ivNavHeaderProfile"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:contentDescription="Teacher Profile Image"
+        android:paddingTop="8dp"
+        android:src="@drawable/molana" />
+
+    <TextView
+        android:id="@+id/tvNavHeaderName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:textColor="?attr/colorOnPrimaryContainer"
+        tools:text="Teacher Name" />
+
+    <TextView
+        android:id="@+id/tvNavHeaderEmail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="?attr/colorOnPrimaryContainer"
+        tools:text="teacher.email@example.com" />
+
+</LinearLayout>

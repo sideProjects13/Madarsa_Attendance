@@ -13,16 +13,15 @@
         android:layout_height="wrap_content"
         android:fitsSystemWindows="true"
         app:liftOnScroll="true">
-
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/add_student_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
+            android:background="@android:color/transparent"
             app:title="Add New Student"
-            app:titleTextColor="?attr/colorOnPrimary"
+            app:titleTextColor="?attr/colorPrimary"
             app:navigationIcon="@drawable/ic_arrow_back"
-            app:navigationIconTint="?attr/colorOnPrimary" />
+            app:navigationIconTint="?attr/colorPrimary" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -128,7 +127,43 @@
                     android:maxLength="10" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- NEWLY ADDED FIELDS -->
+            <!-- CORRECTED PLACEMENT -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilAlternateMobile"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Alternate Mobile (Optional)"
+                app:prefixText="+91 "
+                app:counterEnabled="true"
+                app:counterMaxLength="10">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etAlternateMobile"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="phone"
+                    android:maxLength="10" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilAddress"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Address (Optional)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etAddress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:minLines="2"
+                    android:gravity="top"/>
+            </com.google.android.material.textfield.TextInputLayout>
+            <!-- END OF CORRECTED PLACEMENT -->
+
+            <!-- Other Details -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilRegNo"
                 style="?attr/textInputOutlinedStyle"
@@ -194,7 +229,6 @@
                     android:clickable="true"/>
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- NEW FIELD: Monthly Fee -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilMonthlyFee"
                 style="?attr/textInputOutlinedStyle"

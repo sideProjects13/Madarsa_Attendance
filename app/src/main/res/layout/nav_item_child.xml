@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Using a FrameLayout allows us to set margins on the inner container -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:id="@+id/child_root_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+
+    android:background="@drawable/nav_child_item_background"
+
+    android:layout_marginTop="4dp"
+    android:layout_marginStart="24dp"
+    android:layout_marginEnd="16dp"
+
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
+
+    <TextView
+        android:id="@+id/child_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textStyle="bold"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="@color/mono_palette_black"
+        android:textSize="15dp"
+        tools:text="Child Item" />
+
+</LinearLayout>
+    </FrameLayout>

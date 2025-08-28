@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tv_header_title"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="12dp"
+    android:text="Header"
+    android:background="?attr/colorPrimaryContainer"
+    android:textColor="?attr/colorOnPrimaryContainer"
+    android:textStyle="bold"
+    android:gravity="center_horizontal"
+    android:ellipsize="end"
+    android:maxLines="2"/>

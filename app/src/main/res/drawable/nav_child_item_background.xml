@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This creates the rectangular shape with a subtle background and border -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <!-- The background color of the item. Using a very light grey from your palette -->
+    <solid android:color="@color/mono_palette_background_subtle" />
+
+    <!-- Defines the rounded corners -->
+    <corners android:radius="8dp" />
+
+    <!-- Defines the border/stroke -->
+    <stroke
+        android:width="-0.5dp"
+        android:color="@color/mono_palette_grey_borders" />
+
+</shape>

@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.launch
 
 class ManageMarks : AppCompatActivity() {
@@ -31,7 +32,7 @@ class ManageMarks : AppCompatActivity() {
     private lateinit var reportCardGenerator: ReportCardGenerator
     private lateinit var teacherId: String
     private lateinit var examId: String
-    private var currentOrganizationId: String? = null // NEW: Organization ID
+    private var currentOrganizationId: String? = null
 
     private var allSubjects: List<SubjectItem> = emptyList()
     private var allStudentMarks: List<StudentMarks> = emptyList()
@@ -43,13 +44,10 @@ class ManageMarks : AppCompatActivity() {
         teacherId = intent.getStringExtra("EXTRA_TEACHER_ID") ?: ""
         examId = intent.getStringExtra("EXTRA_EXAM_ID") ?: ""
         val examName = intent.getStringExtra("EXTRA_EXAM_NAME") ?: "Enter Marks"
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
 
-        if (teacherId.isEmpty() || examId.isEmpty()) {
-            Toast.makeText(this, "Error: Missing data.", Toast.LENGTH_LONG).show(); finish(); return
-        }
-        if (currentOrganizationId == null) {
-            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
+        if (teacherId.isEmpty() || examId.isEmpty() || currentOrganizationId == null) {
+            Toast.makeText(this, "Error: Missing required data.", Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -74,16 +72,11 @@ class ManageMarks : AppCompatActivity() {
     }
 
     private fun loadInitialData() {
-        if (currentOrganizationId == null) {
-            Toast.makeText(this, "Cannot load data: Organization ID missing.", Toast.LENGTH_SHORT).show()
-            progressBar.visibility = View.GONE
-            return
-        }
+        if (currentOrganizationId == null) return
 
         progressBar.visibility = View.VISIBLE
         tvEmptyState.visibility = View.GONE
 
-        // NEW: Scope all Firestore queries to the organization
         val studentsRef = db.collection("organizations").document(currentOrganizationId!!).collection("students").whereEqualTo("teacherId", teacherId)
         val subjectsRef = db.collection("organizations").document(currentOrganizationId!!).collection("subjects").whereEqualTo("teacherId", teacherId)
         val marksRef = db.collection("organizations").document(currentOrganizationId!!).collection("examResults").whereEqualTo("examId", examId).whereEqualTo("teacherId", teacherId)
@@ -91,8 +84,10 @@ class ManageMarks : AppCompatActivity() {
         subjectsRef.get().addOnSuccessListener { subjectSnapshot ->
             this.allSubjects = subjectSnapshot.toObjects(SubjectItem::class.java)
             if (allSubjects.isEmpty()) {
-                Toast.makeText(this, "No subjects for this class.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "No subjects found for this class. Please add subjects first.", Toast.LENGTH_LONG).show()
                 progressBar.visibility = View.GONE
+                tvEmptyState.text = "No subjects found for this class."
+                tvEmptyState.visibility = View.VISIBLE
                 return@addOnSuccessListener
             }
 
@@ -135,9 +130,9 @@ class ManageMarks : AppCompatActivity() {
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
             val organizationName = FirebaseAuthManager.getOrganizationName(this@ManageMarks) ?: "Your Madarsa Name"
-            val result = reportCardGenerator.generateSingleReport(reportData, organizationName, "Sarni Society, Ahmedabad, Gujarat")
+            // --- CORRECTED: Simply call the function. It will show its own Toast. ---
+            reportCardGenerator.generateSingleReport(reportData, organizationName, "")
             progressBar.visibility = View.GONE
-            Toast.makeText(this@ManageMarks, result ?: "Failed to generate PDF.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -149,20 +144,22 @@ class ManageMarks : AppCompatActivity() {
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
             val organizationName = FirebaseAuthManager.getOrganizationName(this@ManageMarks) ?: "Your Madarsa Name"
-            val result = reportCardGenerator.generateBulkReport(reportDataList, organizationName, "Your Madarsa Address, City, State")
+            // --- CORRECTED: Simply call the function. It will show its own Toast. ---
+            reportCardGenerator.generateBulkReport(reportDataList, organizationName, "")
             progressBar.visibility = View.GONE
-            Toast.makeText(this@ManageMarks, result ?: "Failed to generate PDF.", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun saveSingleStudentMarks(studentMark: StudentMarks) {
         if (currentOrganizationId == null) {
-            Toast.makeText(this, "Cannot save marks: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            StatusDialogFragment.newInstance(false, "Organization ID missing.").show(supportFragmentManager, "failureDialog")
             return
         }
         progressBar.visibility = View.VISIBLE
+
         val docId = "${examId}_${studentMark.student.id}"
         val docRef = db.collection("organizations").document(currentOrganizationId!!).collection("examResults").document(docId)
+
         val data = hashMapOf(
             "examId" to examId,
             "teacherId" to teacherId,
@@ -170,12 +167,19 @@ class ManageMarks : AppCompatActivity() {
             "studentName" to studentMark.student.studentName,
             "marks" to studentMark.marks
         )
+
         docRef.set(data).addOnSuccessListener {
             progressBar.visibility = View.GONE
-            Toast.makeText(this, "${studentMark.student.studentName}'s marks saved!", Toast.LENGTH_SHORT).show()
+            // --- CHANGE ---
+            StatusDialogFragment.newInstance(true, "Marks Saved!")
+                .show(supportFragmentManager, "successDialog")
+
         }.addOnFailureListener { e ->
             progressBar.visibility = View.GONE
-            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            // --- CHANGE ---
+            StatusDialogFragment.newInstance(false, "Save Failed")
+                .show(supportFragmentManager, "failureDialog")
+            Log.e(TAG, "Error saving marks for student ${studentMark.student.id}", e)
         }
     }
 }

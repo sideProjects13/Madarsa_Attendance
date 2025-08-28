@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/report_generator_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:fitsSystemWindows="false"
+    tools:context=".ReportGeneratorActivity">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/app_bar_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurface"
+        app:elevation="4dp">
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:navigationIcon="?attr/homeAsUpIndicator"
+            app:title="Student Report Generator"
+            app:titleTextColor="?attr/colorOnSurface" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- NEW: Section for Report Name -->
+            <TextView
+                style="@style/DashboardSectionHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:text="Report Details" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_report_name"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Report Title (Optional)"
+                android:layout_marginBottom="16dp">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_report_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <!-- END NEW -->
+
+            <!-- Section 1: Filters -->
+            <TextView
+                style="@style/DashboardSectionHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:text="1. Select Students" />
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/menu_teacher_filter"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Filter by Class (Teacher)">
+                <AutoCompleteTextView
+                    android:id="@+id/spinner_teacher_filter"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Section 2: Fields to Include -->
+            <TextView
+                style="@style/DashboardSectionHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2. Select Info to Include" />
+            <GridLayout
+                android:id="@+id/fields_checkbox_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="2">
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_reg_no" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Reg. No" android:checked="true"/>
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_student_name" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Student Name" android:checked="true"/>
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_parent_name" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Parent Name" android:checked="true"/>
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_parent_mobile" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Parent Mobile" android:checked="true"/>
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_alternate_mobile" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Alternate Mobile" />
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_gender" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Gender" />
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_dob" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Date of Birth" />
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_admission_date" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Admission Date" />
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_monthly_fee" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Monthly Fee" />
+                <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/cb_teacher_name" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_columnWeight="1" android:text="Class / Teacher" />
+            </GridLayout>
+
+            <!-- Section 3: Page Orientation -->
+            <TextView
+                style="@style/DashboardSectionHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="3. Page Orientation" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/toggle_orientation"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:checkedButton="@id/btn_portrait">
+
+                <Button
+                    android:id="@+id/btn_portrait"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Portrait" />
+
+                <Button
+                    android:id="@+id/btn_landscape"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Landscape" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <!-- Section 4: Live Preview -->
+            <TextView
+                style="@style/DashboardSectionHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="4. Live Preview" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout
+                        android:id="@+id/preview_header_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:background="?attr/colorSurface"
+                        tools:layout_height="48dp"/>
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rv_report_preview"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:nestedScrollingEnabled="false"
+                        tools:itemCount="3"
+                        tools:listitem="@layout/item_report_row"/>
+                    <TextView
+                        android:id="@+id/tv_no_preview_data"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="No students found for this filter."
+                        android:padding="24dp"
+                        android:gravity="center"
+                        android:visibility="gone"/>
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <!-- Section 5: Generate Button -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp">
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_generate_pdf"
+                    style="?attr/materialButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Generate PDF Report"
+                    app:icon="@drawable/ic_receipt"
+                    android:paddingVertical="12dp"/>
+                <ProgressBar
+                    android:id="@+id/progress_bar_generate"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_gravity="center"
+                    android:elevation="8dp"
+                    android:indeterminateTint="?attr/colorOnPrimary"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

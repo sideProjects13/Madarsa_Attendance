@@ -36,7 +36,7 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
     private var teacherId: String? = null
     private var targetYear: Int = 0
     private var targetMonth: Int = 0
-    private var currentOrganizationId: String? = null // NEW: Organization ID
+    private var currentOrganizationId: String? = null
 
     private val dailyAttendanceList = mutableListOf<DailyAttendanceStatus>()
 
@@ -50,14 +50,17 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
         teacherId = intent.getStringExtra("TEACHER_ID")
         targetYear = intent.getIntExtra("TARGET_YEAR", Calendar.getInstance().get(Calendar.YEAR))
         targetMonth = intent.getIntExtra("TARGET_MONTH", Calendar.getInstance().get(Calendar.MONTH))
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
 
 
         toolbar = findViewById(R.id.student_monthly_attendance_toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setDisplayShowHomeEnabled(true)
-        toolbar.title = "Monthly Record"
+
+        // --- FIX: Set the title AFTER setSupportActionBar ---
+        supportActionBar?.title = "Monthly Attendance Record"
+
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
         tvStudentNameHeader = findViewById(R.id.tvStudentNameMonthlyHeader)
@@ -71,7 +74,7 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
             finish()
             return
         }
-        if (currentOrganizationId == null) { // NEW: Check organization ID
+        if (currentOrganizationId == null) {
             Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
             finish()
             return
@@ -95,7 +98,7 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
     }
 
     private fun loadMonthlyAttendance() {
-        if (studentId == null || teacherId == null || currentOrganizationId == null) return // NEW: Check organization ID
+        if (studentId == null || teacherId == null || currentOrganizationId == null) return
         Log.d(TAG, "Loading monthly attendance for Student: $studentId, Teacher: $teacherId, Year: $targetYear, Month: ${targetMonth + 1}, Org ID: $currentOrganizationId")
 
         progressBar.visibility = View.VISIBLE
@@ -109,7 +112,6 @@ class StudentMonthlyAttendanceActivity : AppCompatActivity() {
         val lastDay = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
         val lastDayOfMonth = "$monthYearStr-${String.format(Locale.getDefault(), "%02d", lastDay)}"
 
-        // NEW: Scope query to the organization
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("attendanceRecords")
             .whereEqualTo("teacherId", teacherId)

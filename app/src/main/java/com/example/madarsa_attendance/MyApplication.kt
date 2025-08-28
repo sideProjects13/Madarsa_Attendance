@@ -3,27 +3,42 @@ package com.example.madarsa_attendance
 import android.app.Application
 import android.util.Log
 import com.cloudinary.android.MediaManager
-import java.util.HashMap // Ensure this import is present
-
+import com.google.firebase.FirebaseApp
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.ktx.initialize
+import java.util.HashMap
 
 class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        Log.d("MyApplication", "onCreate: Initializing Cloudinary")
+        Log.d("MyApplication", "onCreate: Initializing...")
 
-        // Initialize Cloudinary
-        // !! IMPORTANT: For security, do NOT hardcode API Secret in client-side code for production.
-        // For production, you'd typically use "unsigned uploads" or have a backend generate signatures.
-        // For development/learning, you can include it here, but be aware of the risk.
+        // --- Your existing Cloudinary Initialization ---
+        Log.d("MyApplication", "Initializing Cloudinary")
         val config = HashMap<String, String>()
         config["cloud_name"] = "dbvgevar0"
         config["api_key"] = "396932227925265"
-        //config["api_secret"] = "BxY9cTH6W4elZRyOcQ9fEpLOazs" // BE CAREFUL WITH THIS
+        // config["api_secret"] = "your_api_secret_here" // It's good practice to keep this commented
         try {
             MediaManager.init(this, config)
             Log.d("MyApplication", "Cloudinary initialized successfully.")
         } catch (e: Exception) {
             Log.e("MyApplication", "Error initializing Cloudinary: ${e.message}", e)
         }
+
+        // --- FIX: Secondary FirebaseApp Initialization ---
+        // This is required to create teacher accounts without logging out the admin.
+        try {
+            // Get the configuration from the default, already-initialized Firebase app
+            val options = FirebaseApp.getInstance().options
+
+            // Initialize a new Firebase app with the same options but a unique name "secondary"
+            Firebase.initialize(this, options, "secondary")
+            Log.d("MyApplication", "Secondary FirebaseApp initialized successfully.")
+        } catch (e: IllegalStateException) {
+            // This can happen if the app process is recreated. It's safe to ignore.
+            Log.w("MyApplication", "Secondary FirebaseApp was already initialized.")
+        }
+        // --- END OF FIX ---
     }
 }

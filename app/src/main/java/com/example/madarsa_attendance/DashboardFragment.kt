@@ -8,203 +8,222 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog // Import AlertDialog
-import androidx.core.content.ContextCompat
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
+import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.facebook.shimmer.ShimmerFrameLayout
-import com.github.mikephil.charting.charts.BarChart
-import com.github.mikephil.charting.components.XAxis
-import com.github.mikephil.charting.data.BarData
-import com.github.mikephil.charting.data.BarDataSet
-import com.github.mikephil.charting.data.BarEntry
-import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
-import com.google.android.material.button.MaterialButton // Import MaterialButton
+import com.github.mikephil.charting.charts.PieChart
+import com.github.mikephil.charting.data.PieData
+import com.github.mikephil.charting.data.PieDataSet
+import com.github.mikephil.charting.data.PieEntry
+import com.github.mikephil.charting.formatter.PercentFormatter
+import com.github.mikephil.charting.utils.ColorTemplate
+import com.google.android.material.card.MaterialCardView
 import java.text.NumberFormat
+import java.util.Calendar
 import java.util.Locale
 
 class DashboardFragment : Fragment() {
 
-    private val viewModel: DashboardViewModel by viewModels()
+    private val viewModel: DashboardViewModel by activityViewModels()
 
-    // UI Views
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var shimmerLayout: ShimmerFrameLayout
     private lateinit var mainContentLayout: LinearLayout
+    private lateinit var tvGreeting: TextView
     private lateinit var tvTotalStudents: TextView
     private lateinit var tvTotalTeachers: TextView
     private lateinit var tvFeesCollectedMonth: TextView
     private lateinit var tvFeesCollectedYear: TextView
-    private lateinit var rvRecentlyJoined: RecyclerView
-    private lateinit var rvAbsentToday: RecyclerView
-    private lateinit var tvNoAbsentees: TextView
-    private lateinit var barChart: BarChart
-    private lateinit var btnLogout: MaterialButton // NEW: Logout button
+    private lateinit var pieChart: PieChart
+    private lateinit var tvPresentCount: TextView
+    private lateinit var tvAbsentCount: TextView
+    private lateinit var tvNotMarkedCount: TextView
+    private lateinit var absentCardSection: LinearLayout
+    private lateinit var totalTeachersCard: MaterialCardView
 
-    // Adapters
-    private lateinit var recentStudentsAdapter: DashboardStudentAdapter
-    private lateinit var absentStudentsAdapter: DashboardStudentAdapter
+    // --- NEW: View for the "Not Marked" section ---
+    private lateinit var notMarkedCardSection: LinearLayout
 
     private val currencyFormatter: NumberFormat = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_dashboard, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         setupViews(view)
-        setupRecyclerViews()
         setupObservers()
-        setupLogoutButton() // NEW: Setup logout button
-    }
 
-    override fun onResume() {
-        super.onResume()
-        shimmerLayout.startShimmer()
-        viewModel.loadDashboardData()
-    }
+        swipeRefreshLayout.setOnRefreshListener {
+            viewModel.refreshData()
+        }
 
-    override fun onPause() {
-        shimmerLayout.stopShimmer()
-        super.onPause()
+        absentCardSection.setOnClickListener {
+            startActivity(Intent(activity, AbsenteesActivity::class.java))
+        }
+
+        totalTeachersCard.setOnClickListener {
+            startActivity(Intent(activity, ManageTeachersActivity::class.java))
+        }
+
+        // --- NEW: Set OnClickListener for the Not Marked Card ---
+        notMarkedCardSection.setOnClickListener {
+            viewModel.unmarkedTeachers.value?.let { teachers ->
+                if (teachers.isNotEmpty()) {
+                    showUnmarkedClassesDialog(teachers)
+                } else {
+                    Toast.makeText(context, "All classes have been marked for today!", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun setupViews(view: View) {
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout)
         shimmerLayout = view.findViewById(R.id.shimmer_view_container)
         mainContentLayout = view.findViewById(R.id.main_content_layout)
+        tvGreeting = view.findViewById(R.id.tv_greeting)
         tvTotalStudents = view.findViewById(R.id.tvTotalStudentsCount)
         tvTotalTeachers = view.findViewById(R.id.tvTotalTeachersCount)
         tvFeesCollectedMonth = view.findViewById(R.id.tvFeesCollectedMonth)
         tvFeesCollectedYear = view.findViewById(R.id.tvFeesCollectedYear)
-        rvRecentlyJoined = view.findViewById(R.id.rv_recently_joined)
-        rvAbsentToday = view.findViewById(R.id.rv_absent_today)
-        tvNoAbsentees = view.findViewById(R.id.tv_no_absentees)
-        barChart = view.findViewById(R.id.bar_chart_class_distribution)
-        btnLogout = view.findViewById(R.id.btnLogout) // NEW: Initialize logout button
+        pieChart = view.findViewById(R.id.pie_chart_class_distribution)
+        tvPresentCount = view.findViewById(R.id.tv_present_count)
+        tvAbsentCount = view.findViewById(R.id.tv_absent_count)
+        tvNotMarkedCount = view.findViewById(R.id.tv_not_marked_count)
+        absentCardSection = view.findViewById(R.id.absent_card_section)
+        totalTeachersCard = view.findViewById(R.id.totalTeachersCard)
+
+        // --- NEW: Initialize the Not Marked Card ---
+        notMarkedCardSection = view.findViewById(R.id.not_marked_card_section)
+
+        setGreeting()
     }
 
-    private fun setupRecyclerViews() {
-        recentStudentsAdapter = DashboardStudentAdapter()
-        rvRecentlyJoined.adapter = recentStudentsAdapter
-
-        absentStudentsAdapter = DashboardStudentAdapter()
-        rvAbsentToday.adapter = absentStudentsAdapter
+    private fun setGreeting() {
+        val calendar = Calendar.getInstance()
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        tvGreeting.text = when (hour) {
+            in 0..11 -> "Good Morning!"
+            in 12..16 -> "Good Afternoon!"
+            else -> "Good Evening!"
+        }
     }
 
     private fun setupObservers() {
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            if (isLoading) {
-                shimmerLayout.visibility = View.VISIBLE
-                mainContentLayout.visibility = View.GONE
+            if (isLoading && !swipeRefreshLayout.isRefreshing) {
                 shimmerLayout.startShimmer()
-            } else {
+                shimmerLayout.visibility = View.VISIBLE
+                mainContentLayout.visibility = View.INVISIBLE
+            } else if (!isLoading) {
+                swipeRefreshLayout.isRefreshing = false
                 shimmerLayout.stopShimmer()
                 shimmerLayout.visibility = View.GONE
                 mainContentLayout.visibility = View.VISIBLE
             }
         }
 
-        viewModel.totalStudents.observe(viewLifecycleOwner) { count ->
-            tvTotalStudents.text = count.toString()
-        }
-
-        viewModel.totalTeachers.observe(viewLifecycleOwner) { count ->
-            tvTotalTeachers.text = count.toString()
-        }
-
-        viewModel.feesThisMonth.observe(viewLifecycleOwner) { amount ->
-            tvFeesCollectedMonth.text = currencyFormatter.format(amount)
-        }
-
-        viewModel.feesThisYear.observe(viewLifecycleOwner) { amount ->
-            tvFeesCollectedYear.text = currencyFormatter.format(amount)
-        }
-
-        viewModel.recentlyJoinedStudents.observe(viewLifecycleOwner) { students ->
-            recentStudentsAdapter.submitList(students)
-        }
-
-        viewModel.absentStudents.observe(viewLifecycleOwner) { students ->
-            if (students.isEmpty()) {
-                rvAbsentToday.visibility = View.GONE
-                tvNoAbsentees.visibility = View.VISIBLE
-            } else {
-                rvAbsentToday.visibility = View.VISIBLE
-                tvNoAbsentees.visibility = View.GONE
-                absentStudentsAdapter.submitList(students)
-            }
-        }
+        viewModel.totalStudents.observe(viewLifecycleOwner) { count -> tvTotalStudents.text = count.toString() }
+        viewModel.totalTeachers.observe(viewLifecycleOwner) { count -> tvTotalTeachers.text = count.toString() }
+        viewModel.feesThisMonth.observe(viewLifecycleOwner) { amount -> tvFeesCollectedMonth.text = currencyFormatter.format(amount) }
+        viewModel.feesThisYear.observe(viewLifecycleOwner) { amount -> tvFeesCollectedYear.text = currencyFormatter.format(amount) }
 
         viewModel.classDistribution.observe(viewLifecycleOwner) { distribution ->
             if (distribution.isNotEmpty()) {
-                setupBarChart(distribution)
+                setupPieChart(distribution)
+            } else {
+                pieChart.clear()
             }
         }
+
+        viewModel.presentCount.observe(viewLifecycleOwner) { count -> tvPresentCount.text = count.toString() }
+        viewModel.absentCount.observe(viewLifecycleOwner) { count -> tvAbsentCount.text = count.toString() }
+        viewModel.notMarkedCount.observe(viewLifecycleOwner) { count -> tvNotMarkedCount.text = count.toString() }
     }
 
-    private fun setupBarChart(data: Map<String, Int>) {
-        val entries = ArrayList<BarEntry>()
-        val labels = ArrayList<String>()
-        var index = 0f
+    // --- NEW: Function to show the dialog ---
+    private fun showUnmarkedClassesDialog(teachers: List<Teacher>) {
+        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_not_marked, null)
+        val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_not_marked_classes)
 
-        data.toSortedMap().forEach { (teacherName, count) ->
-            entries.add(BarEntry(index, count.toFloat()))
-            labels.add(teacherName.split(" ").first())
-            index++
+        val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
+            .setView(dialogView)
+            .setNegativeButton("Close", null)
+            .create()
+
+        val adapter = NotMarkedAdapter(teachers) { selectedTeacher ->
+            val intent = Intent(activity, TeacherOptionsActivity::class.java).apply {
+                putExtra(TeacherOptionsActivity.EXTRA_TEACHER_ID, selectedTeacher.teacherId)
+                putExtra(TeacherOptionsActivity.EXTRA_TEACHER_NAME, selectedTeacher.teacherName)
+                putExtra(TeacherOptionsActivity.EXTRA_START_FRAGMENT, TeacherOptionsActivity.FRAGMENT_TAKE_ATTENDANCE)
+            }
+            startActivity(intent)
+            dialog.dismiss()
+        }
+        recyclerView.adapter = adapter
+        dialog.show()
+    }
+
+    // In DashboardFragment.kt
+
+    private fun setupPieChart(data: Map<String, Int>) {
+        val entries = ArrayList<PieEntry>()
+        data.forEach { (className, count) ->
+            // We only add entries that have students to avoid clutter
+            if (count > 0) {
+                entries.add(PieEntry(count.toFloat(), className))
+            }
         }
 
-        val dataSet = BarDataSet(entries, "Students")
-        dataSet.color = ContextCompat.getColor(requireContext(), R.color.mono_palette_white)
-        dataSet.valueTextColor = Color.BLACK
-        dataSet.valueTextSize = 12f
+        if (entries.isEmpty()) {
+            pieChart.visibility = View.GONE
+            return
+        } else {
+            pieChart.visibility = View.VISIBLE
+        }
 
-        barChart.data = BarData(dataSet)
+        val dataSet = PieDataSet(entries, "").apply {
+            // Use a vibrant and professional color palette
+            colors = ColorTemplate.MATERIAL_COLORS.toList() + ColorTemplate.VORDIPLOM_COLORS.toList()
+            valueTextColor = Color.BLACK
+            valueTextSize = 12f
+            sliceSpace = 2f
+        }
 
-        barChart.description.isEnabled = false
-        barChart.legend.isEnabled = false
-        barChart.setDrawValueAboveBar(true)
-        barChart.setFitBars(true)
-        barChart.animateY(1000)
+        val pieData = PieData(dataSet).apply {
+            // Format the value on the chart to show a percentage
+            setValueFormatter(PercentFormatter(pieChart))
+        }
 
-        val xAxis = barChart.xAxis
-        xAxis.valueFormatter = IndexAxisValueFormatter(labels)
-        xAxis.position = XAxis.XAxisPosition.BOTTOM
-        xAxis.granularity = 1f
-        xAxis.setDrawGridLines(false)
-        xAxis.textColor = Color.DKGRAY
-        xAxis.textSize = 10f
-        xAxis.labelRotationAngle = -45f
+        pieChart.apply {
+            // Set the data and invalidate to redraw the chart
+            this.data = pieData
 
-        barChart.axisLeft.axisMinimum = 0f
-        barChart.axisLeft.setDrawGridLines(false)
-        barChart.axisRight.isEnabled = false
+            // General appearance settings
+            description.isEnabled = false
+            legend.isWordWrapEnabled = true
+            isDrawHoleEnabled = true
+            holeRadius = 45f
+            transparentCircleRadius = 50f
 
-        barChart.invalidate()
-    }
+            // Make the chart use percentage values
+            setUsePercentValues(true)
 
-    // NEW METHOD: Setup Logout Button
-    private fun setupLogoutButton() {
-        btnLogout.setOnClickListener {
-            if (!isAdded) return@setOnClickListener // Ensure fragment is still attached
+            // Entry label (the text on the slices) styling
+            setEntryLabelColor(Color.BLACK)
+            setEntryLabelTextSize(10f)
 
-            AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
-                .setTitle("Logout")
-                .setMessage("Are you sure you want to log out?")
-                .setPositiveButton("Logout") { _, _ ->
-                    FirebaseAuthManager.logout(requireContext())
-                    // Redirect to LoginActivity after logout
-                    val intent = Intent(activity, LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK // Clear back stack
-                    startActivity(intent)
-                    activity?.finish() // Finish the hosting activity (MainActivity)
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+            // Animation
+            animateY(1000)
+
+            // Refresh the chart
+            invalidate()
         }
     }
 }

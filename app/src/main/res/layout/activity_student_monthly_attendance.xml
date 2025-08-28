@@ -12,10 +12,10 @@
         android:id="@+id/student_monthly_attendance_toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
-        app:titleTextColor="?attr/colorOnPrimary"
+        android:background="@android:color/transparent"
+        app:titleTextColor="?attr/colorPrimary"
         app:navigationIcon="@drawable/ic_arrow_back"
-        app:navigationIconTint="?attr/colorOnPrimary"
+        app:navigationIconTint="?attr/colorPrimary"
         tools:title="Monthly Attendance" />
 
     <TextView

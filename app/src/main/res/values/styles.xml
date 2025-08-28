@@ -1,8 +1,19 @@
-<!-- In app/res/values/themes.xml -->
 <resources>
-    <!-- ... your other theme definitions (Base.Theme.Madarsa_Attendance, Theme.App.Starting, etc.) ... -->
 
+    <!-- ... (Your other styles) ... -->
 
+<!--    <style name="TextAppearance.App.PureMonochrome.TitleMedium" parent="TextAppearance.Material3.TitleMedium">-->
+<!--        &lt;!&ndash; Change the font family &ndash;&gt;-->
+<!--        <item name="fontFamily">@font/montserrat</item>-->
+<!--        <item name="android:fontFamily">@font/montserrat</item>-->
+<!--        <item name="android:textColor">?attr/colorOnSurface</item>-->
+<!--        <item name="android:textStyle">bold</item>-->
+<!--    </style>-->
 
-    <!-- ... other styles ... -->
+<!--    <style name="TextAppearance.App.PureMonochrome.BodyMedium" parent="TextAppearance.Material3.BodyMedium">-->
+<!--        &lt;!&ndash; Change the font family &ndash;&gt;-->
+<!--        <item name="fontFamily">@font/montserrat</item>-->
+<!--        <item name="android:fontFamily">@font/montserrat</item>-->
+<!--        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>-->
+<!--    </style>-->
 </resources>

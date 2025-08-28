@@ -6,6 +6,7 @@ import android.app.DatePickerDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
@@ -45,7 +46,7 @@ class EditStudentActivity : AppCompatActivity() {
         private const val UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT = "BIBI_AYESHA_MASJID"
     }
 
-    // Existing UI
+    // UI
     private lateinit var toolbar: MaterialToolbar
     private lateinit var ivProfileImage: ImageView
     private lateinit var cardViewProfileImage: MaterialCardView
@@ -59,21 +60,22 @@ class EditStudentActivity : AppCompatActivity() {
     private lateinit var tvCurrentTeacher: TextView
     private lateinit var btnSaveChanges: MaterialButton
     private lateinit var progressBar: ProgressBar
-
-    // New UI
     private lateinit var etRegNo: TextInputEditText
     private lateinit var rgGender: RadioGroup
     private lateinit var etBirthDate: TextInputEditText
     private lateinit var etAdmissionDate: TextInputEditText
+    private lateinit var etAlternateMobile: TextInputEditText
+    private lateinit var tilAlternateMobile: TextInputLayout
+    private lateinit var etAddress: TextInputEditText
+    private lateinit var tilAddress: TextInputLayout
 
     // Backend
     private lateinit var db: FirebaseFirestore
     private var studentId: String? = null
     private var currentTeacherNameFromIntent: String? = null
-    private var currentOrganizationId: String? = null // NEW: Organization ID
-
-    private var imageUri: Uri? = null // This will hold the URI of a NEW image if selected
-    private var existingProfileImageUrl: String? = null // This holds the student's current image URL
+    private var currentOrganizationId: String? = null
+    private var imageUri: Uri? = null
+    private var existingProfileImageUrl: String? = null
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,15 +85,10 @@ class EditStudentActivity : AppCompatActivity() {
         db = FirebaseFirestore.getInstance()
         studentId = intent.getStringExtra("STUDENT_ID")
         currentTeacherNameFromIntent = intent.getStringExtra("TEACHER_NAME")
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this) // NEW: Get organization ID
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
 
-        if (studentId == null) {
-            Toast.makeText(this, "Student ID not found.", Toast.LENGTH_LONG).show(); finish(); return
-        }
-        if (currentOrganizationId == null) { // NEW: Check organization ID
-            Toast.makeText(this, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
-            finish()
-            return
+        if (studentId == null || currentOrganizationId == null) {
+            Toast.makeText(this, "Required data not found.", Toast.LENGTH_LONG).show(); finish(); return
         }
 
         initializeViews()
@@ -113,12 +110,14 @@ class EditStudentActivity : AppCompatActivity() {
         tvCurrentTeacher = findViewById(R.id.tvCurrentTeacherEdit)
         btnSaveChanges = findViewById(R.id.btnSaveChangesStudent)
         progressBar = findViewById(R.id.progressBarEditStudent)
-
-        // New Views
         etRegNo = findViewById(R.id.etRegNoEdit)
         rgGender = findViewById(R.id.rgGenderEdit)
         etBirthDate = findViewById(R.id.etBirthDateEdit)
         etAdmissionDate = findViewById(R.id.etAdmissionDateEdit)
+        etAlternateMobile = findViewById(R.id.etAlternateMobileEdit)
+        tilAlternateMobile = findViewById(R.id.tilAlternateMobileEdit)
+        etAddress = findViewById(R.id.etAddressEdit)
+        tilAddress = findViewById(R.id.tilAddressEdit)
     }
 
     private fun setupListeners() {
@@ -153,13 +152,9 @@ class EditStudentActivity : AppCompatActivity() {
     }
 
     private fun loadStudentDetails() {
-        if (studentId == null || currentOrganizationId == null) { // NEW: Check organization ID
-            Toast.makeText(this, "Student or Organization ID missing.", Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
+        if (studentId == null || currentOrganizationId == null) return
         setInputsEnabled(false, isInitialLoad = true)
-        // NEW: Scope query to the organization
+
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("students").document(studentId!!).get().addOnSuccessListener { document ->
                 setInputsEnabled(true)
@@ -172,6 +167,8 @@ class EditStudentActivity : AppCompatActivity() {
                         etRegNo.setText(student.regNo)
                         etBirthDate.setText(student.birthDate)
                         etAdmissionDate.setText(student.admissionDate)
+                        etAlternateMobile.setText(student.alternateMobileNumber)
+                        etAddress.setText(student.address)
 
                         when (student.gender) {
                             "Male" -> rgGender.check(R.id.rbMaleEdit)
@@ -179,7 +176,6 @@ class EditStudentActivity : AppCompatActivity() {
                         }
 
                         existingProfileImageUrl = student.profileImageUrl
-                        // Load existing image if available
                         if (!existingProfileImageUrl.isNullOrEmpty()) {
                             Glide.with(this).load(existingProfileImageUrl).circleCrop().placeholder(R.drawable.student).into(ivProfileImage)
                         } else {
@@ -197,15 +193,21 @@ class EditStudentActivity : AppCompatActivity() {
     }
 
     private fun validateAndUpdateStudentDetails() {
+        tilStudentName.error = null
+        tilAlternateMobile.error = null
+
         if (etStudentName.text.toString().trim().isEmpty()) {
             tilStudentName.error = "Student name cannot be empty"
             return
-        } else {
-            tilStudentName.error = null
         }
-        // NEW: Basic check for organization ID before proceeding
+        val alternateMobile = etAlternateMobile.text.toString().trim()
+        if (alternateMobile.isNotEmpty() && (alternateMobile.length != 10 || !alternateMobile.all { it.isDigit() })) {
+            tilAlternateMobile.error = "Enter a valid 10-digit number"
+            return
+        }
+
         if (currentOrganizationId == null) {
-            Toast.makeText(this, "Cannot save changes: Organization ID missing.", Toast.LENGTH_SHORT).show()
+            handleFailure("Cannot save: Organization ID is missing.")
             return
         }
 
@@ -225,8 +227,8 @@ class EditStudentActivity : AppCompatActivity() {
                     updateStudentInFirestore(newImageUrl)
                 }
                 override fun onError(requestId: String?, error: ErrorInfo?) {
-                    Toast.makeText(this@EditStudentActivity, "Image upload failed. Updating details without image change.", Toast.LENGTH_LONG).show()
-                    updateStudentInFirestore(existingProfileImageUrl)
+                    Log.e(TAG, "Image upload failed, updating details without image change. Error: ${error?.description}")
+                    updateStudentInFirestore(existingProfileImageUrl) // Try to save other details anyway
                 }
                 override fun onStart(requestId: String?) {}
                 override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
@@ -235,11 +237,7 @@ class EditStudentActivity : AppCompatActivity() {
     }
 
     private fun updateStudentInFirestore(imageUrl: String?) {
-        if (studentId == null || currentOrganizationId == null) { // NEW: Check organization ID
-            Toast.makeText(this, "Cannot update: Student or Organization ID missing.", Toast.LENGTH_SHORT).show()
-            setInputsEnabled(true)
-            return
-        }
+        if (studentId == null || currentOrganizationId == null) return
 
         val selectedGenderId = rgGender.checkedRadioButtonId
         val gender = if (selectedGenderId != -1) findViewById<RadioButton>(selectedGenderId).text.toString() else null
@@ -252,25 +250,36 @@ class EditStudentActivity : AppCompatActivity() {
             "gender" to gender,
             "birthDate" to etBirthDate.text.toString().trim().ifEmpty { null },
             "admissionDate" to etAdmissionDate.text.toString().trim().ifEmpty { null },
-            "lastUpdatedAt" to FieldValue.serverTimestamp()
+            "lastUpdatedAt" to FieldValue.serverTimestamp(),
+            "alternateMobileNumber" to etAlternateMobile.text.toString().trim().ifEmpty { null },
+            "address" to etAddress.text.toString().trim().ifEmpty { null }
         )
 
-        if (imageUrl != null) {
-            studentUpdates["profileImageUrl"] = imageUrl
-        }
+        // Only add the profile image URL if it's not null to avoid overwriting with null
+        imageUrl?.let { studentUpdates["profileImageUrl"] = it }
 
-        // NEW: Scope update to the organization
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("students").document(studentId!!)
             .set(studentUpdates, SetOptions.merge())
             .addOnSuccessListener {
-                Toast.makeText(this, "Details updated successfully.", Toast.LENGTH_SHORT).show()
+                StatusDialogFragment.newInstance(
+                    isSuccess = true,
+                    message = "Details Updated Successfully!",
+                    finishActivityOnDismiss = true
+                ).show(supportFragmentManager, "successDialog")
                 setResult(Activity.RESULT_OK)
-                finish()
             }.addOnFailureListener { e ->
-                setInputsEnabled(true)
-                Toast.makeText(this, "Error updating details: ${e.message}", Toast.LENGTH_LONG).show()
+                Log.e(TAG, "Error updating student details", e)
+                handleFailure("Failed to update details.")
             }
+    }
+
+    private fun handleFailure(message: String) {
+        setInputsEnabled(true)
+        StatusDialogFragment.newInstance(
+            isSuccess = false,
+            message = message
+        ).show(supportFragmentManager, "failureDialog")
     }
 
     private fun setInputsEnabled(enabled: Boolean, isInitialLoad: Boolean = false) {
@@ -288,10 +297,12 @@ class EditStudentActivity : AppCompatActivity() {
         rgGender.isEnabled = enabled
         etBirthDate.isEnabled = enabled
         etAdmissionDate.isEnabled = enabled
+        etAlternateMobile.isEnabled = enabled
+        etAddress.isEnabled = enabled
     }
 
     private fun checkAndRequestPermissions() {
-        val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_IMAGES
         } else {
             Manifest.permission.READ_EXTERNAL_STORAGE

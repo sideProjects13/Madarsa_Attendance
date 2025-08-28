@@ -11,10 +11,10 @@
         android:id="@+id/add_edit_subject_toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
-        app:titleTextColor="?attr/colorOnPrimary"
+        android:background="@android:color/transparent"
+        app:titleTextColor="?attr/colorPrimary"
         app:navigationIcon="?attr/homeAsUpIndicator"
-        app:navigationIconTint="?attr/colorOnPrimary"/>
+        app:navigationIconTint="?attr/colorPrimary"/>
 
     <ScrollView
         android:layout_width="match_parent"

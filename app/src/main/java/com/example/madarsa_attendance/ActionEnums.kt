@@ -1,0 +1,28 @@
+package com.example.madarsa_attendance
+
+import java.io.Serializable // For passing enums in Bundles
+
+enum class TeacherAction {
+    VIEW_ATTENDANCE,
+    ADD_STUDENT,
+    EDIT_TEACHER,
+    DELETE_TEACHER,
+    VIEW_CLASS_FEES,
+    MANAGE_MARKS,
+    MANAGE_SUBJECTS,
+    MANAGE_CLASS,
+    ADD_SUBJECT,
+    BULK_ADD_TO_CLASS,
+    DOWNLOAD_FEES_REPORT_CLASS,
+    GENERATE_CLASS_RESULT,
+    DOWNLOAD_CLASS_STUDENTS // <-- ADD THIS LINE
+}
+
+enum class StudentAction : Serializable {
+    VIEW_FEE_HISTORY, GENERATE_STUDENT_RESULT,
+    EDIT_STUDENT, DELETE_STUDENT,
+    VIEW_MONTHLY_ATTENDANCE,
+    INACTIVATE_STUDENT,
+    MOVE_STUDENT,
+    DOWNLOAD_FEES_REPORT
+}

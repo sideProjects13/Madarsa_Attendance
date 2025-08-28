@@ -1,5 +1,6 @@
 package com.example.madarsa_attendance
 
+import android.app.Activity
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -13,7 +14,6 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.appbar.MaterialToolbar
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 
@@ -35,18 +35,16 @@ class InactiveStudentsFragment : Fragment() {
 
     private lateinit var db: FirebaseFirestore
     private lateinit var teacherDataViewModel: TeacherDataViewModel // Shared ViewModel
-    private var currentOrganizationId: String? = null // NEW: Organization ID
+    private var currentOrganizationId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         db = FirebaseFirestore.getInstance()
         teacherDataViewModel = ViewModelProvider(requireActivity())[TeacherDataViewModel::class.java]
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext()) // NEW: Get organization ID
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext())
 
         if (currentOrganizationId == null) {
             Toast.makeText(context, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
-            // In a fragment, you might just show an error state and prevent loading
-            // or trigger a redirect to login from the hosting activity.
         }
     }
 
@@ -91,7 +89,7 @@ class InactiveStudentsFragment : Fragment() {
     }
 
     private fun loadInactiveStudents() {
-        if (!isAdded || currentOrganizationId == null) { // NEW: Check organization ID
+        if (!isAdded || currentOrganizationId == null) {
             Log.w(TAG, "loadInactiveStudents skipped: fragment not added or organization ID missing.")
             return
         }
@@ -101,7 +99,6 @@ class InactiveStudentsFragment : Fragment() {
         tvNoInactive.visibility = View.GONE
         Log.d(TAG, "Loading all inactive students for organization ID: $currentOrganizationId...")
 
-        // NEW: Scope query to the organization
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("students")
             .whereEqualTo("isActive", false)
@@ -138,7 +135,7 @@ class InactiveStudentsFragment : Fragment() {
     }
 
     private fun confirmReactivateStudent(student: StudentDetailsItem) {
-        if (!isAdded || context == null || currentOrganizationId == null) return // NEW: Check organization ID
+        if (!isAdded || context == null || currentOrganizationId == null) return
         AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
             .setTitle("Reactivate Student")
             .setMessage("Are you sure you want to reactivate ${student.studentName}? They will appear in the active class list for ${student.teacherName}.")
@@ -150,26 +147,33 @@ class InactiveStudentsFragment : Fragment() {
     }
 
     private fun reactivateStudentInFirestore(student: StudentDetailsItem) {
-        if (!isAdded || currentOrganizationId == null) return // NEW: Check organization ID
+        if (!isAdded || currentOrganizationId == null) return
         progressBar.visibility = View.VISIBLE
-        // NEW: Scope update to the organization
+
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("students").document(student.id)
             .update("isActive", true)
             .addOnSuccessListener {
                 if (!isAdded) return@addOnSuccessListener
-                progressBar.visibility = View.GONE
-                Toast.makeText(context, "${student.studentName} reactivated and returned to ${student.teacherName}'s class!", Toast.LENGTH_LONG).show()
-                Log.d(TAG, "Student ${student.studentName} reactivated to class ${student.teacherName} for organization ID: $currentOrganizationId.")
 
+                // --- CHANGE ---
+                StatusDialogFragment.newInstance(true, "${student.studentName} has been reactivated!")
+                    .show(parentFragmentManager, "successDialog")
+
+                // Notify other parts of the app that data has changed
                 teacherDataViewModel.notifyStudentDataChanged()
-                loadInactiveStudents() // Reload the list
+                requireActivity().setResult(Activity.RESULT_OK)
+
+                // Reload the list to remove the reactivated student from this screen
+                loadInactiveStudents()
             }
             .addOnFailureListener { e ->
                 if (!isAdded) return@addOnFailureListener
                 progressBar.visibility = View.GONE
-                Toast.makeText(context, "Failed to reactivate: ${e.message}", Toast.LENGTH_LONG).show()
-                Log.e(TAG, "Failed to reactivate student ${student.id} for organization ID: $currentOrganizationId: ${e.message}", e)
+                // --- CHANGE ---
+                StatusDialogFragment.newInstance(false, "Reactivation Failed")
+                    .show(parentFragmentManager, "failureDialog")
+                Log.e(TAG, "Failed to reactivate student ${student.id}", e)
             }
     }
 }

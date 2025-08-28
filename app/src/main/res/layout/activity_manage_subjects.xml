@@ -15,11 +15,11 @@
             android:id="@+id/manage_subjects_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorSecondary"
+            android:background="@android:color/transparent"
             app:title="Manage Subjects"
-            app:titleTextColor="?attr/colorOnPrimary"
+            app:titleTextColor="?attr/colorPrimary"
             app:navigationIcon="?attr/homeAsUpIndicator"
-            app:navigationIconTint="?attr/colorOnPrimary"/>
+            app:navigationIconTint="?attr/colorPrimary"/>
     </com.google.android.material.appbar.AppBarLayout>
 
     <FrameLayout

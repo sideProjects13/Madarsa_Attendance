@@ -8,50 +8,53 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
+import com.bumptech.glide.Glide // Assuming Glide for image loading
 
-class DashboardStudentAdapter : ListAdapter<DashboardStudentItem, DashboardStudentAdapter.StudentViewHolder>(StudentDiffCallback()) {
+class DashboardStudentAdapter : ListAdapter<DashboardStudentItem, DashboardStudentAdapter.DashboardStudentViewHolder>(DashboardStudentDiffCallback()) {
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StudentViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_dashboard_student, parent, false)
-        return StudentViewHolder(view)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DashboardStudentViewHolder {
+        // --- MODIFIED: Inflate the new layout for absentee students ---
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_absentee_student, parent, false)
+        return DashboardStudentViewHolder(view)
     }
 
-    override fun onBindViewHolder(holder: StudentViewHolder, position: Int) {
-        holder.bind(getItem(position))
+    override fun onBindViewHolder(holder: DashboardStudentViewHolder, position: Int) {
+        val student = getItem(position)
+        holder.bind(student)
     }
 
-    class StudentViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val ivProfile: ImageView = itemView.findViewById(R.id.iv_dashboard_student_profile)
-        private val tvName: TextView = itemView.findViewById(R.id.tv_dashboard_student_name)
-        private val tvSubtitle: TextView = itemView.findViewById(R.id.tv_dashboard_student_subtitle)
+    class DashboardStudentViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        // --- MODIFIED: Find new view IDs ---
+        private val studentNameTextView: TextView = itemView.findViewById(R.id.tv_absentee_student_name)
+        private val teacherNameTextView: TextView = itemView.findViewById(R.id.tv_absentee_teacher_name)
+        private val studentImageView: ImageView = itemView.findViewById(R.id.iv_absentee_student_image)
 
-        fun bind(item: DashboardStudentItem) {
-            tvName.text = item.name
-
-            if (item.subtitle.isNullOrEmpty()) {
-                tvSubtitle.visibility = View.GONE
+        fun bind(student: DashboardStudentItem) {
+            studentNameTextView.text = student.name
+            // Display teacher name if available, otherwise hide the TextView
+            if (!student.subtitle.isNullOrBlank()) {
+                teacherNameTextView.text = "Class: ${student.subtitle}"
+                teacherNameTextView.visibility = View.VISIBLE
             } else {
-                tvSubtitle.visibility = View.VISIBLE
-                tvSubtitle.text = item.subtitle
+                teacherNameTextView.visibility = View.GONE
             }
 
+            // Load image using Glide
             Glide.with(itemView.context)
-                .load(item.imageUrl)
-                .circleCrop()
-                .placeholder(R.drawable.student) // Make sure you have a 'student.xml' or other placeholder drawable
-                .error(R.drawable.student)
-                .into(ivProfile)
+                .load(student.imageUrl)
+                .placeholder(R.drawable.student) // Default icon
+                .error(R.drawable.student) // Error icon
+                .into(studentImageView)
         }
     }
+}
 
-    class StudentDiffCallback : DiffUtil.ItemCallback<DashboardStudentItem>() {
-        override fun areItemsTheSame(oldItem: DashboardStudentItem, newItem: DashboardStudentItem): Boolean {
-            return oldItem.id == newItem.id
-        }
+class DashboardStudentDiffCallback : DiffUtil.ItemCallback<DashboardStudentItem>() {
+    override fun areItemsTheSame(oldItem: DashboardStudentItem, newItem: DashboardStudentItem): Boolean {
+        return oldItem.id == newItem.id
+    }
 
-        override fun areContentsTheSame(oldItem: DashboardStudentItem, newItem: DashboardStudentItem): Boolean {
-            return oldItem == newItem
-        }
+    override fun areContentsTheSame(oldItem: DashboardStudentItem, newItem: DashboardStudentItem): Boolean {
+        return oldItem == newItem
     }
 }

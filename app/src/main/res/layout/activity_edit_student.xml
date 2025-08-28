@@ -101,7 +101,42 @@
                     android:maxLength="10"/>
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- NEW FIELDS FOR EDITING -->
+            <!-- CORRECTED PLACEMENT -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilAlternateMobileEdit"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Alternate Mobile (Optional)"
+                app:prefixText="+91 "
+                app:counterEnabled="true"
+                app:counterMaxLength="10">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etAlternateMobileEdit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="phone"
+                    android:maxLength="10" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilAddressEdit"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Address (Optional)">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etAddressEdit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:minLines="2"
+                    android:gravity="top"/>
+            </com.google.android.material.textfield.TextInputLayout>
+            <!-- END OF CORRECTED PLACEMENT -->
+
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilRegNoEdit"
                 style="?attr/textInputOutlinedStyle"

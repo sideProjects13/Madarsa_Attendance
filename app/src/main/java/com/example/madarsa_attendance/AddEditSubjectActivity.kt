@@ -58,6 +58,7 @@ class AddEditSubjectActivity : AppCompatActivity() {
 
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        supportActionBar?.title = "Add Subject "
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
         if (currentEditingSubjectId != null) {
@@ -130,17 +131,14 @@ class AddEditSubjectActivity : AppCompatActivity() {
         }
 
         if (teacherIdForThisSubject == null) {
-            Log.e(TAG, "saveSubject: teacherIdForThisSubject is null. Cannot save. This indicates a flow error.")
-            Toast.makeText(this, "Error: Teacher association is missing. Please go back and try again.", Toast.LENGTH_LONG).show()
+            Log.e(TAG, "saveSubject: teacherIdForThisSubject is null. Cannot save.")
+            Toast.makeText(this, "Error: Teacher association is missing.", Toast.LENGTH_LONG).show()
             return
         }
-        if (currentOrganizationId == null) { // NEW: Check organization ID before saving
-            Log.e(TAG, "saveSubject: currentOrganizationId is null. Aborting save.")
-            Toast.makeText(this, "Error: Organization data missing. Cannot save subject.", Toast.LENGTH_LONG).show()
+        if (currentOrganizationId == null) {
+            Toast.makeText(this, "Error: Organization data missing.", Toast.LENGTH_LONG).show()
             return
         }
-
-        Log.d(TAG, "saveSubject: Attempting to save. subjectName='$subjectName', description='$description', forTeacherId='$teacherIdForThisSubject', Org ID: $currentOrganizationId")
 
         progressBar.visibility = View.VISIBLE
         btnSaveSubject.isEnabled = false
@@ -151,32 +149,30 @@ class AddEditSubjectActivity : AppCompatActivity() {
             "teacherId" to teacherIdForThisSubject
         )
 
-        val subjectRef = db.collection("organizations").document(currentOrganizationId!!) // NEW
-            .collection("subjects") // NEW
+        val subjectRef = db.collection("organizations").document(currentOrganizationId!!)
+            .collection("subjects")
 
         val task = if (currentEditingSubjectId != null) {
-            Log.d(TAG, "saveSubject: Updating existing subject ID: $currentEditingSubjectId")
             subjectRef.document(currentEditingSubjectId!!).set(subjectData, SetOptions.merge())
         } else {
-            Log.d(TAG, "saveSubject: Adding new subject for teacher ID: $teacherIdForThisSubject")
             subjectRef.add(subjectData)
         }
 
-        task.addOnSuccessListener { documentReferenceOrVoid ->
-            progressBar.visibility = View.GONE
-            btnSaveSubject.isEnabled = true
-            val message = if (currentEditingSubjectId != null) "Subject updated" else "Subject added"
-            Toast.makeText(this, "$message successfully", Toast.LENGTH_SHORT).show()
-
-            val newOrUpdatedId = if (currentEditingSubjectId != null) currentEditingSubjectId else (documentReferenceOrVoid as? com.google.firebase.firestore.DocumentReference)?.id
-            Log.d(TAG, "saveSubject: Success. Subject ID: $newOrUpdatedId")
-
+        task.addOnSuccessListener {
+            val message = if (currentEditingSubjectId != null) "Subject Updated" else "Subject Added"
+            // --- CHANGE ---
+            StatusDialogFragment.newInstance(
+                isSuccess = true,
+                message = "$message Successfully!",
+                finishActivityOnDismiss = true
+            ).show(supportFragmentManager, "successDialog")
             setResult(Activity.RESULT_OK)
-            finish()
+
         }.addOnFailureListener { e ->
             progressBar.visibility = View.GONE
             btnSaveSubject.isEnabled = true
-            Toast.makeText(this, "Error saving subject: ${e.message}", Toast.LENGTH_LONG).show()
+            // --- CHANGE ---
+            StatusDialogFragment.newInstance(false, "Failed to Save Subject").show(supportFragmentManager, "failureDialog")
             Log.e(TAG, "Error saving subject", e)
         }
     }
