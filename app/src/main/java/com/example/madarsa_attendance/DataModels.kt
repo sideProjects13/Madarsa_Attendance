@@ -55,11 +55,11 @@
         val studentName: String? = null,
         val teacherName: String? = null,
         val paymentAmount: Double = 0.0,
-        val paymentDate: Date? = null,
-        val paymentMonth: String = "",
-        val paymentYear: Int = 0,
-        val paymentMode: String? = null, // ADDED BACK
-        val notes: String? = null,       // ADDED BACK
+        val paymentDate: Date? = null,      // The date the transaction was made (e.g., today)
+        val paymentMonth: String = "",   // The month the fee is FOR (e.g., "2025-06")
+        val paymentYear: Int = 0,        // The year the fee is FOR (e.g., 2025)
+        val paymentMode: String? = null,
+        val notes: String? = null,
         val recordedAt: Timestamp? = null
     )
 

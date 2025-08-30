@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".ReportCriteriaActivity">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:navigationIcon="@drawable/ic_arrow_back"
+            app:title="Generate Report" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select Class (Optional)"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:layout_marginBottom="8dp"/>
+
+            <Spinner
+                android:id="@+id/spinner_teacher_filter"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/spinner_background"
+                android:padding="12dp"/>
+
+            <TextView
+                android:id="@+id/tv_exam_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select Exam"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:layout_marginBottom="8dp"/>
+
+            <Spinner
+                android:id="@+id/spinner_exam_filter"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/spinner_background"
+                android:padding="12dp"/>
+
+            <LinearLayout
+                android:id="@+id/date_section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Select Date Range"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:layout_marginBottom="8dp"/>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_start_date"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        tools:text="Start Date"/>
+
+                    <Button
+                        android:id="@+id/btn_end_date"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        tools:text="End Date"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_generate_report"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Generate PDF Report"
+                android:layout_marginTop="32dp"/>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

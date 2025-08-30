@@ -1,15 +1,14 @@
 package com.example.madarsa_attendance
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.example.madarsa_attendance.models.Organization
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
@@ -33,6 +32,8 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var tvGoToRegisterOrg: TextView
     private lateinit var tvForgotPassword: TextView
 
+    private var isLoginAsAdmin = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
@@ -41,12 +42,14 @@ class LoginActivity : AppCompatActivity() {
         db = FirebaseFirestore.getInstance()
 
         if (auth.currentUser != null) {
-            val role = getUserRole()
-            if (role == "admin" && getOrganizationId() != null) {
+            val role = FirebaseAuthManager.getUserRole(this)
+            if (role == "admin" && FirebaseAuthManager.getOrganizationId(this) != null) {
                 startActivity(Intent(this, MainActivity::class.java))
                 finish()
                 return
-            } else if (role == "teacher" && getOrganizationId() != null) {
+            } else if (role == "teacher" && FirebaseAuthManager.getOrganizationId(this) != null) {
+                // Assuming you have a TeacherDashboardActivity
+                // If not, you will need to create it.
                 startActivity(Intent(this, TeacherDashboardActivity::class.java))
                 finish()
                 return
@@ -68,9 +71,13 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // Hide the toggle group as it's no longer needed for role selection
-        toggleLoginAs.visibility = View.GONE
-
+        toggleLoginAs.visibility = View.VISIBLE
+        toggleLoginAs.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                isLoginAsAdmin = checkedId == R.id.btnLoginAsAdmin
+                tvGoToRegisterOrg.visibility = if (isLoginAsAdmin) View.VISIBLE else View.GONE
+            }
+        }
         btnLogin.setOnClickListener { loginUser() }
         tvGoToRegisterOrg.setOnClickListener { startActivity(Intent(this, RegisterActivity::class.java)) }
         tvForgotPassword.setOnClickListener { showForgotPasswordDialog() }
@@ -89,87 +96,127 @@ class LoginActivity : AppCompatActivity() {
 
         auth.signInWithEmailAndPassword(email, password)
             .addOnSuccessListener { authResult ->
-                val user = authResult.user
-                if (user == null) {
-                    logoutAndShowError("Login failed, user not found.")
+                val userId = authResult.user?.uid
+                if (userId == null) {
+                    logoutAndShowError("Failed to get user ID.")
                     return@addOnSuccessListener
                 }
 
-                // Unified Login Logic: Check the /users collection for this user's role and orgId
-                db.collection("users").document(user.uid).get()
-                    .addOnSuccessListener { userDoc ->
-                        if (!userDoc.exists()) {
-                            logoutAndShowError("User record not found.")
-                            return@addOnSuccessListener
-                        }
-
-                        val role = userDoc.getString("role")
-                        val orgId = userDoc.getString("organizationId")
-                        val orgName = userDoc.getString("organizationName") ?: "My Madarsa"
-
-                        if (orgId == null) {
-                            logoutAndShowError("User is not linked to an organization.")
-                            return@addOnSuccessListener
-                        }
-
-                        saveLoginSession(role ?: "unknown", orgId, orgName)
-
-                        // Navigate based on role
-                        if (role == "admin") {
-                            navigateToActivity(MainActivity::class.java)
-                        } else if (role == "teacher") {
-                            navigateToActivity(TeacherDashboardActivity::class.java)
-                        } else {
-                            logoutAndShowError("Unknown user role.")
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        logoutAndShowError("Failed to fetch user data: ${e.message}")
-                    }
+                if (isLoginAsAdmin) {
+                    handleAdminLogin(userId)
+                } else {
+                    handleTeacherLogin(userId)
+                }
             }
             .addOnFailureListener { e ->
                 setLoading(false)
-                StatusDialogFragment.newInstance(false, "Login Failed: ${e.message}")
-                    .show(supportFragmentManager, "failureDialog")
+                StatusDialogFragment.newInstance(false, "Login Failed: ${e.message}").show(supportFragmentManager, "failureDialog")
+            }
+    }
+
+    private fun handleAdminLogin(userId: String) {
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener { userDoc ->
+                if (userDoc != null && userDoc.exists() && userDoc.getString("role") == "admin") {
+                    val orgId = userDoc.getString("organizationId")
+                    if (orgId != null) {
+                        db.collection("organizations").document(orgId).get()
+                            .addOnSuccessListener { orgDoc ->
+                                if (orgDoc.exists()) {
+                                    val org = orgDoc.toObject(Organization::class.java)
+                                    FirebaseAuthManager.saveLoginSession(
+                                        this,
+                                        "admin",
+                                        orgId,
+                                        org?.organizationName ?: "My Madarsa",
+                                        org?.logoUrl,
+                                        org?.address
+                                    )
+                                    navigateToActivity(MainActivity::class.java)
+                                } else {
+                                    logoutAndShowError("Organization data not found.")
+                                }
+                            }
+                            .addOnFailureListener { logoutAndShowError("Failed to fetch organization details.") }
+                    } else {
+                        logoutAndShowError("Admin data is incomplete.")
+                    }
+                } else {
+                    logoutAndShowError("This account is not registered as an Admin.")
+                }
+            }
+            .addOnFailureListener { logoutAndShowError("Failed to verify admin status.") }
+    }
+
+    private fun handleTeacherLogin(userId: String) {
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener { userDoc ->
+                if (userDoc != null && userDoc.exists() && userDoc.getString("role") == "teacher") {
+                    val orgId = userDoc.getString("organizationId")
+                    if (orgId != null) {
+                        db.collection("organizations").document(orgId).get()
+                            .addOnSuccessListener { orgDoc ->
+                                if (orgDoc.exists()) {
+                                    val org = orgDoc.toObject(Organization::class.java)
+                                    FirebaseAuthManager.saveLoginSession(
+                                        this,
+                                        "teacher",
+                                        orgId,
+                                        org?.organizationName ?: "My Madarsa",
+                                        org?.logoUrl,
+                                        org?.address
+                                    )
+
+                                    // --- THIS IS THE FIX ---
+                                    // This line was commented out, causing the process to hang.
+                                    navigateToActivity(TeacherDashboardActivity::class.java)
+                                    // --- END OF FIX ---
+
+                                } else {
+                                    logoutAndShowError("Organization data for teacher not found.")
+                                }
+                            }
+                            .addOnFailureListener { logoutAndShowError("Failed to fetch organization details for teacher.") }
+                    } else {
+                        logoutAndShowError("Teacher data is incomplete (missing organization).")
+                    }
+                } else {
+                    logoutAndShowError("This account is not registered as a Teacher.")
+                }
+            }
+            .addOnFailureListener {
+                logoutAndShowError("Failed to verify teacher status.")
             }
     }
 
     private fun navigateToActivity(activityClass: Class<*>) {
-        StatusDialogFragment.newInstance(true, "Login Successful!", true)
-            .show(supportFragmentManager, "successDialog")
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            startActivity(Intent(this, activityClass))
-            finish()
-        }, 1800)
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            StatusDialogFragment.newInstance(true, "Login Successful!", true)
+                .show(supportFragmentManager, "successDialog")
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                startActivity(Intent(this, activityClass))
+                finish()
+            }, 1800)
+        }
     }
 
     private fun logoutAndShowError(message: String) {
         auth.signOut()
         setLoading(false)
-        StatusDialogFragment.newInstance(false, message).show(supportFragmentManager, "failureDialog")
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            StatusDialogFragment.newInstance(false, message).show(supportFragmentManager, "failureDialog")
+        }
     }
 
     private fun setLoading(isLoading: Boolean) {
         progressBarLogin.visibility = if (isLoading) View.VISIBLE else View.GONE
         btnLogin.isEnabled = !isLoading
+        toggleLoginAs.isEnabled = !isLoading
         etLoginEmail.isEnabled = !isLoading
         etLoginPassword.isEnabled = !isLoading
         tvGoToRegisterOrg.isEnabled = !isLoading
         tvForgotPassword.isEnabled = !isLoading
     }
-
-    private fun saveLoginSession(role: String, orgId: String, orgName: String) {
-        getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit().apply {
-            putString("user_role", role)
-            putString("organization_id", orgId)
-            putString("organization_name", orgName)
-            apply()
-        }
-    }
-
-    private fun getUserRole(): String? = getSharedPreferences("app_prefs", Context.MODE_PRIVATE).getString("user_role", null)
-    private fun getOrganizationId(): String? = getSharedPreferences("app_prefs", Context.MODE_PRIVATE).getString("organization_id", null)
-    private fun getOrganizationName(): String? = getSharedPreferences("app_prefs", Context.MODE_PRIVATE).getString("organization_name", null)
 
     private fun showForgotPasswordDialog() {
         val builder = AlertDialog.Builder(this, R.style.AlertDialog_App_Monochrome)

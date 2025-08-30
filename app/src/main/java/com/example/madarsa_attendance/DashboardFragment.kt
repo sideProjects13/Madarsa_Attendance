@@ -87,7 +87,7 @@ class DashboardFragment : Fragment() {
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout)
         shimmerLayout = view.findViewById(R.id.shimmer_view_container)
         mainContentLayout = view.findViewById(R.id.main_content_layout)
-        tvGreeting = view.findViewById(R.id.tv_greeting)
+//        tvGreeting = view.findViewById(R.id.tv_greeting)
         tvTotalStudents = view.findViewById(R.id.tvTotalStudentsCount)
         tvTotalTeachers = view.findViewById(R.id.tvTotalTeachersCount)
         tvFeesCollectedMonth = view.findViewById(R.id.tvFeesCollectedMonth)
@@ -102,18 +102,18 @@ class DashboardFragment : Fragment() {
         // --- NEW: Initialize the Not Marked Card ---
         notMarkedCardSection = view.findViewById(R.id.not_marked_card_section)
 
-        setGreeting()
+//        setGreeting()
     }
 
-    private fun setGreeting() {
-        val calendar = Calendar.getInstance()
-        val hour = calendar.get(Calendar.HOUR_OF_DAY)
-        tvGreeting.text = when (hour) {
-            in 0..11 -> "Good Morning!"
-            in 12..16 -> "Good Afternoon!"
-            else -> "Good Evening!"
-        }
-    }
+//    private fun setGreeting() {
+//        val calendar = Calendar.getInstance()
+//        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+//        tvGreeting.text = when (hour) {
+//            in 0..11 -> "Good Morning!"
+//            in 12..16 -> "Good Afternoon!"
+//            else -> "Good Evening!"
+//        }
+//    }
 
     private fun setupObservers() {
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->

@@ -2,6 +2,7 @@ package com.example.madarsa_attendance
 
 import android.Manifest
 import android.app.Activity
+import android.app.DatePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
@@ -13,9 +14,10 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.MenuItem
 import android.view.View
 import android.widget.ArrayAdapter
-import android.widget.RadioButton
+import android.widget.ImageView
 import android.widget.RadioGroup
 import android.widget.Spinner
 import android.widget.Toast
@@ -31,16 +33,21 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.navigation.NavigationView
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObjects
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 class MainActivity : AppCompatActivity(),
@@ -67,7 +74,6 @@ class MainActivity : AppCompatActivity(),
     private var selectedTeacherForBulkAdd: Teacher? = null
     private var studentToMove: StudentDetailsItem? = null
 
-    // Permission launcher for data downloads
     private var onPermissionGranted: (() -> Unit)? = null
     private val requestPermissionLauncherForDownloads =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -93,13 +99,18 @@ class MainActivity : AppCompatActivity(),
         private const val SAMPLE_TEACHER_CSV_CONTENT = "\"Teacher Name\",\"Mobile Number\",\"Email\",\"Password\"\n" +
                 "\"Ahmed Khan\",\"9876543210\",\"ahmed.khan@example.com\",\"password123\"\n" +
                 "\"Fatima Ali\",\"9123456780\",\"fatima.ali@example.com\",\"teacherpass\""
-
     }
 
+    private val profileUpdateLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            Log.d(TAG, "Returned from AdminProfileActivity with updates. Recreating MainActivity.")
+            // This is the simplest and most effective way to "refresh" the app's main screen
+            recreate()
+        }
+    }
 
     private val studentDataChangeLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            Log.d(TAG, "Returned from an activity that changed student data. Forcing data refresh.")
             dashboardViewModel.fetchStudentListForSearch(forceRefresh = true)
             dashboardViewModel.refreshData()
         }
@@ -108,21 +119,16 @@ class MainActivity : AppCompatActivity(),
     private val pickCsvFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
-                if (pendingTeacherAction == TeacherAction.BULK_ADD_TO_CLASS) {
-                    val teacher = selectedTeacherForBulkAdd
-                    if (teacher != null) {
-                        val intent = Intent(this, BulkAddStudentsActivity::class.java).apply {
-                            putExtra("CSV_FILE_URI", uri.toString())
-                            putExtra("TEACHER_ID", teacher.teacherId)
-                            putExtra("TEACHER_NAME", teacher.teacherName)
-                        }
-                        studentDataChangeLauncher.launch(intent)
+                val intent = if (pendingTeacherAction == TeacherAction.BULK_ADD_TO_CLASS) {
+                    Intent(this, BulkAddStudentsActivity::class.java).apply {
+                        putExtra("CSV_FILE_URI", uri.toString())
+                        putExtra("TEACHER_ID", selectedTeacherForBulkAdd?.teacherId)
+                        putExtra("TEACHER_NAME", selectedTeacherForBulkAdd?.teacherName)
                     }
                 } else {
-                    val intent = Intent(this, BulkAddOrgActivity::class.java)
-                    intent.data = uri
-                    studentDataChangeLauncher.launch(intent)
+                    Intent(this, BulkAddOrgActivity::class.java).apply { data = uri }
                 }
+                studentDataChangeLauncher.launch(intent)
             }
         }
         pendingTeacherAction = null
@@ -131,34 +137,59 @@ class MainActivity : AppCompatActivity(),
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!FirebaseAuthManager.isLoggedInAndOrgSelected(this)) {
+
+        // --- START: NEW AND CORRECTED STARTUP ROUTING LOGIC ---
+        val auth = FirebaseAuth.getInstance() // Get instance for the check
+
+        // First, check if the user is logged in and their session data is valid.
+        if (auth.currentUser == null || !FirebaseAuthManager.isLoggedInAndOrgSelected(this)) {
+            // If not, redirect to the Login screen immediately.
             startActivity(Intent(this, LoginActivity::class.java))
-            finish()
-            return
+            finish() // Close MainActivity so the user can't press "back" to it.
+            return   // Stop executing the rest of this function.
         }
+
+        // If the user IS logged in, now check their role.
+        val role = FirebaseAuthManager.getUserRole(this)
+        if (role == "teacher") {
+            // If the saved role is 'teacher', redirect to the Teacher Dashboard.
+            startActivity(Intent(this, TeacherDashboardActivity::class.java))
+            finish() // Close MainActivity.
+            return   // Stop executing.
+        }
+        // --- END: NEW AND CORRECTED STARTUP ROUTING LOGIC ---
+
+        // If the code reaches this point, it means the user is logged in AND their role is 'admin'.
+        // We can now safely set up the admin UI.
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
 
+        // Initialize UI components for the Admin Dashboard
         drawerLayout = findViewById(R.id.drawer_layout)
         toolbar = findViewById(R.id.toolbar)
         appBarLayout = findViewById(R.id.app_bar_layout)
-        feesReportGenerator = FeesReportGenerator(this, db)
+        feesReportGenerator = FeesReportGenerator(this, db) // Assuming 'db' is initialized as a class variable
 
+        // Setup Toolbar and Navigation Drawer
         setSupportActionBar(toolbar)
         toggle = ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.nav_open, R.string.nav_close)
         drawerLayout.addDrawerListener(toggle)
         toggle.syncState()
 
+        // Call your other setup methods
         setupCustomNavigationDrawer()
+//        updateNavHeader()
         applyWindowInsets()
 
+        // Load the initial fragment if the activity is newly created
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
                 .replace(R.id.fragment_container, DashboardFragment())
                 .commit()
         }
 
-        // Observer for report generation status
+        // Observe ViewModel for status updates
         resultViewModel.generationStatus.observe(this) { event ->
             event.getContentIfNotHandled()?.let { (isSuccess, message) ->
                 if (message.contains("...")) {
@@ -235,6 +266,11 @@ class MainActivity : AppCompatActivity(),
                 TeacherSelectionDialogFragment.newInstance("Select Class to Manage")
                     .show(supportFragmentManager, "ManageClassDialog")
             }
+            R.id.nav_check_daily_attendance -> {
+                pendingStudentAction = StudentAction.CHECK_DAILY_ATTENDANCE
+                QuickFeesDialogFragment.newInstance("Check Student Attendance", StudentAction.CHECK_DAILY_ATTENDANCE)
+                    .show(supportFragmentManager, "CheckAttendanceDialog")
+            }
             R.id.nav_quick_add_teacher -> {
                 val intent = Intent(this, AddTeacherActivity::class.java)
                 studentDataChangeLauncher.launch(intent)
@@ -250,11 +286,6 @@ class MainActivity : AppCompatActivity(),
                     .show(supportFragmentManager, "DeleteTeacherDialog")
             }
             R.id.nav_manage_teachers -> startActivity(Intent(this, ManageTeachersActivity::class.java))
-            R.id.nav_record_student_fee -> {
-                QuickFeesDialogFragment.newInstance("Record Student Fee", StudentAction.VIEW_FEE_HISTORY)
-                    .show(supportFragmentManager, "RecordFeeDialog")
-            }
-
             R.id.nav_bulk_add_teachers -> {
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
@@ -267,8 +298,9 @@ class MainActivity : AppCompatActivity(),
                     downloadAllTeacherData()
                 }
             }
-            R.id.nav_download_teacher_sample -> {
-                downloadCsvFile(SAMPLE_TEACHER_CSV_FILENAME, SAMPLE_TEACHER_CSV_CONTENT)
+            R.id.nav_record_student_fee -> {
+                QuickFeesDialogFragment.newInstance("Record Student Fee", StudentAction.VIEW_FEE_HISTORY)
+                    .show(supportFragmentManager, "RecordFeeDialog")
             }
             R.id.nav_student_fee_history -> {
                 QuickFeesDialogFragment.newInstance("Student Fee History", StudentAction.VIEW_FEE_HISTORY)
@@ -277,6 +309,18 @@ class MainActivity : AppCompatActivity(),
             R.id.nav_class_fee_summary -> {
                 pendingTeacherAction = TeacherAction.VIEW_CLASS_FEES
                 TeacherSelectionDialogFragment.newInstance("Select Class for Fee Summary")
+                    .show(supportFragmentManager, "TeacherSelectionDialog")
+            }
+
+            R.id.nav_quick_add_subject -> {
+                pendingTeacherAction = TeacherAction.ADD_SUBJECT
+                TeacherSelectionDialogFragment.newInstance("Select Class Add Subject")
+                    .show(supportFragmentManager, "TeacherSelectionDialog")
+
+
+            }R.id.nav_manage_subjects -> {
+                pendingTeacherAction = TeacherAction.MANAGE_SUBJECTS
+                TeacherSelectionDialogFragment.newInstance("Select Class For Manage Subject")
                     .show(supportFragmentManager, "TeacherSelectionDialog")
             }
             R.id.nav_download_fees_report_class -> {
@@ -304,6 +348,9 @@ class MainActivity : AppCompatActivity(),
             R.id.nav_download_org_sample -> {
                 downloadCsvFile(SAMPLE_ORG_CSV_FILENAME, SAMPLE_ORG_CSV_CONTENT)
             }
+            R.id.nav_download_teacher_sample -> {
+                downloadCsvFile(SAMPLE_TEACHER_CSV_FILENAME, SAMPLE_TEACHER_CSV_CONTENT)
+            }
             R.id.nav_download_org_students -> {
                 requestStoragePermission {
                     downloadOrganizationStudentData()
@@ -329,6 +376,9 @@ class MainActivity : AppCompatActivity(),
                 TeacherSelectionDialogFragment.newInstance("Select Class for Result")
                     .show(supportFragmentManager, "TeacherResultDialog")
             }
+            R.id.nav_download_marks_report -> {
+                startActivity(Intent(this, MarksReportActivity::class.java))
+            }
             R.id.nav_quick_add_subject -> {
                 pendingTeacherAction = TeacherAction.ADD_SUBJECT
                 TeacherSelectionDialogFragment.newInstance("Select Class to Add Subject")
@@ -341,6 +391,12 @@ class MainActivity : AppCompatActivity(),
             }
             R.id.nav_student_reports -> startActivity(Intent(this, ReportGeneratorActivity::class.java))
             R.id.nav_custom_student_info_report -> startActivity(Intent(this, MultiStudentReportActivity::class.java))
+            R.id.nav_download_attendance_report -> {
+                startActivity(Intent(this, AttendanceReportActivity::class.java))
+            }
+            R.id.nav_admin_profile -> {
+                startActivity(Intent(this, AdminProfileActivity::class.java))
+            }
             R.id.nav_logout -> showLogoutConfirmationDialog()
         }
         drawerLayout.closeDrawer(GravityCompat.START)
@@ -348,7 +404,7 @@ class MainActivity : AppCompatActivity(),
 
     private fun getNavigationMenuItems(): List<NavigationItem> {
         return listOf(
-            NavigationItem.SingleItem(R.id.nav_quick_attendance, "Take Attendance", R.drawable.ic_attendance_checklist),
+            NavigationItem.SingleItem(R.id.nav_quick_attendance, "Attendance", R.drawable.ic_attendance_checklist),
             NavigationItem.SingleItem(R.id.nav_dashboard, "Dashboard", R.drawable.ic_dashboard),
             NavigationItem.SingleItem(R.id.nav_leaderboard, "Leaderboard", R.drawable.ic_leaderboard_trophy),
             NavigationItem.Header(
@@ -360,9 +416,11 @@ class MainActivity : AppCompatActivity(),
                     NavigationItem.Child(R.id.nav_delete_student, "Delete Student"),
                     NavigationItem.Child(R.id.nav_inactivate_student, "Inactivate a Student"),
                     NavigationItem.Child(R.id.nav_inactive_students_list, "View Inactive Students"),
-                    NavigationItem.Child(R.id.nav_move_student, "Move Student to Class"),
+                    NavigationItem.Child(R.id.nav_move_student, "Move Student to other Class"),
                     NavigationItem.Child(R.id.nav_view_monthly_attendance, "View Monthly Attendance"),
-                    NavigationItem.Child(R.id.nav_manage_class, "Class Management")
+//                    NavigationItem.Child(R.id.nav_manage_class, "Class Management"),
+                    NavigationItem.Child(R.id.nav_download_attendance_report, "Generate Attendance Report"),
+                    NavigationItem.Child(R.id.nav_check_daily_attendance, "Check Attendance By Date")
                 )
             ),
             NavigationItem.Header(
@@ -373,8 +431,7 @@ class MainActivity : AppCompatActivity(),
                     NavigationItem.Child(R.id.nav_edit_teacher, "Edit Teacher"),
                     NavigationItem.Child(R.id.nav_delete_teacher, "Delete Teacher"),
                     NavigationItem.Child(R.id.nav_manage_teachers, "Manage Teachers"),
-                    // --- NEW ITEMS FOR TEACHER MANAGEMENT ---
-                    NavigationItem.Child(R.id.nav_bulk_add_teachers, "Bulk Add Teachers"),
+//                    NavigationItem.Child(R.id.nav_bulk_add_teachers, "Bulk Add Teachers"),
                     NavigationItem.Child(R.id.nav_download_teacher_data, "Download Teacher Data")
                 )
             ),
@@ -389,14 +446,12 @@ class MainActivity : AppCompatActivity(),
                 )
             ),
             NavigationItem.Header(
-                title = "Bulk Actions & Samples",
+                title = "Bulk Actions",
                 iconResId = R.drawable.ic_upload_file,
                 children = listOf(
                     NavigationItem.Child(R.id.nav_bulk_add_class, "Bulk Add Students to Class"),
                     NavigationItem.Child(R.id.nav_bulk_add_org, "Bulk Add Students to Org"),
-                    NavigationItem.Child(R.id.nav_download_class_sample, "Download Class Sample CSV"),
-                    NavigationItem.Child(R.id.nav_download_org_sample, "Download Org Sample CSV"),
-                    NavigationItem.Child(R.id.nav_download_teacher_sample, "Download Teacher Sample CSV") // New sample
+//                    NavigationItem.Child(R.id.nav_download_teacher_sample, "Download Teacher Sample CSV")
                 )
             ),
             NavigationItem.Header(
@@ -404,7 +459,9 @@ class MainActivity : AppCompatActivity(),
                 iconResId = R.drawable.ic_download,
                 children = listOf(
                     NavigationItem.Child(R.id.nav_download_org_students, "Download All Students (Org)"),
-                    NavigationItem.Child(R.id.nav_download_class_students, "Download Class Students")
+                    NavigationItem.Child(R.id.nav_download_class_students, "Download Class Students"),
+                    NavigationItem.Child(R.id.nav_download_class_sample, "Download Class CSV"),
+                    NavigationItem.Child(R.id.nav_download_org_sample, "Download Org Students CSV"),
                 )
             ),
             NavigationItem.Header(
@@ -414,15 +471,16 @@ class MainActivity : AppCompatActivity(),
                     NavigationItem.Child(R.id.nav_exams, "Manage Exams"),
                     NavigationItem.Child(R.id.nav_add_update_marks, "Add/Update Marks"),
                     NavigationItem.Child(R.id.nav_generate_student_result, "Generate Student Result"),
-                    NavigationItem.Child(R.id.nav_generate_class_result, "Generate Class Result")
+                    NavigationItem.Child(R.id.nav_generate_class_result, "Generate Class Result"),
+                    NavigationItem.Child(R.id.nav_download_marks_report, "Marks Report")
+
                 )
-            ),
-            NavigationItem.Header(
+            ),NavigationItem.Header(
                 title = "Subject Management",
                 iconResId = R.drawable.ic_subject_book,
                 children = listOf(
-                    NavigationItem.Child(R.id.nav_quick_add_subject, "Add/Assign Subject"),
-                    NavigationItem.Child(R.id.nav_manage_subjects, "Manage Teacher's Subjects")
+                    NavigationItem.Child(R.id.nav_quick_add_subject, "Add Subject"),
+                    NavigationItem.Child(R.id.nav_manage_subjects, "Manage Subject"),
                 )
             ),
             NavigationItem.Header(
@@ -430,18 +488,21 @@ class MainActivity : AppCompatActivity(),
                 iconResId = R.drawable.ic_receipt,
                 children = listOf(
                     NavigationItem.Child(R.id.nav_student_reports, "Student Info Reports"),
-                    NavigationItem.Child(R.id.nav_custom_student_info_report, "Custom Student Info Report")
+                    NavigationItem.Child(R.id.nav_custom_student_info_report, "Custom Student Info Report"),
+
                 )
             ),
+            NavigationItem.SingleItemWithDivider(R.id.nav_admin_profile,"Admin Profile",R.drawable.ic_person_outlined),
             NavigationItem.SingleItemWithDivider(R.id.nav_logout, "Logout", R.drawable.ic_logout)
         )
     }
+
     override fun onTeacherSelected(teacher: Teacher) {
         if (pendingStudentAction == StudentAction.MOVE_STUDENT && studentToMove != null) {
             if (teacher.teacherId == studentToMove!!.teacherId) {
                 Toast.makeText(this, "Student is already in this class.", Toast.LENGTH_SHORT).show()
             } else {
-                moveStudentToNewClass(studentToMove!!, TeacherSpinnerItem(teacher.teacherId, teacher.teacherName ?: "N/A", teacher.profileImageUrl))
+                moveStudentToNewClass(studentToMove!!, TeacherSpinnerItem(teacher.teacherId, teacher.teacherName, teacher.profileImageUrl))
             }
             studentToMove = null
             pendingStudentAction = null
@@ -463,12 +524,10 @@ class MainActivity : AppCompatActivity(),
                     putExtra("TEACHER_ID", teacher.teacherId)
                 }
                 studentDataChangeLauncher.launch(intent)
-                pendingTeacherAction = null
             }
             TeacherAction.DELETE_TEACHER -> {
                 val teacherSpinnerItem = TeacherSpinnerItem(id = teacher.teacherId, name = teacher.teacherName, profileImageUrl = teacher.profileImageUrl)
                 confirmDeleteTeacher(teacherSpinnerItem)
-                pendingTeacherAction = null
             }
             TeacherAction.VIEW_ATTENDANCE -> {
                 val intent = Intent(this, TeacherOptionsActivity::class.java).apply {
@@ -478,7 +537,6 @@ class MainActivity : AppCompatActivity(),
                     putExtra(TeacherOptionsActivity.EXTRA_START_FRAGMENT, TeacherOptionsActivity.FRAGMENT_TAKE_ATTENDANCE)
                 }
                 startActivity(intent)
-                pendingTeacherAction = null
             }
             TeacherAction.ADD_STUDENT -> {
                 val intent = Intent(this, AddStudentActivity::class.java).apply {
@@ -486,14 +544,12 @@ class MainActivity : AppCompatActivity(),
                     putExtra("PRESELECTED_TEACHER_NAME", teacher.teacherName)
                 }
                 studentDataChangeLauncher.launch(intent)
-                pendingTeacherAction = null
             }
             TeacherAction.ADD_SUBJECT -> {
                 val intent = Intent(this, AddEditSubjectActivity::class.java).apply {
                     putExtra(AddEditSubjectActivity.EXTRA_TEACHER_ID_FOR_SUBJECT, teacher.teacherId)
                 }
                 startActivity(intent)
-                pendingTeacherAction = null
             }
             TeacherAction.VIEW_CLASS_FEES -> {
                 val intent = Intent(this, ClassPaymentSummaryActivity::class.java).apply {
@@ -501,7 +557,6 @@ class MainActivity : AppCompatActivity(),
                     putExtra("TEACHER_NAME", teacher.teacherName)
                 }
                 startActivity(intent)
-                pendingTeacherAction = null
             }
             TeacherAction.MANAGE_MARKS, TeacherAction.GENERATE_CLASS_RESULT -> {
                 showExamSelectionDialog(teacher = teacher, action = pendingTeacherAction)
@@ -512,7 +567,6 @@ class MainActivity : AppCompatActivity(),
                     putExtra(ManageSubjectsActivity.EXTRA_TEACHER_NAME_CONTEXT, teacher.teacherName)
                 }
                 startActivity(intent)
-                pendingTeacherAction = null
             }
             TeacherAction.MANAGE_CLASS -> {
                 val intent = Intent(this, TeacherOptionsActivity::class.java).apply {
@@ -522,28 +576,23 @@ class MainActivity : AppCompatActivity(),
                     putExtra(TeacherOptionsActivity.EXTRA_START_FRAGMENT, TeacherOptionsActivity.FRAGMENT_MANAGE_CLASS)
                 }
                 startActivity(intent)
-                pendingTeacherAction = null
             }
             TeacherAction.DOWNLOAD_FEES_REPORT_CLASS -> {
                 val currentCalendar = Calendar.getInstance()
                 showFeesReportDownloadDialog(teacher, currentCalendar.get(Calendar.MONTH), currentCalendar.get(Calendar.YEAR))
-                pendingTeacherAction = null
             }
             TeacherAction.DOWNLOAD_CLASS_STUDENTS -> {
                 requestStoragePermission {
                     downloadClassStudentData(teacher)
                 }
-                pendingTeacherAction = null
             }
-            else -> {
-                Log.e(TAG, "onTeacherSelected called with unhandled TeacherAction: $pendingTeacherAction.")
-                pendingTeacherAction = null
-            }
+            else -> Log.e(TAG, "onTeacherSelected called with unhandled TeacherAction: $pendingTeacherAction.")
         }
+        pendingTeacherAction = null
     }
 
     override fun onFeesReportGenerated(teacherId: String, teacherName: String, reportType: String, month: Int?, year: Int?) {
-        // This is intentionally left blank for now
+        // Intentionally left blank
     }
 
     override fun onFeeStudentSelected(student: StudentDetailsItem, action: StudentAction?) {
@@ -555,12 +604,8 @@ class MainActivity : AppCompatActivity(),
                 }
                 studentDataChangeLauncher.launch(intent)
             }
-            StudentAction.DELETE_STUDENT -> {
-                confirmDeleteStudent(student)
-            }
-            StudentAction.INACTIVATE_STUDENT -> {
-                confirmInactivateStudent(student)
-            }
+            StudentAction.DELETE_STUDENT -> confirmDeleteStudent(student)
+            StudentAction.INACTIVATE_STUDENT -> confirmInactivateStudent(student)
             StudentAction.MOVE_STUDENT -> {
                 studentToMove = student
                 pendingStudentAction = StudentAction.MOVE_STUDENT
@@ -590,34 +635,105 @@ class MainActivity : AppCompatActivity(),
                 }
                 startActivity(intent)
             }
-            else -> Log.e(TAG, "onFeeStudentSelected called with unhandled or null StudentAction: $action")
+            StudentAction.CHECK_DAILY_ATTENDANCE -> {
+                showDatePickerForAttendanceCheck(student)
+            }
+            else -> Log.e(TAG, "onFeeStudentSelected called with unhandled action: $action")
         }
         if (action != StudentAction.MOVE_STUDENT) {
             pendingStudentAction = null
         }
     }
 
+    private fun showDatePickerForAttendanceCheck(student: StudentDetailsItem) {
+        val calendar = Calendar.getInstance()
+        DatePickerDialog(
+            this,
+            { _, year, month, dayOfMonth ->
+                val selectedDate = Calendar.getInstance().apply { set(year, month, dayOfMonth) }.time
+                val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(selectedDate)
+                checkAttendanceStatus(student, dateStr)
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    private fun checkAttendanceStatus(student: StudentDetailsItem, dateStr: String) {
+        val loadingDialog = StatusDialogFragment.newInstance(true, "Checking...").apply { isCancelable = false }
+        loadingDialog.show(supportFragmentManager, "loading")
+
+        db.collection("organizations").document(FirebaseAuthManager.getOrganizationId(this)!!)
+            .collection("attendanceRecords")
+            .whereEqualTo("date", dateStr)
+            .whereEqualTo("teacherId", student.teacherId)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { documents ->
+                loadingDialog.dismiss()
+                if (documents.isEmpty) {
+                    StatusDialogFragment.newInstance(false, "Attendance not marked for this day.").show(supportFragmentManager, "statusDialog")
+                } else {
+                    val studentAttendances = documents.documents[0].get("studentAttendances") as? List<Map<String, Any>>
+                    val studentStatus = studentAttendances?.find { it["studentId"] == student.id }
+                    if (studentStatus == null) {
+                        StatusDialogFragment.newInstance(false, "Student not found in this day's record.").show(supportFragmentManager, "statusDialog")
+                    } else {
+                        val status = studentStatus["status"] as? String
+                        if (status == "Present") {
+                            StatusDialogFragment.newInstance(true, "${student.studentName} was Present.").show(supportFragmentManager, "successDialog")
+                        } else {
+                            StatusDialogFragment.newInstance(false, "${student.studentName} was Absent.").show(supportFragmentManager, "failureDialog")
+                        }
+                    }
+                }
+            }
+            .addOnFailureListener {
+                loadingDialog.dismiss()
+                StatusDialogFragment.newInstance(false, "Error checking status.").show(supportFragmentManager, "failureDialog")
+            }
+    }
+
     private fun showFeesReportDownloadDialog(teacher: Teacher, defaultMonth: Int, defaultYear: Int) {
-        val organizationId = FirebaseAuthManager.getOrganizationId(this) ?: return
+        val organizationId = FirebaseAuthManager.getOrganizationId(this)
+        if (organizationId == null) {
+            Toast.makeText(this, "Organization ID missing.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_report_options, null)
         val radioGroupReportType: RadioGroup = dialogView.findViewById(R.id.radioGroupReportType)
         val spinnerReportMonth: Spinner = dialogView.findViewById(R.id.spinnerDialogReportMonth)
         val spinnerReportYear: Spinner = dialogView.findViewById(R.id.spinnerDialogReportYear)
+
         val currentCalendar = Calendar.getInstance()
-        var selectedReportYear = currentCalendar.get(Calendar.YEAR)
-        var selectedReportType = "Monthly"
+        var selectedReportType = "Monthly" // Default to Monthly
+
+        // Setup Month Spinner
         val months = SimpleDateFormat("MMMM", Locale.getDefault()).let { sdf ->
-            (0..11).map { val cal = Calendar.getInstance(); cal.set(Calendar.MONTH, it); sdf.format(cal.time) }
+            (0..11).map {
+                val cal = Calendar.getInstance()
+                cal.set(Calendar.MONTH, it)
+                sdf.format(cal.time)
+            }
         }
         val monthAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, months)
         monthAdapter.setDropDownViewResource(android.R.layout.simple_dropdown_item_1line)
         spinnerReportMonth.adapter = monthAdapter
-        spinnerReportMonth.setSelection(currentCalendar.get(Calendar.MONTH))
-        val years = (currentCalendar.get(Calendar.YEAR) - 5..currentCalendar.get(Calendar.YEAR) + 1).map { it.toString() }.toList()
+        spinnerReportMonth.setSelection(defaultMonth)
+
+        // Setup Year Spinner
+        val years = (currentCalendar.get(Calendar.YEAR) - 5..currentCalendar.get(Calendar.YEAR)).map { it.toString() }.reversed()
         val yearAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, years)
         yearAdapter.setDropDownViewResource(android.R.layout.simple_dropdown_item_1line)
         spinnerReportYear.adapter = yearAdapter
-        spinnerReportYear.setSelection(years.indexOf(selectedReportYear.toString()))
+        val yearIndex = years.indexOf(defaultYear.toString())
+        if (yearIndex != -1) {
+            spinnerReportYear.setSelection(yearIndex)
+        }
+
+        // Handle RadioButton clicks to show/hide the month spinner
         radioGroupReportType.setOnCheckedChangeListener { _, checkedId ->
             if (checkedId == R.id.radioMonthly) {
                 spinnerReportMonth.visibility = View.VISIBLE
@@ -627,12 +743,15 @@ class MainActivity : AppCompatActivity(),
                 selectedReportType = "Yearly"
             }
         }
-        AlertDialog.Builder(this)
+
+        // Create and show the dialog
+        AlertDialog.Builder(this, R.style.AlertDialog_App_Monochrome)
             .setTitle("Generate Fees Report for ${teacher.teacherName}")
             .setView(dialogView)
             .setPositiveButton("Generate") { _, _ ->
-                selectedReportYear = spinnerReportYear.selectedItem.toString().toInt()
-                val selectedReportMonth = spinnerReportMonth.selectedItemPosition
+                // Correctly get the selected year and month
+                val selectedYear = spinnerReportYear.selectedItem.toString().toInt()
+                val selectedMonth = spinnerReportMonth.selectedItemPosition // This is the 0-indexed month
 
                 val loadingDialog = StatusDialogFragment.newInstance(true, "Generating Report...").apply { isCancelable = false }
                 loadingDialog.show(supportFragmentManager, "loading")
@@ -642,16 +761,22 @@ class MainActivity : AppCompatActivity(),
                         teacher.teacherId,
                         teacher.teacherName,
                         organizationId,
-                        selectedReportType,
-                        selectedReportYear,
-                        if (selectedReportType == "Monthly") selectedReportMonth else null
+                        selectedReportType, // Use the stateful variable
+                        selectedYear,
+                        // Only pass the month if the report type is Monthly
+                        if (selectedReportType == "Monthly") selectedMonth else null
                     )
-                    loadingDialog.dismiss()
-                    if (pdfUri != null) {
-                        StatusDialogFragment.newInstance(true, "Report Generated!").show(supportFragmentManager, "successDialog")
-                        openPdfFile(pdfUri)
-                    } else {
-                        StatusDialogFragment.newInstance(false, "Failed to Generate Report").show(supportFragmentManager, "failureDialog")
+
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                        loadingDialog.dismiss()
+                        if (pdfUri != null) {
+                            StatusDialogFragment.newInstance(true, "Report Generated!").show(supportFragmentManager, "successDialog")
+                            openPdfFile(pdfUri)
+                        } else {
+                            // The Toast message is handled inside the generator,
+                            // but we can also show a dialog for consistency.
+                            StatusDialogFragment.newInstance(false, "No data found for the selected period.").show(supportFragmentManager, "failureDialog")
+                        }
                     }
                 }
             }
@@ -659,7 +784,6 @@ class MainActivity : AppCompatActivity(),
             .create()
             .show()
     }
-
     private fun showExamSelectionDialog(teacher: Teacher? = null, student: StudentDetailsItem? = null, action: Any?) {
         val organizationId = FirebaseAuthManager.getOrganizationId(this) ?: return
         val title = when {
@@ -671,7 +795,7 @@ class MainActivity : AppCompatActivity(),
             .collection("exams").orderBy("name").get()
             .addOnSuccessListener { documents ->
                 if (documents.isEmpty) {
-                    Toast.makeText(this, "No exams found.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "No exams found. Please add exams first.", Toast.LENGTH_LONG).show()
                     return@addOnSuccessListener
                 }
                 val examsList = documents.toObjects<Exam>()
@@ -689,12 +813,8 @@ class MainActivity : AppCompatActivity(),
                                 }
                                 startActivity(intent)
                             }
-                            TeacherAction.GENERATE_CLASS_RESULT -> {
-                                resultViewModel.generateClassReport(teacher!!, selectedExam)
-                            }
-                            StudentAction.GENERATE_STUDENT_RESULT -> {
-                                resultViewModel.generateSingleStudentReport(student!!, selectedExam)
-                            }
+                            TeacherAction.GENERATE_CLASS_RESULT -> resultViewModel.generateClassReport(teacher!!, selectedExam)
+                            StudentAction.GENERATE_STUDENT_RESULT -> resultViewModel.generateSingleStudentReport(student!!, selectedExam)
                         }
                         pendingTeacherAction = null
                         pendingStudentAction = null
@@ -764,6 +884,7 @@ class MainActivity : AppCompatActivity(),
     }
 
     fun confirmDeleteTeacher(teacher: TeacherSpinnerItem) {
+        val organizationId = FirebaseAuthManager.getOrganizationId(this) ?: return
         AlertDialog.Builder(this, R.style.AlertDialog_App_Monochrome)
             .setTitle("Delete Teacher")
             .setMessage("Are you sure you want to delete ${teacher.name}? This will also delete all associated students and data!")
@@ -937,7 +1058,6 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    // ADD THIS FUNCTION
     private fun downloadAllTeacherData() {
         val organizationId = FirebaseAuthManager.getOrganizationId(this)
         if (organizationId == null) {
@@ -958,4 +1078,23 @@ class MainActivity : AppCompatActivity(),
             }
         }
     }
+
+//    private fun updateNavHeader() {
+//        try {
+//            val customNavView = findViewById<View>(R.id.custom_nav_view)
+////            val logoImageView = customNavView.findViewById<ImageView>(R.id.iv_nav_header_logo)
+//
+//            val logoUrl = FirebaseAuthManager.getOrganizationLogoUrl(this)
+//
+//            if (!logoUrl.isNullOrEmpty()) {
+//                Glide.with(this)
+//                    .load(logoUrl)
+//                    .circleCrop()
+//                    .placeholder(R.drawable.logo)
+//                    .error(R.drawable.logo)
+//                    .into(logoImageView)
+//            }
+//        } catch (e: Exception) {
+//            Log.e(TAG, "Could not update navigation header logo.", e)
+//        }
 }

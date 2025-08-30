@@ -1,46 +1,70 @@
 package com.example.madarsa_attendance
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.bumptech.glide.Glide
+import com.cloudinary.android.MediaManager
+import com.cloudinary.android.callback.ErrorInfo
+import com.cloudinary.android.callback.UploadCallback
 import com.example.madarsa_attendance.models.AppUser
 import com.example.madarsa_attendance.models.Organization
-
-// Data class to represent an Organization
-
-// Data class to link Firebase Auth UID to Organization ID and Role
-
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 class RegisterActivity : AppCompatActivity() {
+
+    private companion object {
+        private const val TAG = "RegisterActivity"
+        private const val PERMISSION_REQUEST_CODE = 102
+        private const val UNSIGNED_UPLOAD_PRESET = "BIBI_AYESHA_MASJID"
+    }
 
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
 
-    private lateinit var etOrganizationNameRegister: TextInputEditText // NEW
-    private lateinit var etAdminNameRegister: TextInputEditText // Renamed
-    private lateinit var etAdminEmailRegister: TextInputEditText // Renamed
-    private lateinit var etAdminMobileRegister: TextInputEditText // Renamed
+    // UI Components
+    private lateinit var etOrganizationNameRegister: TextInputEditText
+    private lateinit var etOrganizationAddress: TextInputEditText
+    private lateinit var etAdminNameRegister: TextInputEditText
+    private lateinit var etAdminEmailRegister: TextInputEditText
+    private lateinit var etAdminMobileRegister: TextInputEditText
     private lateinit var etPasswordRegister: TextInputEditText
     private lateinit var etConfirmPasswordRegister: TextInputEditText
-    private lateinit var btnRegisterOrganization: MaterialButton // Renamed
+    private lateinit var btnRegisterOrganization: MaterialButton
     private lateinit var progressBarRegister: ProgressBar
     private lateinit var tvGoToLogin: TextView
+    private lateinit var ivOrgLogo: ImageView
+    private lateinit var btnSelectOrgLogo: MaterialButton
 
-    // Not directly used in the current organization registration flow, but keep if you want organization logo selection
-    // private lateinit var ivTeacherProfileImageRegister: ImageView
-    // private lateinit var btnSelectImageRegister: MaterialButton
+    // Data
+    private var imageUri: Uri? = null
+    private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,174 +73,215 @@ class RegisterActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
 
-        setupToolbar()
-        initViews()
+        initializeViews()
         setupListeners()
     }
 
-    private fun setupToolbar() {
+    private fun initializeViews() {
         val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.register_toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
-    }
 
-    private fun initViews() {
-        // Image selection views commented out as per XML for simplicity for Organization registration
-        // ivTeacherProfileImageRegister = findViewById(R.id.ivTeacherProfileImageRegister)
-        // btnSelectImageRegister = findViewById(R.id.btnSelectImageRegister)
-
-        etOrganizationNameRegister = findViewById(R.id.etOrganizationNameRegister) // NEW
-        etAdminNameRegister = findViewById(R.id.etAdminNameRegister) // Renamed from etTeacherNameRegister
-        etAdminEmailRegister = findViewById(R.id.etAdminEmailRegister) // Renamed from etTeacherEmailRegister
-        etAdminMobileRegister = findViewById(R.id.etAdminMobileRegister) // Renamed from etTeacherMobileRegister
+        etOrganizationNameRegister = findViewById(R.id.etOrganizationNameRegister)
+        etOrganizationAddress = findViewById(R.id.etOrganizationAddress)
+        etAdminNameRegister = findViewById(R.id.etAdminNameRegister)
+        etAdminEmailRegister = findViewById(R.id.etAdminEmailRegister)
+        etAdminMobileRegister = findViewById(R.id.etAdminMobileRegister)
         etPasswordRegister = findViewById(R.id.etPasswordRegister)
         etConfirmPasswordRegister = findViewById(R.id.etConfirmPasswordRegister)
-        btnRegisterOrganization = findViewById(R.id.btnRegisterOrganization) // Renamed
+        btnRegisterOrganization = findViewById(R.id.btnRegisterOrganization)
         progressBarRegister = findViewById(R.id.progressBarRegister)
         tvGoToLogin = findViewById(R.id.tvGoToLogin)
+        ivOrgLogo = findViewById(R.id.ivOrgLogo)
+        btnSelectOrgLogo = findViewById(R.id.btnSelectOrgLogo)
     }
 
     private fun setupListeners() {
-        // btnSelectImageRegister.setOnClickListener { /* Implement image selection logic */ }
-
-        btnRegisterOrganization.setOnClickListener {
-            registerOrganizationAndAdmin()
+        imagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data?.data?.let { uri ->
+                    imageUri = uri
+                    Glide.with(this).load(uri).circleCrop().into(ivOrgLogo)
+                }
+            }
         }
-
+        val imageClickListener = View.OnClickListener { checkAndRequestPermissions() }
+        ivOrgLogo.setOnClickListener(imageClickListener)
+        btnSelectOrgLogo.setOnClickListener(imageClickListener)
+        btnRegisterOrganization.setOnClickListener { registerOrganizationAndAdmin() }
         tvGoToLogin.setOnClickListener {
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
         }
     }
 
+    private fun validateInputs(): Boolean {
+        if (etOrganizationNameRegister.text.toString().trim().isEmpty()) {
+            etOrganizationNameRegister.error = "Organization name is required"
+            return false
+        }
+        if (etOrganizationAddress.text.toString().trim().isEmpty()) {
+            etOrganizationAddress.error = "Organization address is required"
+            return false
+        }
+        if (etAdminNameRegister.text.toString().trim().isEmpty()) {
+            etAdminNameRegister.error = "Admin name is required"
+            return false
+        }
+        if (etAdminEmailRegister.text.toString().trim().isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(etAdminEmailRegister.text.toString().trim()).matches()) {
+            etAdminEmailRegister.error = "A valid email is required"
+            return false
+        }
+        if (etAdminMobileRegister.text.toString().trim().length != 10) {
+            etAdminMobileRegister.error = "A valid 10-digit mobile number is required"
+            return false
+        }
+        if (etPasswordRegister.text.toString().trim().length < 6) {
+            etPasswordRegister.error = "Password must be at least 6 characters"
+            return false
+        }
+        if (etConfirmPasswordRegister.text.toString().trim() != etPasswordRegister.text.toString().trim()) {
+            etConfirmPasswordRegister.error = "Passwords do not match"
+            return false
+        }
+        if (imageUri == null) {
+            Toast.makeText(this, "Please select an organization logo", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        return true
+    }
+
     private fun registerOrganizationAndAdmin() {
+        if (!validateInputs()) return
+        setLoading(true)
+
         val orgName = etOrganizationNameRegister.text.toString().trim()
+        val orgAddress = etOrganizationAddress.text.toString().trim()
         val adminName = etAdminNameRegister.text.toString().trim()
         val adminEmail = etAdminEmailRegister.text.toString().trim()
         val adminMobile = etAdminMobileRegister.text.toString().trim()
         val password = etPasswordRegister.text.toString().trim()
-        val confirmPassword = etConfirmPasswordRegister.text.toString().trim()
 
-        // --- Input validation (remains the same) ---
-        if (orgName.isEmpty()) {
-            etOrganizationNameRegister.error = "Organization name is required"
-            etOrganizationNameRegister.requestFocus()
-            return
-        }
-        if (adminName.isEmpty()) {
-            etAdminNameRegister.error = "Admin name is required"
-            etAdminNameRegister.requestFocus()
-            return
-        }
-        if (adminEmail.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(adminEmail).matches()) {
-            etAdminEmailRegister.error = "A valid email is required"
-            etAdminEmailRegister.requestFocus()
-            return
-        }
-        if (password.length < 6) {
-            etPasswordRegister.error = "Password must be at least 6 characters"
-            etPasswordRegister.requestFocus()
-            return
-        }
-        if (password != confirmPassword) {
-            etConfirmPasswordRegister.error = "Passwords do not match"
-            etConfirmPasswordRegister.requestFocus()
-            return
-        }
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                // Step 1: Upload Logo to Cloudinary
+                val logoUrl = withContext(Dispatchers.IO) { uploadImage(imageUri!!) }
+                    ?: throw Exception("Logo upload failed. Please try again.")
 
-        setLoading(true)
+                // Step 2: Create Firebase Auth User
+                val authResult = auth.createUserWithEmailAndPassword(adminEmail, password).await()
+                val user = authResult.user ?: throw Exception("Failed to create user account.")
 
-        auth.createUserWithEmailAndPassword(adminEmail, password)
-            .addOnCompleteListener(this) { authTask ->
-                if (authTask.isSuccessful) {
-                    val firebaseUser = authTask.result?.user
-                    firebaseUser?.let { user ->
-                        val organization = Organization(
-                            organizationName = orgName,
-                            adminEmail = adminEmail,
-                            adminName = adminName,
-                            adminMobile = adminMobile.ifEmpty { null },
-                            createdAt = com.google.firebase.firestore.FieldValue.serverTimestamp()
-                        )
+                // Step 3: Create Organization Document in Firestore
+                val organization = Organization(
+                    organizationName = orgName,
+                    address = orgAddress,
+                    logoUrl = logoUrl,
+                    adminEmail = adminEmail,
+                    adminName = adminName,
+                    adminMobile = adminMobile,
+                    createdAt = FieldValue.serverTimestamp()
+                )
+                val orgDocRef = db.collection("organizations").add(organization).await()
 
-                        db.collection("organizations").add(organization)
-                            .addOnSuccessListener { orgDocumentRef ->
-                                val organizationId = orgDocumentRef.id
-                                val appUser = AppUser(
-                                    organizationId = organizationId,
-                                    role = "admin",
-                                    email = adminEmail,
-                                    name = adminName,
-                                    mobile = adminMobile.ifEmpty { null },
-//                                    organizationName = orgName // Also store org name in user doc for easy retrieval
-                                )
-                                db.collection("users").document(user.uid).set(appUser)
-                                    .addOnSuccessListener {
-                                        saveOrganizationId(organizationId)
-                                        saveOrganizationName(orgName)
+                // Step 4: Create User Document in top-level 'users' collection
+                val appUser = AppUser(
+                    organizationId = orgDocRef.id,
+                    role = "admin",
+                    email = adminEmail,
+                    name = adminName,
+                    mobile = adminMobile,
+                    organizationName = orgName
+                )
+                db.collection("users").document(user.uid).set(appUser).await()
 
-                                        StatusDialogFragment.newInstance(
-                                            isSuccess = true,
-                                            message = "Registration Successful!",
-                                            finishActivityOnDismiss = true
-                                        ).show(supportFragmentManager, "successDialog")
+                // Success
+                saveLoginSession("admin", orgDocRef.id, orgName)
+                StatusDialogFragment.newInstance(true, "Registration Successful!", true)
+                    .show(supportFragmentManager, "successDialog")
+                android.os.Handler(mainLooper).postDelayed({
+                    startActivity(Intent(this@RegisterActivity, MainActivity::class.java))
+                    finish()
+                }, 1800)
 
-                                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                            startActivity(Intent(this, MainActivity::class.java))
-                                            finish()
-                                        }, 1800)
-                                    }
-                                    .addOnFailureListener { e ->
-                                        user.delete()
-                                        orgDocumentRef.delete()
-                                        setLoading(false)
-                                        StatusDialogFragment.newInstance(false, "Failed to Create User Data").show(supportFragmentManager, "failureDialog")
-                                        Log.e("RegisterActivity", "Error setting user data", e)
-                                    }
-                            }
-                            .addOnFailureListener { e ->
-                                user.delete()
-                                setLoading(false)
-                                StatusDialogFragment.newInstance(false, "Failed to Create Organization").show(supportFragmentManager, "failureDialog")
-                                Log.e("RegisterActivity", "Error creating organization", e)
-                            }
-                    }
-                } else {
-                    setLoading(false)
-                    val errorMessage = authTask.exception?.message ?: "An unknown error occurred."
-                    StatusDialogFragment.newInstance(false, "Registration Failed").show(supportFragmentManager, "failureDialog")
-                    Log.w("RegisterActivity", "createUserWithEmail:failure", authTask.exception)
-                }
+            } catch (e: Exception) {
+                setLoading(false)
+                StatusDialogFragment.newInstance(false, e.message ?: "Registration Failed").show(supportFragmentManager, "failureDialog")
+                Log.e(TAG, "Registration failed", e)
             }
+        }
+    }
+
+    private suspend fun uploadImage(uri: Uri): String? {
+        return kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            MediaManager.get().upload(uri)
+                .unsigned(UNSIGNED_UPLOAD_PRESET)
+                .option("folder", "org_logos")
+                .callback(object : UploadCallback {
+                    override fun onSuccess(requestId: String, resultData: Map<*, *>) {
+                        val url = resultData["secure_url"] as? String
+                        if (continuation.isActive) continuation.resume(url, null)
+                    }
+                    override fun onError(requestId: String, error: ErrorInfo) {
+                        if (continuation.isActive) continuation.cancel(Exception(error.description))
+                    }
+                    override fun onStart(requestId: String) {}
+                    override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
+                    override fun onReschedule(requestId: String, error: ErrorInfo) {}
+                }).dispatch()
+        }
     }
 
     private fun setLoading(isLoading: Boolean) {
         progressBarRegister.visibility = if (isLoading) View.VISIBLE else View.GONE
         btnRegisterOrganization.isEnabled = !isLoading
+        // Disable all fields while loading
         etOrganizationNameRegister.isEnabled = !isLoading
+        etOrganizationAddress.isEnabled = !isLoading
         etAdminNameRegister.isEnabled = !isLoading
         etAdminEmailRegister.isEnabled = !isLoading
         etAdminMobileRegister.isEnabled = !isLoading
         etPasswordRegister.isEnabled = !isLoading
         etConfirmPasswordRegister.isEnabled = !isLoading
         tvGoToLogin.isEnabled = !isLoading
+        btnSelectOrgLogo.isEnabled = !isLoading
+        ivOrgLogo.isEnabled = !isLoading
     }
 
-    // Helper functions for SharedPreferences (will be moved to a central place later)
-    private fun saveOrganizationId(organizationId: String) {
-        val sharedPref = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        with(sharedPref.edit()) {
-            putString("organization_id", organizationId)
+    private fun saveLoginSession(role: String, orgId: String, orgName: String) {
+        getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit().apply {
+            putString("user_role", role)
+            putString("organization_id", orgId)
+            putString("organization_name", orgName)
             apply()
         }
     }
 
-    private fun saveOrganizationName(organizationName: String) {
-        val sharedPref = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        with(sharedPref.edit()) {
-            putString("organization_name", organizationName)
-            apply()
+    private fun checkAndRequestPermissions() {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(permission), PERMISSION_REQUEST_CODE)
+        } else {
+            openGallery()
+        }
+    }
+
+    private fun openGallery() {
+        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        imagePickerLauncher.launch(intent)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            openGallery()
+        } else {
+            Toast.makeText(this, "Permission denied.", Toast.LENGTH_SHORT).show()
         }
     }
 }

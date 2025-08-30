@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Build
@@ -35,13 +36,7 @@ class ReportCardGenerator(private val context: Context) {
     private val A4_HEIGHT = 842
     private val MARGIN = 40f
 
-    // NEW: Organization details constants
-    private companion object {
-        private const val ORG_NAME_FULL = "Madarsa Aaisha Siddiqa Ta'alimul Quran"
-        private const val ORG_ADDRESS_FULL = "BIBI AAISHA MASJID SARNI SOCIETY AHMEDABAD"
-    }
-
-    suspend fun generateBulkReport(reportDataList: List<ReportData>, madarsaName: String, madarsaAddress: String) { // NEW: madarsaAddress parameter
+    suspend fun generateBulkReport(reportDataList: List<ReportData>) {
         if (reportDataList.isEmpty()) {
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "No student data to generate report.", Toast.LENGTH_SHORT).show()
@@ -49,12 +44,14 @@ class ReportCardGenerator(private val context: Context) {
             return
         }
         val document = PdfDocument()
-        val logo = withContext(Dispatchers.IO) { BitmapFactory.decodeResource(context.resources, R.drawable.logo) } // Load logo once
+        val logo = awaitLogo() // Dynamically load logo
+        val orgName = FirebaseAuthManager.getOrganizationName(context) ?: "Madarsa"
+        val orgAddress = FirebaseAuthManager.getOrganizationAddress(context) ?: ""
+
         reportDataList.forEachIndexed { index, reportData ->
             val pageInfo = PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, index + 1).create()
             val page = document.startPage(pageInfo)
-            // NEW: Pass madarsaAddress and logo
-            drawReportPage(page.canvas, reportData, madarsaName, madarsaAddress, logo)
+            drawReportPage(page.canvas, reportData, orgName, orgAddress, logo)
             document.finishPage(page)
         }
         val examName = reportDataList.first().examName.replace(" ", "_")
@@ -62,40 +59,78 @@ class ReportCardGenerator(private val context: Context) {
         saveAndOpenFile(document, "ClassReport_${className}_${examName}.pdf")
     }
 
-    suspend fun generateSingleReport(reportData: ReportData, madarsaName: String, madarsaAddress: String) { // NEW: madarsaAddress parameter
+    suspend fun generateSingleReport(reportData: ReportData) {
         val document = PdfDocument()
-        val logo = withContext(Dispatchers.IO) { BitmapFactory.decodeResource(context.resources, R.drawable.logo) } // Load logo once
+        val logo = awaitLogo() // Dynamically load logo
+        val orgName = FirebaseAuthManager.getOrganizationName(context) ?: "Madarsa"
+        val orgAddress = FirebaseAuthManager.getOrganizationAddress(context) ?: ""
+
         val pageInfo = PdfDocument.PageInfo.Builder(A4_WIDTH, A4_HEIGHT, 1).create()
         val page = document.startPage(pageInfo)
-        // NEW: Pass madarsaAddress and logo
-        drawReportPage(page.canvas, reportData, madarsaName, madarsaAddress, logo)
+        drawReportPage(page.canvas, reportData, orgName, orgAddress, logo)
         document.finishPage(page)
         val studentName = reportData.student.studentName.replace(" ", "_")
         saveAndOpenFile(document, "Result_${studentName}.pdf")
     }
 
-    // NEW: Added logo parameter
-    private suspend fun drawReportPage(canvas: Canvas, data: ReportData, madarsaName: String, madarsaAddress: String, logo: Bitmap) {
-        val studentPhoto: Bitmap? = withContext(Dispatchers.IO) {
-            if (data.student.profileImageUrl.isNullOrEmpty()) {
-                null
-            } else {
-                try {
-                    Glide.with(context).asBitmap().load(data.student.profileImageUrl).submit(100, 120).get()
-                } catch (e: Exception) {
-                    Log.e("ReportCardGenerator", "Failed to load student image", e)
-                    null
-                }
-            }
+    private suspend fun awaitLogo(): Bitmap? = withContext(Dispatchers.IO) {
+        val logoUrl = FirebaseAuthManager.getOrganizationLogoUrl(context)
+        if (logoUrl.isNullOrEmpty()) {
+            return@withContext BitmapFactory.decodeResource(context.resources, R.drawable.logo) // Fallback
         }
-        drawWatermark(canvas, logo) // Ensure watermark is always drawn
-        // NEW: Pass madarsaAddress
+        try {
+            Glide.with(context).asBitmap().load(logoUrl).submit().get()
+        } catch (e: Exception) {
+            Log.e("ReportCardGenerator", "Failed to load logo from URL", e)
+            BitmapFactory.decodeResource(context.resources, R.drawable.logo) // Fallback
+        }
+    }
+
+    private suspend fun drawReportPage(canvas: Canvas, data: ReportData, madarsaName: String, madarsaAddress: String, logo: Bitmap?) {
+        val studentPhoto: Bitmap? = withContext(Dispatchers.IO) {
+            if (data.student.profileImageUrl.isNullOrEmpty()) null
+            else try {
+                Glide.with(context).asBitmap().load(data.student.profileImageUrl).submit(100, 120).get()
+            } catch (e: Exception) { null }
+        }
+        if (logo != null) drawWatermark(canvas, logo)
         var currentY = drawHeader(canvas, logo, studentPhoto, madarsaName, madarsaAddress, data.examName)
         currentY = drawStudentDetails(canvas, data.student, currentY + 25f)
         drawMarksTable(canvas, data, currentY + 25f)
         drawFooter(canvas, A4_HEIGHT - MARGIN - 20f)
     }
 
+    private fun drawHeader(canvas: Canvas, logo: Bitmap?, studentPhoto: Bitmap?, madarsaName: String, madarsaAddress: String, examName: String): Float {
+        val titlePaint = TextPaint().apply { color = Color.BLACK; textSize = 20f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
+        val addressPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 11f; textAlign = Paint.Align.CENTER }
+        val reportTitlePaint = TextPaint().apply { color = Color.BLACK; textSize = 16f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
+        val photoBorderPaint = Paint().apply { color = Color.DKGRAY; style = Paint.Style.STROKE; strokeWidth = 1f }
+
+        // Safely draw the logo if it's not null
+        logo?.let {
+            val scaledLogo = Bitmap.createScaledBitmap(it, 70, 70, true)
+            canvas.drawBitmap(scaledLogo, MARGIN, MARGIN, null)
+        }
+
+        // Safely draw the student photo if it's not null
+        studentPhoto?.let {
+            val photoWidth = 80f
+            val photoHeight = 100f
+            val photoX = A4_WIDTH - MARGIN - photoWidth
+            val scaledPhoto = Bitmap.createScaledBitmap(it, photoWidth.toInt(), photoHeight.toInt(), true)
+            canvas.drawBitmap(scaledPhoto, photoX, MARGIN, null)
+            canvas.drawRect(photoX, MARGIN, photoX + photoWidth, MARGIN + photoHeight, photoBorderPaint)
+        }
+
+        val textCenterX = A4_WIDTH / 2f
+        canvas.drawText(madarsaName, textCenterX, MARGIN + 35f, titlePaint)
+        canvas.drawText(madarsaAddress, textCenterX, MARGIN + 55f, addressPaint)
+        canvas.drawText("REPORT CARD - $examName", textCenterX, MARGIN + 95f, reportTitlePaint)
+
+        val lineY = MARGIN + 120f
+        canvas.drawLine(MARGIN, lineY, A4_WIDTH - MARGIN, lineY, photoBorderPaint)
+        return lineY
+    }
     private suspend fun saveAndOpenFile(document: PdfDocument, fileName: String) {
         var fileUri: Uri? = null
         try {
@@ -150,34 +185,6 @@ class ReportCardGenerator(private val context: Context) {
         canvas.drawBitmap(scaledWatermark, x, y, watermarkPaint)
     }
 
-    // NEW: Added madarsaAddress parameter
-    private fun drawHeader(canvas: Canvas, logo: Bitmap, studentPhoto: Bitmap?, madarsaName: String, madarsaAddress: String, examName: String): Float {
-        val titlePaint = TextPaint().apply { color = Color.BLACK; textSize = 20f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
-        val addressPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 11f; textAlign = Paint.Align.CENTER }
-        val reportTitlePaint = TextPaint().apply { color = Color.BLACK; textSize = 16f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
-        val photoBorderPaint = Paint().apply { color = Color.DKGRAY; style = Paint.Style.STROKE; strokeWidth = 1f }
-
-        val scaledLogo = Bitmap.createScaledBitmap(logo, 70, 70, true)
-        canvas.drawBitmap(scaledLogo, MARGIN, MARGIN, null)
-
-        val photoWidth = 80f
-        val photoHeight = 100f
-        val photoX = A4_WIDTH - MARGIN - photoWidth
-        studentPhoto?.let {
-            val scaledPhoto = Bitmap.createScaledBitmap(it, photoWidth.toInt(), photoHeight.toInt(), true)
-            canvas.drawBitmap(scaledPhoto, photoX, MARGIN, null)
-            canvas.drawRect(photoX, MARGIN, photoX + photoWidth, MARGIN + photoHeight, photoBorderPaint)
-        }
-
-        val textCenterX = (A4_WIDTH / 2).toFloat()
-        canvas.drawText(madarsaName, textCenterX, MARGIN + 35f, titlePaint)
-        canvas.drawText(madarsaAddress, textCenterX, MARGIN + 55f, addressPaint) // NEW: Draw address
-        canvas.drawText("REPORT CARD - $examName", textCenterX, MARGIN + 95f, reportTitlePaint)
-
-        val lineY = MARGIN + 120f
-        canvas.drawLine(MARGIN, lineY, A4_WIDTH - MARGIN, lineY, photoBorderPaint)
-        return lineY
-    }
 
     private fun drawStudentDetails(canvas: Canvas, student: StudentDetailsItem, startY: Float): Float {
         val labelPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 10f; }

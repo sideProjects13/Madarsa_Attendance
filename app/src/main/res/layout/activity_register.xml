@@ -11,18 +11,14 @@
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fitsSystemWindows="true"
-        app:liftOnScroll="true">
+        android:fitsSystemWindows="true">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/register_toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
-            app:title="Organization Registration"
-        app:titleTextColor="?attr/colorOnPrimary"
-        app:navigationIcon="@drawable/ic_arrow_back"
-        app:navigationIconTint="?attr/colorOnPrimary" />
+            app:navigationIcon="@drawable/ic_arrow_back"
+            app:title="Organization Registration" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -33,219 +29,196 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
             android:orientation="vertical"
-            android:padding="24dp"
-            android:gravity="center_horizontal">
+            android:padding="24dp">
 
-            <!-- You can keep or remove the profile image selection for the organization admin,
-                 or repurpose it for an organization logo. For now, let's keep it simple
-                 and just add an organization name field.
-                 I'll comment out the image selection for simplicity but you can add it back
-                 and repurpose it for organization logo if needed. -->
-            <!--
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardViewProfileImageRegister"
+                android:id="@+id/cardViewOrgLogo"
                 android:layout_width="120dp"
                 android:layout_height="120dp"
                 android:layout_gravity="center_horizontal"
-                app:cardCornerRadius="60dp"
-                app:cardElevation="4dp"
                 android:layout_marginBottom="8dp"
                 android:clickable="true"
                 android:focusable="true"
-                app:strokeColor="?attr/colorOutline"
-                app:strokeWidth="1dp">
+                app:cardCornerRadius="60dp"
+                app:cardElevation="4dp">
 
                 <ImageView
-                    android:id="@+id/ivTeacherProfileImageRegister"
+                    android:id="@+id/ivOrgLogo"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
+                    android:contentDescription="Organization Logo"
+                    android:padding="32dp"
                     android:scaleType="centerCrop"
-                    android:src="@drawable/person"
-                    android:contentDescription="Profile Image" />
+                    android:src="@drawable/ic_upload_file"
+                    app:tint="?attr/colorOnSurfaceVariant" />
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSelectImageRegister"
+                android:id="@+id/btnSelectOrgLogo"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Select Profile Image"
-                android:textColor="?attr/colorPrimary"
                 android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="24dp"/>
-            -->
+                android:layout_marginBottom="24dp"
+                android:text="Select Organization Logo" />
 
-            <!-- NEW: Organization Name -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilOrganizationNameRegister"
-                style="@style/Widget.App.TextInputLayout.PureMonochrome.Outlined"
+                style="?attr/textInputOutlinedStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Organization Name"
-                android:layout_marginBottom="16dp"
-                app:startIconTint="?attr/colorOnSurfaceVariant"
-                app:endIconMode="clear_text"
-                app:endIconTint="?attr/colorOnSurfaceVariant">
+                android:hint="Organization Name">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etOrganizationNameRegister"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/mono_palette_black"
                     android:inputType="textCapWords"
-                    android:maxLines="1"/>
+                    android:maxLines="1" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilOrganizationAddress"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Organization Address">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etOrganizationAddress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top"
+                    android:inputType="textPostalAddress|textMultiLine"
+                    android:minLines="2" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilAdminNameRegister"
-            style="@style/Widget.App.TextInputLayout.PureMonochrome.Outlined"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Admin Full Name"
-            app:startIconTint="?attr/colorOnSurfaceVariant"
-            app:endIconMode="clear_text"
-            app:endIconTint="?attr/colorOnSurfaceVariant">
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Admin Full Name">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etAdminNameRegister"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/mono_palette_black"
-            android:inputType="textCapWords|textPersonName"
-            android:maxLines="1"/>
-        </com.google.android.material.textfield.TextInputLayout>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etAdminNameRegister"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapWords|textPersonName"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilAdminEmailRegister"
-        style="@style/Widget.App.TextInputLayout.PureMonochrome.Outlined"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:hint="Admin Email Address"
-        app:startIconDrawable="@drawable/ic_email"
-        app:startIconTint="?attr/colorOnSurfaceVariant"
-        app:endIconMode="clear_text"
-        app:endIconTint="?attr/colorOnSurfaceVariant">
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilAdminEmailRegister"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Admin Email Address">
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etAdminEmailRegister"
-        android:layout_width="match_parent"
-        android:textColor="@color/mono_palette_black"
-        android:layout_height="wrap_content"
-        android:inputType="textEmailAddress"
-        android:maxLines="1"/>
-    </com.google.android.material.textfield.TextInputLayout>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etAdminEmailRegister"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textEmailAddress"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilAdminMobileRegister"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Admin Mobile Number"
+                app:counterEnabled="true"
+                app:counterMaxLength="10"
+                app:prefixText="+91 ">
 
-    <!-- You might not need mobile number for the admin, or you can keep it -->
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/tilAdminMobileRegister"
-    style="@style/Widget.App.TextInputLayout.PureMonochrome.Outlined"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_marginTop="16dp"
-    android:hint="Admin Mobile Number (Optional)"
-    app:prefixText="+91 "
-    app:prefixTextAppearance="?attr/textAppearanceBodyLarge"
-    app:prefixTextColor="?attr/colorOnSurfaceVariant"
-    app:startIconTint="?attr/colorOnSurfaceVariant"
-    app:endIconMode="clear_text"
-    app:endIconTint="?attr/colorOnSurfaceVariant"
-    app:counterEnabled="true"
-    app:counterMaxLength="10">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etAdminMobileRegister"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:digits="0123456789"
+                    android:inputType="phone"
+                    android:maxLength="10"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-    <com.google.android.material.textfield.TextInputEditText
-        android:id="@+id/etAdminMobileRegister"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:textColor="@color/mono_palette_black"
-    android:inputType="phone"
-    android:maxLength="10"
-    android:digits="0123456789"
-    android:maxLines="1"/>
-</com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilPasswordRegister"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Password (min. 6 characters)"
+                app:endIconMode="password_toggle">
 
-<com.google.android.material.textfield.TextInputLayout
-android:id="@+id/tilPasswordRegister"
-style="@style/Widget.App.TextInputLayout.PureMonochrome.Outlined"
-android:layout_width="match_parent"
-android:layout_height="wrap_content"
-android:layout_marginTop="16dp"
-android:hint="Password (min. 6 characters)"
-app:startIconDrawable="@drawable/ic_lock"
-app:startIconTint="?attr/colorOnSurfaceVariant"
-app:endIconMode="password_toggle"
-app:endIconTint="?attr/colorOnSurfaceVariant">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etPasswordRegister"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-<com.google.android.material.textfield.TextInputEditText
-    android:id="@+id/etPasswordRegister"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:inputType="textPassword"
-    android:textColor="@color/mono_palette_black"
-    android:maxLines="1"/>
-</com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilConfirmPasswordRegister"
+                style="?attr/textInputOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Confirm Password"
+                app:endIconMode="password_toggle">
 
-<com.google.android.material.textfield.TextInputLayout
-android:id="@+id/tilConfirmPasswordRegister"
-style="?attr/textInputOutlinedStyle"
-android:layout_width="match_parent"
-android:layout_height="wrap_content"
-android:layout_marginTop="16dp"
-android:hint="Confirm Password"
-app:startIconDrawable="@drawable/ic_lock"
-app:startIconTint="?attr/colorOnSurfaceVariant"
-app:endIconMode="password_toggle"
-app:endIconTint="?attr/colorOnSurfaceVariant">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etConfirmPasswordRegister"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:maxLines="1" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-<com.google.android.material.textfield.TextInputEditText
-    android:id="@+id/etConfirmPasswordRegister"
-    android:layout_width="match_parent"
-    android:textColor="@color/mono_palette_black"
-    android:layout_height="wrap_content"
-    android:inputType="textPassword"
-    android:maxLines="1"/>
-</com.google.android.material.textfield.TextInputLayout>
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp">
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRegisterOrganization"
+                    style="?attr/materialButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingVertical="12dp"
+                    android:text="Register Organization" />
 
-<FrameLayout
-android:layout_width="match_parent"
-android:layout_height="wrap_content"
-android:layout_marginTop="32dp">
+                <ProgressBar
+                    android:id="@+id/progressBarRegister"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_gravity="center"
+                    android:elevation="8dp"
+                    android:indeterminateTint="?attr/colorOnPrimary"
+                    android:visibility="gone" />
+            </FrameLayout>
 
-<com.google.android.material.button.MaterialButton
-    android:id="@+id/btnRegisterOrganization"
-style="?attr/materialButtonStyle"
-android:layout_width="match_parent"
-android:layout_height="wrap_content"
-android:text="Register Organization"
-android:paddingVertical="12dp"/>
+            <TextView
+                android:id="@+id/tvGoToLogin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:padding="8dp"
+                android:text="Already registered? Login Here"
+                android:textColor="?attr/colorPrimary" />
 
-<ProgressBar
-    android:id="@+id/progressBarRegister"
-    style="?android:attr/progressBarStyle"
-    android:layout_width="32dp"
-    android:layout_height="32dp"
-    android:layout_gravity="center"
-    android:elevation="8dp"
-    android:indeterminateTint="?attr/colorOnPrimary"
-    android:visibility="gone" />
-</FrameLayout>
-
-<TextView
-android:id="@+id/tvGoToLogin"
-android:layout_width="wrap_content"
-android:layout_height="wrap_content"
-android:text="Already registered? Login Here"
-android:layout_marginTop="24dp"
-android:padding="8dp"
-android:textColor="?attr/colorPrimary"
-android:clickable="true"
-android:focusable="true"
-android:background="?attr/selectableItemBackground"/>
-
-    </LinearLayout>
+        </LinearLayout>
     </androidx.core.widget.NestedScrollView>
-    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

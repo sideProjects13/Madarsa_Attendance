@@ -47,8 +47,6 @@ object PdfGenerator {
     private const val COL_STUDENT_NAME_X = MARGIN_LEFT
     private const val COL_PAYMENTS_COUNT_X_RIGHT_EDGE = PAGE_WIDTH - MARGIN_RIGHT - 80f
     private const val COL_TOTAL_PAID_X_RIGHT_EDGE = PAGE_WIDTH - MARGIN_RIGHT
-    private const val ORG_NAME_FULL = "Madarsa Aaisha Siddiqa Ta'alimul Quran"
-    private const val ORG_ADDRESS_FULL = "BIBI AAISHA MASJID SARNI SOCIETY AHMEDABAD"
 
 
     // =====================================================================================
@@ -58,10 +56,13 @@ object PdfGenerator {
     fun createMonthlyReportPdf(
         context: Context,
         madarsaName: String,
+        madarsaAddress: String, // <-- ADD THIS PARAMETER
         className: String,
         year: Int,
         month: Int,
-        studentSummaries: List<StudentPaymentSummaryItem>
+        studentSummaries: List<StudentPaymentSummaryItem>,
+        logoBitmap: Bitmap // <-- Accepts the dynamic logo
+
     ): Uri? {
         val document = PdfDocument()
         val calendar = Calendar.getInstance().apply { set(year, month, 1) }
@@ -70,21 +71,25 @@ object PdfGenerator {
         val fileName = "Report_Monthly_${className.replace(" ", "_")}_${monthName}_$year.pdf"
         val totalPages = estimateTotalPages(studentSummaries.size)
 
-        return generatePdf(context, document, fileName, reportTitle, ORG_NAME_FULL, ORG_ADDRESS_FULL, className, studentSummaries, totalPages)
+        return generatePdf(context, document, fileName, reportTitle, madarsaName, madarsaAddress, className, studentSummaries, totalPages, logoBitmap)
     }
 
+    // REPLACE THIS FUNCTIONF
     fun createYearlyReportPdf(
         context: Context,
         madarsaName: String,
+        madarsaAddress: String, // <-- ADD THIS PARAMETER
         className: String,
         year: Int,
-        studentSummaries: List<StudentPaymentSummaryItem>
+        studentSummaries: List<StudentPaymentSummaryItem>,
+        logoBitmap: Bitmap // <-- Accepts the dynamic logo
+
     ): Uri? {
         val document = PdfDocument()
         val reportTitle = "Yearly Fee Report - $year"
         val fileName = "Report_Yearly_${className.replace(" ", "_")}_$year.pdf"
         val totalPages = estimateTotalPages(studentSummaries.size)
-        return generatePdf(context, document, fileName, reportTitle, ORG_NAME_FULL, ORG_ADDRESS_FULL, className, studentSummaries, totalPages)
+        return generatePdf(context, document, fileName, reportTitle, madarsaName, madarsaAddress, className, studentSummaries, totalPages,logoBitmap)
     }
 
     private fun generatePdf(
@@ -96,11 +101,12 @@ object PdfGenerator {
         madarsaAddress: String,
         className: String,
         studentSummaries: List<StudentPaymentSummaryItem>,
-        totalPagesEstimate: Int
+        totalPagesEstimate: Int,
+        logoBitmap: Bitmap
     ): Uri? {
         val paint = Paint().apply { isAntiAlias = true }
         val originalTextColor = Color.BLACK
-        val logoBitmap = BitmapFactory.decodeResource(context.resources, R.drawable.logo)
+//        val logoBitmap = BitmapFactory.decodeResource(context.resources, R.drawable.logo)
 
         var currentPageNumber = 1
         var pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, currentPageNumber).create()
@@ -254,13 +260,16 @@ object PdfGenerator {
 
     fun createSingleFeeReceiptPdf(
         context: Context,
+        madarsaName: String, // DYNAMIC
+        madarsaAddress: String,
         studentName: String,
         parentName: String,
         registrationNumber: String,
         teacherName: String,
         paymentDate: String,
         paymentMonth: String,
-        amountPaid: Double
+        amountPaid: Double,
+        logoBitmap: Bitmap
     ): Uri? {
         val document = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(RECEIPT_WIDTH, RECEIPT_HEIGHT, 1).create()
@@ -275,11 +284,11 @@ object PdfGenerator {
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = RECEIPT_HEADER_SIZE
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText(ORG_NAME_FULL, RECEIPT_WIDTH / 2f, yPos, paint)
+        canvas.drawText(madarsaName, RECEIPT_WIDTH / 2f, yPos, paint)
         yPos += RECEIPT_LINE_SPACING
         paint.textSize = RECEIPT_SUBNAME_SIZE
         paint.typeface = Typeface.DEFAULT
-        canvas.drawText(ORG_ADDRESS_FULL, RECEIPT_WIDTH / 2f, yPos, paint)
+        canvas.drawText(madarsaAddress, RECEIPT_WIDTH / 2f, yPos, paint)
         yPos += RECEIPT_LINE_SPACING * 1.5f
         paint.textSize = RECEIPT_TITLE_SIZE
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)

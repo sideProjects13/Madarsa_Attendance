@@ -10,10 +10,10 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
+import android.widget.NumberPicker
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -37,19 +37,19 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
         private const val TAG = "StudentPaymentHistory"
     }
 
-    private val viewModel: StudentPaymentHistoryViewModel by viewModels()
     private lateinit var tvStudentNameHeader: TextView
     private lateinit var btnRecordNewPayment: Button
     private lateinit var recyclerViewPaymentHistory: RecyclerView
     private lateinit var paymentHistoryAdapter: PaymentHistoryAdapter
     private lateinit var progressBarHistory: ProgressBar
+    private lateinit var progressBarReceipt: ProgressBar
     private lateinit var tvNoHistory: TextView
     private lateinit var db: FirebaseFirestore
     private var currentStudentId: String? = null
     private var currentStudentName: String? = null
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
-    private var currentOrganizationId: String? = null
+    private var organizationId: String? = null // Correctly defined as a class property
     private var fullStudentDetails: StudentDetailsItem? = null
     private var paymentModifiedInThisSession = false
 
@@ -62,9 +62,9 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
         currentStudentName = intent.getStringExtra("STUDENT_NAME")
         currentTeacherId = intent.getStringExtra("TEACHER_ID")
         currentTeacherName = intent.getStringExtra("TEACHER_NAME")
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
+        organizationId = FirebaseAuthManager.getOrganizationId(this)
 
-        if (currentStudentId == null || currentTeacherId == null || currentOrganizationId == null) {
+        if (currentStudentId == null || currentTeacherId == null || organizationId == null) {
             Toast.makeText(this, "Essential information is missing.", Toast.LENGTH_LONG).show()
             finish()
             return
@@ -72,8 +72,7 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
 
         tvStudentNameHeader.text = "Student: ${currentStudentName ?: "N/A"}"
         setupRecyclerView()
-        setupObservers()
-        viewModel.fetchStudentDetails(currentOrganizationId!!, currentStudentId!!)
+        fetchFullStudentDetails()
         loadPaymentHistory()
         btnRecordNewPayment.setOnClickListener { showRecordPaymentDialog(null) }
     }
@@ -83,26 +82,20 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
         btnRecordNewPayment = findViewById(R.id.btnRecordNewPayment)
         recyclerViewPaymentHistory = findViewById(R.id.recyclerViewPaymentHistory)
         progressBarHistory = findViewById(R.id.progressBarPaymentHistory)
+        progressBarReceipt = findViewById(R.id.progressBarReceipt)
         tvNoHistory = findViewById(R.id.tvNoPaymentHistory)
     }
 
-    private fun setupObservers() {
-        viewModel.studentDetails.observe(this) { student ->
-            fullStudentDetails = student
-        }
-
-        viewModel.operationStatus.observe(this) { event ->
-            event.getContentIfNotHandled()?.let { (isSuccess, message) ->
-                progressBarHistory.visibility = View.GONE
-                // --- THIS IS THE FIX ---
-                StatusDialogFragment.newInstance(isSuccess, message).show(supportFragmentManager, "statusDialog")
-                if (isSuccess) {
-                    paymentModifiedInThisSession = true
-                    setResult(Activity.RESULT_OK)
-                    loadPaymentHistory() // Refresh the list on any success
-                }
+    private fun fetchFullStudentDetails() {
+        db.collection("organizations").document(organizationId!!)
+            .collection("students").document(currentStudentId!!)
+            .get()
+            .addOnSuccessListener { document ->
+                fullStudentDetails = document.toObject(StudentDetailsItem::class.java)
             }
-        }
+            .addOnFailureListener {
+                Toast.makeText(this, "Could not load full student details.", Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun setupRecyclerView() {
@@ -133,11 +126,29 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
             .setTitle("Delete Payment")
             .setMessage("Are you sure you want to delete this payment of ₹${payment.paymentAmount}?")
             .setPositiveButton("Delete") { _, _ ->
-                progressBarHistory.visibility = View.VISIBLE
-                viewModel.deletePayment(payment.id)
+                deletePayment(payment.id)
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun deletePayment(paymentId: String) {
+        progressBarHistory.visibility = View.VISIBLE
+        db.collection("organizations").document(organizationId!!)
+            .collection("feePayments").document(paymentId)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(this, "Payment deleted.", Toast.LENGTH_SHORT).show()
+                paymentModifiedInThisSession = true
+                setResult(Activity.RESULT_OK)
+                loadPaymentHistory()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+            .addOnCompleteListener {
+                progressBarHistory.visibility = View.GONE
+            }
     }
 
     private fun loadPaymentHistory() {
@@ -145,7 +156,7 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
         tvNoHistory.visibility = View.GONE
         recyclerViewPaymentHistory.visibility = View.GONE
 
-        db.collection("organizations").document(currentOrganizationId!!)
+        db.collection("organizations").document(organizationId!!)
             .collection("feePayments")
             .whereEqualTo("studentId", currentStudentId)
             .orderBy("paymentDate", Query.Direction.DESCENDING)
@@ -154,7 +165,6 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
                 progressBarHistory.visibility = View.GONE
                 if (querySnapshot.isEmpty) {
                     tvNoHistory.visibility = View.VISIBLE
-                    recyclerViewPaymentHistory.visibility = View.GONE
                     paymentHistoryAdapter.updateData(emptyList())
                 } else {
                     val payments = querySnapshot.toObjects(FeePaymentItem::class.java)
@@ -175,26 +185,29 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
         val isEditing = paymentToEdit != null
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_record_payment, null)
         val etAmount = dialogView.findViewById<TextInputEditText>(R.id.etPaymentAmountDialog)
-        val btnSelectDate = dialogView.findViewById<Button>(R.id.btnSelectPaymentDateDialog)
-        val dialogDateFormat = SimpleDateFormat("dd MMM, yyyy", Locale.getDefault())
-        val selectedDate = Calendar.getInstance()
+        val btnSelectFeeMonth = dialogView.findViewById<Button>(R.id.btnSelectFeeMonthDialog)
+
+        val feeMonthCalendar = Calendar.getInstance()
 
         if (isEditing) {
             etAmount.setText(String.format(Locale.US, "%.0f", paymentToEdit!!.paymentAmount))
-            paymentToEdit.paymentDate?.let { selectedDate.time = it }
+            val monthYearParts = paymentToEdit.paymentMonth.split("-")
+            if (monthYearParts.size == 2) {
+                try {
+                    feeMonthCalendar.set(Calendar.YEAR, monthYearParts[0].toInt())
+                    feeMonthCalendar.set(Calendar.MONTH, monthYearParts[1].toInt() - 1)
+                } catch (e: NumberFormatException) { /* Keep current date on error */ }
+            }
         } else {
             fullStudentDetails?.monthlyFee?.let { etAmount.setText(String.format(Locale.US, "%.0f", it)) }
         }
-        btnSelectDate.text = "Date: ${dialogDateFormat.format(selectedDate.time)}"
+        btnSelectFeeMonth.text = "Fee for: ${SimpleDateFormat("MMMM, yyyy", Locale.getDefault()).format(feeMonthCalendar.time)}"
 
-        btnSelectDate.setOnClickListener {
-            DatePickerDialog(
-                this, R.style.DatePickerDialog_App_Monochrome,
-                { _, year, month, dayOfMonth ->
-                    selectedDate.set(year, month, dayOfMonth)
-                    btnSelectDate.text = "Date: ${dialogDateFormat.format(selectedDate.time)}"
-                }, selectedDate.get(Calendar.YEAR), selectedDate.get(Calendar.MONTH), selectedDate.get(Calendar.DAY_OF_MONTH)
-            ).apply { datePicker.maxDate = System.currentTimeMillis() }.show()
+        btnSelectFeeMonth.setOnClickListener {
+            showMonthYearPickerDialog(feeMonthCalendar) { updatedCalendar ->
+                feeMonthCalendar.time = updatedCalendar.time
+                btnSelectFeeMonth.text = "Fee for: ${SimpleDateFormat("MMMM, yyyy", Locale.getDefault()).format(feeMonthCalendar.time)}"
+            }
         }
 
         AlertDialog.Builder(this, R.style.AlertDialog_App_Monochrome)
@@ -211,28 +224,85 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
                 if (isEditing) {
                     val updatedData = hashMapOf<String, Any>(
                         "paymentAmount" to amount,
-                        "paymentDate" to selectedDate.time,
-                        "paymentMonth" to SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(selectedDate.time),
-                        "paymentYear" to selectedDate.get(Calendar.YEAR)
+                        "paymentMonth" to SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(feeMonthCalendar.time),
+                        "paymentYear" to feeMonthCalendar.get(Calendar.YEAR)
                     )
-                    viewModel.updatePayment(paymentToEdit!!.id, updatedData)
+                    updatePayment(paymentToEdit!!.id, updatedData)
                 } else {
-                    val paymentData = hashMapOf<String, Any>(
+                    val paymentData = hashMapOf(
                         "studentId" to currentStudentId!!,
                         "studentName" to (currentStudentName ?: "N/A"),
                         "teacherId" to currentTeacherId!!,
                         "teacherName" to (currentTeacherName ?: "N/A"),
                         "paymentAmount" to amount,
-                        "paymentDate" to selectedDate.time,
-                        "paymentMonth" to SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(selectedDate.time),
-                        "paymentYear" to selectedDate.get(Calendar.YEAR),
+                        "paymentDate" to Date(),
+                        "paymentMonth" to SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(feeMonthCalendar.time),
+                        "paymentYear" to feeMonthCalendar.get(Calendar.YEAR),
                         "recordedAt" to FieldValue.serverTimestamp()
                     )
-                    viewModel.addPayment(paymentData)
+                    addPayment(paymentData)
                 }
             }
             .setNegativeButton("Cancel", null)
             .create()
+            .show()
+    }
+
+    private fun addPayment(paymentData: HashMap<String, Any>) {
+        db.collection("organizations").document(organizationId!!)
+            .collection("feePayments").add(paymentData)
+            .addOnSuccessListener {
+                Toast.makeText(this, "Payment Saved.", Toast.LENGTH_SHORT).show()
+                paymentModifiedInThisSession = true
+                setResult(Activity.RESULT_OK)
+                loadPaymentHistory()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+            .addOnCompleteListener { progressBarHistory.visibility = View.GONE }
+    }
+
+    private fun updatePayment(paymentId: String, updatedData: HashMap<String, Any>) {
+        db.collection("organizations").document(organizationId!!)
+            .collection("feePayments").document(paymentId)
+            .update(updatedData)
+            .addOnSuccessListener {
+                Toast.makeText(this, "Payment Updated.", Toast.LENGTH_SHORT).show()
+                paymentModifiedInThisSession = true
+                setResult(Activity.RESULT_OK)
+                loadPaymentHistory()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to update: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+            .addOnCompleteListener { progressBarHistory.visibility = View.GONE }
+    }
+
+    private fun showMonthYearPickerDialog(initialCalendar: Calendar, onDateSet: (Calendar) -> Unit) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_month_year_picker, null)
+        val monthPicker = dialogView.findViewById<NumberPicker>(R.id.picker_month)
+        val yearPicker = dialogView.findViewById<NumberPicker>(R.id.picker_year)
+
+        monthPicker.minValue = 0
+        monthPicker.maxValue = 11
+        monthPicker.displayedValues = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        monthPicker.value = initialCalendar.get(Calendar.MONTH)
+
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        yearPicker.minValue = currentYear - 10
+        yearPicker.maxValue = currentYear + 10
+        yearPicker.value = initialCalendar.get(Calendar.YEAR)
+
+        AlertDialog.Builder(this, R.style.AlertDialog_App_Monochrome)
+            .setView(dialogView)
+            .setPositiveButton("OK") { _, _ ->
+                val selectedCalendar = Calendar.getInstance()
+                selectedCalendar.set(Calendar.YEAR, yearPicker.value)
+                selectedCalendar.set(Calendar.MONTH, monthPicker.value)
+                onDateSet(selectedCalendar)
+            }
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -245,83 +315,60 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
             Toast.makeText(this, "Student details not loaded yet, please wait.", Toast.LENGTH_SHORT).show()
             return
         }
-        val progressBarReceipt = findViewById<ProgressBar>(R.id.progressBarReceipt)
+        generateAndShareReceiptImage(payment)
+    }
+
+    private fun generateAndShareReceiptImage(payment: FeePaymentItem) {
+        val student = fullStudentDetails!!
         progressBarReceipt.visibility = View.VISIBLE
-        lifecycleScope.launch(Dispatchers.IO) {
-            val receiptUri = ReceiptImageGenerator.createFeeReceiptImage(
-                context = applicationContext,
-                studentName = fullStudentDetails!!.studentName,
-                teacherName = fullStudentDetails!!.teacherName ?: "N/A",
-                registrationId = fullStudentDetails!!.regNo ?: "N/A",
-                feeMonth = SimpleDateFormat("MMMM, yyyy", Locale.getDefault()).format(payment.paymentDate!!),
-                totalAmount = fullStudentDetails!!.monthlyFee ?: payment.paymentAmount,
-                depositAmount = payment.paymentAmount,
-                remainingAmount = (fullStudentDetails!!.monthlyFee ?: payment.paymentAmount) - payment.paymentAmount
-            )
-            withContext(Dispatchers.Main) {
-                progressBarReceipt.visibility = View.GONE
-                if (receiptUri != null) {
-                    shareReceiptViaWhatsApp(receiptUri, fullStudentDetails!!)
-                } else {
-                    Toast.makeText(applicationContext, "Failed to create receipt image.", Toast.LENGTH_LONG).show()
-                }
+
+        lifecycleScope.launch {
+            val logoBitmap = LogoProvider.getActiveLogo(applicationContext)
+
+            val receiptUri = withContext(Dispatchers.IO) {
+                ReceiptImageGenerator.createFeeReceiptImage(
+                    context = applicationContext,
+                    studentName = student.studentName,
+                    teacherName = student.teacherName ?: "N/A",
+                    registrationId = student.regNo ?: "N/A",
+                    feeMonth = SimpleDateFormat("MMMM, yyyy", Locale.getDefault()).format(payment.paymentDate!!),
+                    paymentDate = SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(payment.paymentDate!!),
+                    totalAmount = student.monthlyFee ?: payment.paymentAmount,
+                    depositAmount = payment.paymentAmount,
+                    remainingAmount = (student.monthlyFee ?: payment.paymentAmount) - payment.paymentAmount,
+                    logoBitmap = logoBitmap
+                )
+            }
+
+            progressBarReceipt.visibility = View.GONE
+            if (receiptUri != null) {
+                shareReceiptViaWhatsApp(receiptUri, student)
+            } else {
+                Toast.makeText(applicationContext, "Failed to create receipt image.", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    // --- THIS IS THE FINAL, CORRECTED SHARING FUNCTION ---
     private fun shareReceiptViaWhatsApp(receiptUri: Uri, student: StudentDetailsItem) {
         val parentMobile = student.parentMobileNumber
         if (parentMobile.isNullOrEmpty()) {
             Toast.makeText(this, "Parent mobile number not available.", Toast.LENGTH_LONG).show()
             return
         }
-
-        // 1. Robustly clean the phone number: remove anything that isn't a digit.
-        val digitsOnlyNumber = parentMobile.filter { it.isDigit() }
-
-        // 2. Format for WhatsApp JID: Ensure it has the country code.
-        val whatsappNumber = when {
-            digitsOnlyNumber.length > 10 && digitsOnlyNumber.startsWith("91") -> digitsOnlyNumber
-            digitsOnlyNumber.length == 10 -> "91$digitsOnlyNumber"
-            else -> digitsOnlyNumber // Fallback for other formats
-        }
-
-        if (whatsappNumber.isEmpty()) {
-            Toast.makeText(this, "Invalid parent mobile number format.", Toast.LENGTH_LONG).show()
-            return
-        }
+        val cleanMobileNumber = parentMobile.replace(Regex("[^0-9]"), "")
+        val whatsappNumber = if (cleanMobileNumber.length > 10) cleanMobileNumber else "91$cleanMobileNumber"
 
         try {
-            // 3. Create the ACTION_SEND Intent
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, receiptUri)
-                setPackage("com.whatsapp")
-                // 4. Use the "jid" extra to target the unsaved number directly
                 putExtra("jid", "$whatsappNumber@s.whatsapp.net")
+                setPackage("com.whatsapp")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            // 5. Add this flag to grant WhatsApp permission to read the image file
-            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
             startActivity(shareIntent)
-
         } catch (e: ActivityNotFoundException) {
-            // This fallback will be used if WhatsApp is not installed.
-            Toast.makeText(this, "WhatsApp is not installed. Opening general share dialog.", Toast.LENGTH_LONG).show()
-            try {
-                val genericShareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, receiptUri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivity(Intent.createChooser(genericShareIntent, "Share receipt via"))
-            } catch (ex: Exception) {
-                Toast.makeText(this, "Could not open any sharing application.", Toast.LENGTH_SHORT).show()
-            }
-        } catch (e: Exception) {
-            Toast.makeText(this, "Could not share receipt directly.", Toast.LENGTH_LONG).show()
-            Log.e(TAG, "Error sharing receipt directly", e)
+            Toast.makeText(this, "WhatsApp not installed.", Toast.LENGTH_SHORT).show()
         }
     }
 

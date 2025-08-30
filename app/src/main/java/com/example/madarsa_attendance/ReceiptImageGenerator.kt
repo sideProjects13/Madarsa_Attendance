@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.text.StaticLayout
 import android.text.TextPaint
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -24,10 +23,9 @@ object ReceiptImageGenerator {
     private const val TAG = "ReceiptImageGenerator"
     private val currencyFormatter: NumberFormat = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
 
-    // --- Image Dimensions ---
+    // Image Dimensions
     private const val IMAGE_WIDTH = 800
-    // --- CHANGE 1: Increased height slightly for better bottom margin ---
-    private const val IMAGE_HEIGHT = 1250
+    private const val IMAGE_HEIGHT = 1350
     private const val CORNER_RADIUS = 40f
     private const val MARGIN = 60f
 
@@ -37,39 +35,36 @@ object ReceiptImageGenerator {
         teacherName: String,
         registrationId: String,
         feeMonth: String,
+        paymentDate: String,
         totalAmount: Double,
         depositAmount: Double,
-        remainingAmount: Double
+        remainingAmount: Double,
+        logoBitmap: Bitmap
     ): Uri? {
-        // Create a bitmap and canvas to draw on
         val bitmap = Bitmap.createBitmap(IMAGE_WIDTH, IMAGE_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        // --- 1. Draw Background and Watermark ---
-        drawBackground(canvas, context)
-        drawWatermark(canvas, context)
+        drawBackground(canvas)
+        drawWatermark(canvas, logoBitmap)
+        val yPos = drawHeader(canvas, context) // Pass context to header
 
-        // --- 2. Draw Header ---
-        var yPos = drawHeader(canvas, context)
-
-        // --- 3. Draw Details Section ---
         drawDetails(
             canvas, yPos,
             registrationId,
             teacherName,
             studentName,
             feeMonth,
+            paymentDate,
             totalAmount,
             depositAmount,
             remainingAmount
         )
 
-        // --- 4. Save and return URI ---
         val fileName = "FeeReceipt_${studentName.replace(" ", "_")}_${System.currentTimeMillis()}.png"
         return saveImage(context, bitmap, fileName)
     }
 
-    private fun drawBackground(canvas: Canvas, context: Context) {
+    private fun drawBackground(canvas: Canvas) {
         val backgroundPaint = Paint().apply {
             color = Color.WHITE
             style = Paint.Style.FILL
@@ -78,24 +73,26 @@ object ReceiptImageGenerator {
         canvas.drawRoundRect(rect, CORNER_RADIUS, CORNER_RADIUS, backgroundPaint)
     }
 
-    private fun drawWatermark(canvas: Canvas, context: Context) {
-        val logoBitmap = BitmapFactory.decodeResource(context.resources, R.drawable.logo)
-        val watermarkPaint = Paint().apply {
-            // --- CHANGE 2: Increased alpha for better visibility ---
-            alpha = 25 // Was 10, now more visible
-            isAntiAlias = true
+    private fun drawWatermark(canvas: Canvas, logo: Bitmap) {
+        try {
+            val watermarkPaint = Paint().apply {
+                alpha = 25
+                isAntiAlias = true
+            }
+            val watermarkSize = IMAGE_WIDTH - (MARGIN * 4)
+            val scaledWatermark = Bitmap.createScaledBitmap(logo, watermarkSize.toInt(), watermarkSize.toInt(), true)
+            val x = (IMAGE_WIDTH - watermarkSize) / 2f
+            val y = (IMAGE_HEIGHT - watermarkSize) / 2f
+            canvas.drawBitmap(scaledWatermark, x, y, watermarkPaint)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to draw watermark bitmap.", e)
         }
-        val watermarkSize = IMAGE_WIDTH - (MARGIN * 4)
-        val scaledWatermark = Bitmap.createScaledBitmap(logoBitmap, watermarkSize.toInt(), watermarkSize.toInt(), true)
-        val x = (IMAGE_WIDTH - watermarkSize) / 2f
-        val y = (IMAGE_HEIGHT - watermarkSize) / 2f
-        canvas.drawBitmap(scaledWatermark, x, y, watermarkPaint)
     }
 
     private fun drawHeader(canvas: Canvas, context: Context): Float {
         var yPos = MARGIN * 2
 
-        // Draw Header Icon
+        // FIX for unresolved reference: ic_fees_paid
         val iconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_receipt)
         val iconBitmap = iconDrawable?.toBitmap(120, 120, Bitmap.Config.ARGB_8888)
         if (iconBitmap != null) {
@@ -103,7 +100,6 @@ object ReceiptImageGenerator {
             yPos += iconBitmap.height + 40f
         }
 
-        // Draw "Fees Paid Receipt" Title
         val titlePaint = TextPaint().apply {
             isAntiAlias = true
             color = Color.parseColor("#333333")
@@ -113,25 +109,27 @@ object ReceiptImageGenerator {
         }
         canvas.drawText("Fees Paid Receipt", IMAGE_WIDTH / 2f, yPos, titlePaint)
 
-        return yPos + 100f // Return Y position for the next section
+        return yPos + 120f
     }
 
     private fun drawDetails(
         canvas: Canvas, startY: Float, regId: String, className: String,
-        studentName: String, feeMonth: String, total: Double,
-        deposit: Double, remaining: Double
+        studentName: String, feeMonth: String, paymentDate: String,
+        total: Double, deposit: Double, remaining: Double
     ) {
         var yPos = startY
-        val rowHeight = 120f
+        val rowHeight = 110f
         val itemBackgroundColor = Color.parseColor("#F5F6F8")
 
-        yPos = drawDetailRow(canvas, yPos, rowHeight, "Registration/ID", regId, itemBackgroundColor)
-        yPos = drawDetailRow(canvas, yPos, rowHeight, "Class", className, Color.WHITE)
-        yPos = drawDetailRow(canvas, yPos, rowHeight, "Name", studentName, itemBackgroundColor)
+        yPos = drawDetailRow(canvas, yPos, rowHeight, "Registration ID", regId, itemBackgroundColor)
+        yPos = drawDetailRow(canvas, yPos, rowHeight, "Name", studentName, Color.WHITE)
+        yPos = drawDetailRow(canvas, yPos, rowHeight, "Class", className, itemBackgroundColor)
         yPos = drawDetailRow(canvas, yPos, rowHeight, "Fee Month", feeMonth, Color.WHITE)
-        yPos = drawDetailRow(canvas, yPos, rowHeight, "Total Amount", currencyFormatter.format(total), itemBackgroundColor)
+        yPos = drawDetailRow(canvas, yPos, rowHeight, "Payment Date", paymentDate, itemBackgroundColor)
+
+        // FIX for Type Mismatch: currencyFormatter.format returns a String
         yPos = drawDetailRow(canvas, yPos, rowHeight, "Deposit", currencyFormatter.format(deposit), Color.WHITE)
-        drawDetailRow(canvas, yPos, rowHeight, "Remainings", currencyFormatter.format(remaining), itemBackgroundColor)
+        drawDetailRow(canvas, yPos, rowHeight, "Remaining", currencyFormatter.format(remaining), itemBackgroundColor)
     }
 
     private fun drawDetailRow(canvas: Canvas, y: Float, height: Float, label: String, value: String, bgColor: Int): Float {
@@ -155,7 +153,7 @@ object ReceiptImageGenerator {
         }
         canvas.drawText(value, IMAGE_WIDTH - MARGIN - 40f, y + (height / 2f) + 15f, valuePaint)
 
-        return y + height // Return the next Y position
+        return y + height
     }
 
     private fun saveImage(context: Context, bitmap: Bitmap, fileName: String): Uri? {
@@ -177,19 +175,20 @@ object ReceiptImageGenerator {
                 }
             } else {
                 val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), subfolder)
-                if (!dir.exists() && !dir.mkdirs()) {
-                    Log.e(TAG, "Failed to create directory: ${dir.absolutePath}")
+                if (!dir.exists()) {
+                    dir.mkdirs()
                 }
                 val file = File(dir, fileName)
                 FileOutputStream(file).use { outputStream ->
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
                 }
+                // FIX for unresolved reference: FileProvider
                 uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
             }
             Log.d(TAG, "Image saved successfully: $uri")
             return uri
-        } catch (e: IOException) {
-            Log.e(TAG, "Error writing image", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving image", e)
             return null
         }
     }

@@ -592,48 +592,42 @@ class PaymentSummaryFragment : Fragment() {
 
     private fun fetchDataAndGeneratePdf(type: String, year: Int, month: Int? = null) {
         if (!isAdded || context == null || currentTeacherId == null || currentTeacherName == null || currentOrganizationId == null) {
-            StatusDialogFragment.newInstance(false, "Required data is missing.").show(parentFragmentManager, "failureDialog")
+            Toast.makeText(context, "Cannot generate report, essential data is missing.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val loadingDialog = StatusDialogFragment.newInstance(true, "Generating Report...").apply {
-            isCancelable = false
-        }
+        val loadingDialog = StatusDialogFragment.newInstance(true, "Generating Report...").apply { isCancelable = false }
         loadingDialog.show(parentFragmentManager, "loading")
 
         lifecycleScope.launch {
             try {
-                val reportData: List<StudentPaymentSummaryItem> = if (type == "Monthly" && month != null) {
-                    fetchReportDataForMonth(currentTeacherId!!, currentOrganizationId!!, year, month)
-                } else {
-                    fetchReportDataForYear(currentTeacherId!!, currentOrganizationId!!, year)
-                }
+                // The FeesReportGenerator now handles everything, including fetching the logo
+                val feesReportGenerator = FeesReportGenerator(requireContext(), db)
+                val pdfUri = feesReportGenerator.generateAndSaveFeeReport(
+                    teacherId = currentTeacherId!!,
+                    teacherName = currentTeacherName!!,
+                    organizationId = currentOrganizationId!!,
+                    reportType = type,
+                    year = year,
+                    month = month
+                )
 
-                if (reportData.isEmpty()) {
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
                     loadingDialog.dismiss()
-                    StatusDialogFragment.newInstance(false, "No payment data found for this period.").show(parentFragmentManager, "failureDialog")
-                    return@launch
+                    if (pdfUri != null) {
+                        StatusDialogFragment.newInstance(true, "Report Generated Successfully!").show(parentFragmentManager, "successDialog")
+                        tryOpenPdf(pdfUri)
+                    } else {
+                        // The generator shows its own toast, but we can show a dialog too
+                        StatusDialogFragment.newInstance(false, "No payment data found.").show(parentFragmentManager, "failureDialog")
+                    }
                 }
-
-                val madarsaName = FirebaseAuthManager.getOrganizationName(requireContext()) ?: "Madarsa Report"
-                val pdfUri = if (type == "Monthly" && month != null) {
-                    PdfGenerator.createMonthlyReportPdf(requireContext(), madarsaName, currentTeacherName!!, year, month, reportData)
-                } else {
-                    PdfGenerator.createYearlyReportPdf(requireContext(), madarsaName, currentTeacherName!!, year, reportData)
-                }
-
-                loadingDialog.dismiss()
-                if (pdfUri != null) {
-                    StatusDialogFragment.newInstance(true, "Report Generated Successfully!").show(parentFragmentManager, "successDialog")
-                    tryOpenPdf(pdfUri)
-                } else {
-                    StatusDialogFragment.newInstance(false, "Failed to Create PDF").show(parentFragmentManager, "failureDialog")
-                }
-
             } catch (e: Exception) {
-                loadingDialog.dismiss()
-                StatusDialogFragment.newInstance(false, "Report Generation Failed").show(parentFragmentManager, "failureDialog")
-                Log.e(TAG, "Error generating report: ", e)
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                    loadingDialog.dismiss()
+                    Log.e(TAG, "Error generating report: ", e)
+                    StatusDialogFragment.newInstance(false, "Error: ${e.message}").show(parentFragmentManager, "failureDialog")
+                }
             }
         }
     }

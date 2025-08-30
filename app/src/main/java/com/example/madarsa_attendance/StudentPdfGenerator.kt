@@ -15,6 +15,7 @@ import android.provider.MediaStore
 import android.text.TextPaint
 import android.util.Log
 import android.widget.Toast
+import com.bumptech.glide.Glide
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -29,10 +30,6 @@ class StudentPdfGenerator(private val context: Context) {
         const val PORTRAIT_WIDTH = 595
         const val PORTRAIT_HEIGHT = 842
         const val MARGIN = 40f
-
-        // NEW: Organization details constants
-        private const val ORG_NAME_FULL = "Madarsa Aaisha Siddiqa Ta'alimul Quran"
-        private const val ORG_ADDRESS_FULL = "BIBI AAISHA MASJID SARNI SOCIETY AHMEDABAD"
     }
 
     private var canvas: Canvas? = null
@@ -40,7 +37,7 @@ class StudentPdfGenerator(private val context: Context) {
     private var currentPage: PdfDocument.Page? = null
     private lateinit var document: PdfDocument
     private lateinit var pageInfo: PdfDocument.PageInfo
-    private lateinit var logoBitmap: Bitmap
+    private var logoBitmap: Bitmap? = null
     private var pageNumber = 1
     private var pageWidth = 0
     private var pageHeight = 0
@@ -49,7 +46,7 @@ class StudentPdfGenerator(private val context: Context) {
         students: List<StudentDetailsItem>,
         columns: List<ReportColumn>,
         orientation: PageOrientation,
-        reportName: String // NEW: Added report name parameter
+        reportName: String
     ): Uri? = withContext(Dispatchers.IO) {
         if (columns.isEmpty()) {
             withContext(Dispatchers.Main) {
@@ -67,12 +64,12 @@ class StudentPdfGenerator(private val context: Context) {
         }
 
         document = PdfDocument()
-        logoBitmap = BitmapFactory.decodeResource(context.resources, R.drawable.logo)
+        logoBitmap = awaitLogo()
         pageNumber = 1
 
         var studentIndex = 0
         while (studentIndex < students.size) {
-            startNewPage(reportName) // NEW: Pass reportName
+            startNewPage(reportName)
             studentIndex = drawTableLayoutPage(students, columns, studentIndex)
             document.finishPage(currentPage!!)
         }
@@ -80,14 +77,26 @@ class StudentPdfGenerator(private val context: Context) {
         return@withContext savePdfDocument()
     }
 
-    // NEW: Updated startNewPage to accept reportName
+    private suspend fun awaitLogo(): Bitmap? = withContext(Dispatchers.IO) {
+        val logoUrl = FirebaseAuthManager.getOrganizationLogoUrl(context)
+        if (logoUrl.isNullOrEmpty()) {
+            return@withContext BitmapFactory.decodeResource(context.resources, R.drawable.logo) // Fallback
+        }
+        try {
+            Glide.with(context).asBitmap().load(logoUrl).submit().get()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load logo from URL for PDF", e)
+            BitmapFactory.decodeResource(context.resources, R.drawable.logo) // Fallback
+        }
+    }
+
     private fun startNewPage(reportName: String) {
         pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber++).create()
         currentPage = document.startPage(pageInfo)
         canvas = currentPage!!.canvas
         yPosition = MARGIN
         drawWatermark()
-        drawPageHeader(reportName) // NEW: Pass reportName
+        drawPageHeader(reportName)
     }
 
     private fun drawTableLayoutPage(students: List<StudentDetailsItem>, columns: List<ReportColumn>, startIndex: Int): Int {
@@ -145,71 +154,56 @@ class StudentPdfGenerator(private val context: Context) {
     }
 
     private fun drawWatermark() {
-        val watermarkPaint = Paint().apply { alpha = 20; isAntiAlias = true }
-        val watermarkSize = if (pageWidth > pageHeight) pageHeight / 2 else pageWidth / 2
-        val scaledWatermark = Bitmap.createScaledBitmap(logoBitmap, watermarkSize, watermarkSize, true)
-        val x = (pageWidth - watermarkSize) / 2f
-        val y = (pageHeight - watermarkSize) / 2f
-        canvas?.drawBitmap(scaledWatermark, x, y, watermarkPaint)
+        logoBitmap?.let {
+            val watermarkPaint = Paint().apply { alpha = 20; isAntiAlias = true }
+            val watermarkSize = if (pageWidth > pageHeight) pageHeight / 2 else pageWidth / 2
+            val scaledWatermark = Bitmap.createScaledBitmap(it, watermarkSize, watermarkSize, true)
+            val x = (pageWidth - watermarkSize) / 2f
+            val y = (pageHeight - watermarkSize) / 2f
+            canvas?.drawBitmap(scaledWatermark, x, y, watermarkPaint)
+        }
     }
 
-    // NEW: Updated drawPageHeader to accept reportName
     private fun drawPageHeader(reportName: String) {
-        val titlePaint = TextPaint().apply {
-            color = Color.BLACK; textSize = 18f; isFakeBoldText = true; textAlign = Paint.Align.CENTER
-        }
-        val addressPaint = TextPaint().apply {
-            color = Color.DKGRAY; textSize = 11f; textAlign = Paint.Align.CENTER
-        }
-        val reportTitlePaint = TextPaint().apply {
-            color = Color.BLACK; textSize = 14f; isFakeBoldText = true; textAlign = Paint.Align.CENTER
-        }
-        val datePaint = TextPaint().apply {
-            color = Color.DKGRAY; textSize = 10f; textAlign = Paint.Align.RIGHT
-        }
+        val titlePaint = TextPaint().apply { color = Color.BLACK; textSize = 18f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
+        val addressPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 11f; textAlign = Paint.Align.CENTER }
+        val reportTitlePaint = TextPaint().apply { color = Color.BLACK; textSize = 14f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
+        val datePaint = TextPaint().apply { color = Color.DKGRAY; textSize = 10f; textAlign = Paint.Align.RIGHT }
 
-        // Madarsa Name (main title)
-        canvas?.drawText(ORG_NAME_FULL, (pageWidth / 2).toFloat(), yPosition, titlePaint)
-        yPosition += 25f // Adjusted spacing
+        val orgName = FirebaseAuthManager.getOrganizationName(context) ?: "Organization Report"
+        val orgAddress = FirebaseAuthManager.getOrganizationAddress(context) ?: ""
 
-        // Madarsa Address
-        canvas?.drawText(ORG_ADDRESS_FULL, (pageWidth / 2).toFloat(), yPosition, addressPaint)
-        yPosition += 35f // Adjusted spacing
+        canvas?.drawText(orgName, (pageWidth / 2).toFloat(), yPosition, titlePaint)
+        yPosition += 25f
+        canvas?.drawText(orgAddress, (pageWidth / 2).toFloat(), yPosition, addressPaint)
+        yPosition += 35f
 
-        // Report Name (if provided)
         if (reportName.isNotBlank()) {
             canvas?.drawText(reportName, (pageWidth / 2).toFloat(), yPosition, reportTitlePaint)
-            yPosition += 30f // Extra space after report name
+            yPosition += 30f
         }
 
-        // Report Date
         val reportDate = SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(Date())
         canvas?.drawText("Report Date: $reportDate", pageWidth - MARGIN, yPosition, datePaint)
-        yPosition += 20f // Space before table data
+        yPosition += 20f
     }
 
     private fun savePdfDocument(): Uri? {
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val fileName = "Student_Report_$timestamp.pdf"
         var fileUri: Uri? = null
-
         try {
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + File.separator + "MadarsaReports") // Save to subfolder
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + File.separator + "MadarsaReports")
                 }
             }
-
             val resolver = context.contentResolver
             fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-
             if (fileUri != null) {
-                resolver.openOutputStream(fileUri)?.use { outputStream ->
-                    document.writeTo(outputStream)
-                }
-                Log.d(TAG, "PDF saved successfully to Downloads/MadarsaReports. URI: $fileUri")
+                resolver.openOutputStream(fileUri)?.use { outputStream -> document.writeTo(outputStream) }
             } else {
                 throw Exception("MediaStore returned a null URI.")
             }

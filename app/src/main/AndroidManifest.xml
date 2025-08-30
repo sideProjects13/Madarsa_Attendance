@@ -17,11 +17,23 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/logo"
-        android:label="MADARSA AAISHA SIDDIQA TAALIMUL QURAN SARNI MASJID"
+        android:label="MADRASA MANAGEMENT"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
+        <activity
+            android:name=".MarksReportActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AdminProfileActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ReportCriteriaActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AttendanceReportActivity"
+            android:exported="false" />
         <activity
             android:name=".BulkAddTeachersActivity"
             android:exported="false" />

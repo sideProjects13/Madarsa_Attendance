@@ -22,7 +22,6 @@ class ResultGeneratorViewModel(application: Application) : AndroidViewModel(appl
     private val TAG = "ResultGeneratorVM"
 
     private companion object {
-        private const val ORG_ADDRESS_FULL = "BIBI AAISHA MASJID SARNI SOCIETY AHMEDABAD"
     }
 
     // LiveData to communicate status back to the UI (MainActivity)
@@ -48,16 +47,15 @@ class ResultGeneratorViewModel(application: Application) : AndroidViewModel(appl
                 val marks = marksDoc.get("marks") as? Map<String, String> ?: emptyMap()
 
                 val reportData = ReportCardGenerator.ReportData(student, exam.name, marks, subjects)
-                val organizationName = FirebaseAuthManager.getOrganizationName(context) ?: "Madarsa"
-                val organizationAddress = ORG_ADDRESS_FULL
 
-                withContext(Dispatchers.IO) {
-                    reportCardGenerator.generateSingleReport(reportData, organizationName, organizationAddress)
-                }
+                // --- THIS IS THE CHANGE ---
+                // The generator now fetches the name and address itself
+                reportCardGenerator.generateSingleReport(reportData)
+                // --- END OF CHANGE ---
+
                 withContext(Dispatchers.Main) {
                     _generationStatus.value = Event(Pair(true, "Report Generated Successfully!"))
                 }
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating single student report", e)
                 withContext(Dispatchers.Main) {
@@ -99,16 +97,15 @@ class ResultGeneratorViewModel(application: Application) : AndroidViewModel(appl
                 val reportDataList = students.map { student ->
                     ReportCardGenerator.ReportData(student, exam.name, marksMap[student.id] ?: emptyMap(), subjects)
                 }
-                val organizationName = FirebaseAuthManager.getOrganizationName(context) ?: "Madarsa"
-                val organizationAddress = ORG_ADDRESS_FULL
 
-                withContext(Dispatchers.IO) {
-                    reportCardGenerator.generateBulkReport(reportDataList, organizationName, organizationAddress)
-                }
+                // --- THIS IS THE CHANGE ---
+                // The generator now fetches the name and address itself
+                reportCardGenerator.generateBulkReport(reportDataList)
+                // --- END OF CHANGE ---
+
                 withContext(Dispatchers.Main) {
                     _generationStatus.value = Event(Pair(true, "Bulk Report Generated!"))
                 }
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating class report", e)
                 withContext(Dispatchers.Main) {

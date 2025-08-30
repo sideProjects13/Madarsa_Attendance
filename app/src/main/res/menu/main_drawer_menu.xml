@@ -6,8 +6,6 @@
         android:id="@+id/nav_quick_attendance"
         android:icon="@drawable/ic_event_available"
         android:title="Take Attendance" />
-
-    <!-- Important Things - Dashboard and Leaderboard -->
     <item
         android:id="@+id/nav_dashboard"
         android:icon="@drawable/ic_dashboard"
@@ -28,6 +26,8 @@
             <item android:id="@+id/nav_move_student" android:title="Move Student to Class" />
             <item android:id="@+id/nav_view_monthly_attendance" android:title="View Monthly Attendance" />
             <item android:id="@+id/nav_manage_class" android:title="Class Management" />
+            <item android:id="@+id/nav_download_attendance_report" android:title="Attendance Report" />
+            <item android:id="@+id/nav_check_daily_attendance" android:title="Check Attendance by Date" />"
         </menu>
     </item>
 
@@ -83,6 +83,7 @@
             <item android:id="@+id/nav_generate_class_result" android:title="Generate Class Result" />
             <item android:id="@+id/nav_quick_add_subject" android:title="Add/Assign Subject" />
             <item android:id="@+id/nav_manage_subjects" android:title="Manage Teacher's Subjects" />
+            <item android:id="@+id/nav_download_marks_report" android:title="Download Marks Report"/>
         </menu>
     </item>
 
@@ -98,6 +99,7 @@
     <item android:title="Account" android:icon="@drawable/ic_account">
         <menu>
             <item android:id="@+id/nav_logout" android:title="Logout" />
+            <item android:id="@+id/nav_admin_profile" android:title="Admin Profile"/>
         </menu>
     </item>
 

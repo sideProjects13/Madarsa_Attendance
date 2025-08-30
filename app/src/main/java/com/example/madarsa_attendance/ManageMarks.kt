@@ -129,13 +129,15 @@ class ManageMarks : AppCompatActivity() {
         val reportData = ReportCardGenerator.ReportData(studentMarks.student, toolbar.title.toString(), studentMarks.marks, allSubjects)
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
-            val organizationName = FirebaseAuthManager.getOrganizationName(this@ManageMarks) ?: "Your Madarsa Name"
-            // --- CORRECTED: Simply call the function. It will show its own Toast. ---
-            reportCardGenerator.generateSingleReport(reportData, organizationName, "")
+            // --- THIS IS THE FIX ---
+            // The generator now fetches the name and address itself. No need to pass them.
+            reportCardGenerator.generateSingleReport(reportData)
+            // --- END OF FIX ---
             progressBar.visibility = View.GONE
         }
     }
 
+    // REPLACE THIS FUNCTION
     private fun generateBulkPdf() {
         if (allStudentMarks.isEmpty()) {
             Toast.makeText(this, "No data to generate report.", Toast.LENGTH_SHORT).show(); return
@@ -143,13 +145,13 @@ class ManageMarks : AppCompatActivity() {
         val reportDataList = allStudentMarks.map { ReportCardGenerator.ReportData(it.student, toolbar.title.toString(), it.marks, allSubjects) }
         lifecycleScope.launch {
             progressBar.visibility = View.VISIBLE
-            val organizationName = FirebaseAuthManager.getOrganizationName(this@ManageMarks) ?: "Your Madarsa Name"
-            // --- CORRECTED: Simply call the function. It will show its own Toast. ---
-            reportCardGenerator.generateBulkReport(reportDataList, organizationName, "")
+            // --- THIS IS THE FIX ---
+            // The generator now fetches the name and address itself. No need to pass them.
+            reportCardGenerator.generateBulkReport(reportDataList)
+            // --- END OF FIX ---
             progressBar.visibility = View.GONE
         }
     }
-
     private fun saveSingleStudentMarks(studentMark: StudentMarks) {
         if (currentOrganizationId == null) {
             StatusDialogFragment.newInstance(false, "Organization ID missing.").show(supportFragmentManager, "failureDialog")

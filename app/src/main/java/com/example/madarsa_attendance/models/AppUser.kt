@@ -6,5 +6,7 @@ data class AppUser(
     val role: String? = null,
     val email: String? = null,
     val name: String? = null,
-    val mobile: String? = null
+    val mobile: String? = null,
+    val organizationName: String? = null // <-- ADD THIS LINE
+
 )

@@ -1,13 +1,16 @@
-// src/main/java/com/example/madarsa_attendance/models/Organization.kt
-package com.example.madarsa_attendance.models // Note the 'models' subpackage
+package com.example.madarsa_attendance.models
 
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.FieldValue
 
 data class Organization(
-    val organizationId: String? = null,
     val organizationName: String? = null,
     val adminEmail: String? = null,
     val adminName: String? = null,
     val adminMobile: String? = null,
-    val createdAt: FieldValue? = null
+
+    @get:Exclude var createdAt: FieldValue? = null,
+
+    val address: String? = null,
+    val logoUrl: String? = null // Only one logo URL is needed now
 )

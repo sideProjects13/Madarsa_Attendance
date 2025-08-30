@@ -1,79 +1,70 @@
-    // src/main/java/com/example/madarsa_attendance/FirebaseAuthManager.kt
-    package com.example.madarsa_attendance
+package com.example.madarsa_attendance
 
-    import android.content.Context
-    import com.google.firebase.auth.FirebaseAuth
+import android.content.Context
+import android.content.Intent
+import com.google.firebase.auth.FirebaseAuth
 
-    object FirebaseAuthManager {
+object FirebaseAuthManager {
 
-        private const val PREFS_FILE = "app_prefs"
-        private const val KEY_ORGANIZATION_ID = "organization_id"
-        private const val KEY_ORGANIZATION_NAME = "organization_name"
+    private const val PREFS_NAME = "app_prefs"
+    private const val KEY_ORG_ID = "organization_id"
+    private const val KEY_ORG_NAME = "organization_name"
+    private const val KEY_ROLE = "user_role"
+    private const val KEY_ORG_LOGO_URL = "organization_logo_url"
+    private const val KEY_ORG_ADDRESS = "organization_address"
 
-        private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
 
-        /**
-         * Saves the current organization ID to SharedPreferences.
-         */
-        fun saveOrganizationId(context: Context, organizationId: String) {
-            val sharedPref = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-            with(sharedPref.edit()) {
-                putString(KEY_ORGANIZATION_ID, organizationId)
-                apply()
-            }
-        }
+    fun isLoggedInAndOrgSelected(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return auth.currentUser != null && prefs.contains(KEY_ORG_ID)
+    }
 
-        /**
-         * Retrieves the current organization ID from SharedPreferences.
-         */
-        fun getOrganizationId(context: Context): String? {
-            val sharedPref = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-            return sharedPref.getString(KEY_ORGANIZATION_ID, null)
-        }
-
-        /**
-         * Saves the current organization name to SharedPreferences.
-         */
-        fun saveOrganizationName(context: Context, organizationName: String) {
-            val sharedPref = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-            with(sharedPref.edit()) {
-                putString(KEY_ORGANIZATION_NAME, organizationName)
-                apply()
-            }
-        }
-
-        /**
-         * Retrieves the current organization name from SharedPreferences.
-         */
-        fun getOrganizationName(context: Context): String? {
-            val sharedPref = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-            return sharedPref.getString(KEY_ORGANIZATION_NAME, null)
-        }
-
-        /**
-         * Clears stored organization data and signs out the Firebase user.
-         */
-        fun logout(context: Context) {
-            val sharedPref = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-            with(sharedPref.edit()) {
-                remove(KEY_ORGANIZATION_ID)
-                remove(KEY_ORGANIZATION_NAME)
-                apply()
-            }
-            auth.signOut()
-        }
-
-        /**
-         * Checks if a user is currently logged in AND an organization ID is stored.
-         */
-        fun isLoggedInAndOrgSelected(context: Context): Boolean {
-            return auth.currentUser != null && getOrganizationId(context) != null
-        }
-
-        /**
-         * Returns the current Firebase Auth user ID.
-         */
-        fun getCurrentUserId(): String? {
-            return auth.currentUser?.uid
+    fun saveLoginSession(
+        context: Context,
+        role: String,
+        orgId: String,
+        orgName: String,
+        activeLogoUrl: String?,
+        address: String?
+    ) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        with(prefs.edit()) {
+            putString(KEY_ROLE, role)
+            putString(KEY_ORG_ID, orgId)
+            putString(KEY_ORG_NAME, orgName)
+            putString(KEY_ORG_LOGO_URL, activeLogoUrl)
+            putString(KEY_ORG_ADDRESS, address)
+            // --- THE FIX ---
+            // commit() is synchronous and guarantees the data is saved before the code continues.
+            commit()
         }
     }
+
+    fun logout(context: Context) {
+        auth.signOut()
+        // It's good practice to use commit() here as well for consistency.
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+        val intent = Intent(context, LoginActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        context.startActivity(intent)
+    }
+
+    fun getOrganizationId(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_ORG_ID, null)
+
+    fun getOrganizationName(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_ORG_NAME, "My Madarsa")
+
+    fun getOrganizationLogoUrl(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_ORG_LOGO_URL, null)
+
+    fun getOrganizationAddress(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_ORG_ADDRESS, "Address not set")
+
+    fun getUserRole(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_ROLE, null)
+}

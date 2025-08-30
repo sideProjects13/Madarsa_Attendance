@@ -5,7 +5,9 @@ import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -18,51 +20,47 @@ class FeesReportGenerator(private val context: Context, private val db: Firebase
         teacherId: String,
         teacherName: String,
         organizationId: String,
-        reportType: String, // "Monthly" or "Yearly"
+        reportType: String,
         year: Int,
-        month: Int? = null // 0-indexed for monthly
+        month: Int? = null
     ): Uri? {
-        if (teacherId.isBlank() || organizationId.isBlank()) {
-            Toast.makeText(context, "Error: Missing teacher or organization info for report.", Toast.LENGTH_SHORT).show()
+        if (organizationId.isBlank()) {
+            Log.e(TAG, "Organization ID is blank.")
             return null
         }
-
         try {
-            val reportData: List<StudentPaymentSummaryItem> = if (reportType == "Monthly" && month != null) {
+            val reportData = if (reportType == "Monthly" && month != null) {
                 fetchReportDataForMonth(teacherId, organizationId, year, month)
             } else {
                 fetchReportDataForYear(teacherId, organizationId, year)
             }
 
             if (reportData.isEmpty()) {
-                Toast.makeText(context, "No payment data found for the selected period for ${teacherName}.", Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "No payment data found for the selected period.", Toast.LENGTH_LONG).show()
+                }
                 return null
             }
 
-            val madarsaName = FirebaseAuthManager.getOrganizationName(context) ?: "Madarsa Aaisha Siddiqa Taalimul Quran"
+            val madarsaName = FirebaseAuthManager.getOrganizationName(context) ?: "Madarsa Report"
+            val madarsaAddress = FirebaseAuthManager.getOrganizationAddress(context) ?: ""
+            val logoBitmap = LogoProvider.getActiveLogo(context)
 
             return if (reportType == "Monthly" && month != null) {
                 PdfGenerator.createMonthlyReportPdf(
-                    context,
-                    madarsaName,
-                    teacherName,
-                    year,
-                    month,
-                    reportData
+                    context, madarsaName, madarsaAddress, teacherName, year, month, reportData, logoBitmap
                 )
             } else {
                 PdfGenerator.createYearlyReportPdf(
-                    context,
-                    madarsaName,
-                    teacherName,
-                    year,
-                    reportData
+                    context, madarsaName, madarsaAddress, teacherName, year, reportData, logoBitmap
                 )
             }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error generating fee report: ", e)
-            Toast.makeText(context, "Error generating fee report: ${e.message}", Toast.LENGTH_SHORT).show()
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Error generating fee report: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
             return null
         }
     }
@@ -80,11 +78,8 @@ class FeesReportGenerator(private val context: Context, private val db: Firebase
 
         studentsSnapshot.forEach { doc ->
             val studentId = doc.id
-            studentDetailsMap[studentId] = StudentDetailsItem(
-                id = studentId, studentName = doc.getString("studentName") ?: "N/A",
-                parentName = doc.getString("parentName"), parentMobileNumber = doc.getString("parentMobileNumber"),
-                profileImageUrl = doc.getString("profileImageUrl")
-            )
+            val student = doc.toObject(StudentDetailsItem::class.java)
+            studentDetailsMap[studentId] = student
             studentMonthlyPaymentDetails[studentId] = Pair(0.0, 0)
         }
 
@@ -131,11 +126,8 @@ class FeesReportGenerator(private val context: Context, private val db: Firebase
 
         studentsSnapshot.forEach { doc ->
             val studentId = doc.id
-            studentDetailsMap[studentId] = StudentDetailsItem(
-                id = studentId, studentName = doc.getString("studentName") ?: "N/A",
-                parentName = doc.getString("parentName"), parentMobileNumber = doc.getString("parentMobileNumber"),
-                profileImageUrl = doc.getString("profileImageUrl")
-            )
+            val student = doc.toObject(StudentDetailsItem::class.java)
+            studentDetailsMap[studentId] = student
             studentYearlyPaymentDetails[studentId] = Pair(0.0, 0)
         }
 

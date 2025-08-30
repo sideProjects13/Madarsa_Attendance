@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.fragment.app.DialogFragment
+import androidx.lifecycle.Lifecycle
 import com.airbnb.lottie.LottieAnimationView
 
 class StatusDialogFragment : DialogFragment() {
@@ -29,7 +30,8 @@ class StatusDialogFragment : DialogFragment() {
             }
             return StatusDialogFragment().apply {
                 arguments = args
-                isCancelable = false // Prevent user from dismissing failure dialogs accidentally
+                // Default to not cancelable; we'll change it for failure cases.
+                isCancelable = false
             }
         }
     }
@@ -55,23 +57,44 @@ class StatusDialogFragment : DialogFragment() {
 
         if (isSuccess) {
             lottieView.setAnimation(R.raw.lottie_success)
-            // For success, automatically dismiss after a delay and finish the activity if requested
+
+            // --- THIS IS THE NEW LOGIC ---
+            // Allow the user to dismiss success dialogs by tapping anywhere.
+            view.setOnClickListener {
+                safeDismiss(shouldFinishActivity)
+            }
+            // --- END OF NEW LOGIC ---
+
+            // Auto-dismiss after a delay as a fallback.
             Handler(Looper.getMainLooper()).postDelayed({
-                dismiss()
-                if (shouldFinishActivity) {
-                    activity?.finish()
-                }
-            }, 2200) // 2.2 seconds delay
+                safeDismiss(shouldFinishActivity)
+            }, 2200)
+
         } else {
             lottieView.setAnimation(R.raw.lottie_failure)
-            // For failure, allow the user to dismiss it by tapping outside
+            // For failure, also allow dismissing by tapping.
             isCancelable = true
+            view.setOnClickListener {
+                safeDismiss(false) // Never finish activity on failure dismiss
+            }
+        }
+    }
+
+    /**
+     * A lifecycle-aware function to safely dismiss the dialog.
+     */
+    private fun safeDismiss(shouldFinishActivity: Boolean) {
+        // Check if the fragment is still attached and in a valid state to prevent crashes.
+        if (isAdded && viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            dismissAllowingStateLoss()
+            if (shouldFinishActivity) {
+                activity?.finish()
+            }
         }
     }
 
     override fun onStart() {
         super.onStart()
-        // Make the dialog background transparent to show our rounded corners
         dialog?.window?.setBackgroundDrawableResource(android.R.color.transparent)
     }
 }
