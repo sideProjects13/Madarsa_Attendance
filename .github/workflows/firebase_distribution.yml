@@ -10,9 +10,6 @@ Latest Version Name:         versionName = 2.1.0"```
 
 ### Your Final, Corrected GitHub Actions Workflow File
 
-  **File Location:** `.github/workflows/your-workflow-name.yml`
-  
-  ```yaml
 name: Build and Distribute to Firebase
 
 on:
