@@ -103,6 +103,7 @@ jobs:
           echo "Version Code: $LATEST_VERSION_CODE | Version Name: $LATEST_VERSION_NAME"
 
           echo "Step 5: Creating temporary config file..."
+          # The firebase deploy command for remote config expects a file named remoteconfig.template.json
           jq -n \
             --arg code "$LATEST_VERSION_CODE" \
             --arg name "$LATEST_VERSION_NAME" \
@@ -115,12 +116,11 @@ jobs:
                 "update_notes": {"defaultValue": {"value": $notes}},
                 "update_url": {"defaultValue": {"value": $url}}
               }
-            }' > temp_config.json
-          
+            }' > remoteconfig.template.json
+
           # Step 6: Publish the config to Firebase. THIS IS THE CORRECTED COMMAND.
-          # It does not need --force or -f when running in a non-interactive CI environment.
           echo "Step 6: Publishing updated configuration to Firebase Remote Config..."
-          firebase remoteconfig:publish temp_config.json --project ${{ secrets.FIREBASE_PROJECT_ID }}
+          firebase deploy --only remoteconfig --project ${{ secrets.FIREBASE_PROJECT_ID }}
 
           if [ $? -ne 0 ]; then
             echo "::error::Failed to publish new version to Remote Config. The app was distributed, but the in-app prompt will not work."
