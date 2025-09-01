@@ -1,0 +1,3 @@
+- Added Dark Mode theme!
+- Fixed a bug on the dashboard.
+- Improved attendance saving performance.

@@ -3,7 +3,6 @@ package com.example.madarsa_attendance
 import android.app.DatePickerDialog
 import android.os.Bundle
 import android.util.Log
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,14 +10,25 @@ import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.lifecycle.Lifecycle
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.madarsa_attendance.AppDatabase
+import com.example.madarsa_attendance.LocalAttendanceRecord
+import com.example.madarsa_attendance.worker.SyncAttendanceWorker
 import com.google.android.material.button.MaterialButton
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -43,34 +53,24 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     // Views
-    private var _tvClassName: TextView? = null
-    private val tvClassName get() = _tvClassName!!
-    private var _tvAttendanceDate: TextView? = null
-    private val tvAttendanceDate get() = _tvAttendanceDate!!
-    private var _btnChangeDate: ImageButton? = null
-    private val btnChangeDate get() = _btnChangeDate!!
-    private var _recyclerViewStudents: RecyclerView? = null
-    private val recyclerViewStudents get() = _recyclerViewStudents!!
-    private var _studentAdapter: StudentAttendanceAdapter? = null
-    private val studentAdapter get() = _studentAdapter!!
-    private var _btnSaveAttendance: MaterialButton? = null
-    private val btnSaveAttendance get() = _btnSaveAttendance!!
-    private var _progressBar: ProgressBar? = null
-    private val progressBar get() = _progressBar!!
-    private var _tvNoStudents: TextView? = null
-    private val tvNoStudents get() = _tvNoStudents!!
-    private var _swipeRefreshLayout: SwipeRefreshLayout? = null
-    private val swipeRefreshLayout get() = _swipeRefreshLayout!!
+    private lateinit var tvClassName: TextView
+    private lateinit var tvAttendanceDate: TextView
+    private lateinit var btnChangeDate: ImageButton
+    private lateinit var recyclerViewStudents: RecyclerView
+    private lateinit var studentAdapter: StudentAttendanceAdapter
+    private lateinit var btnSaveAttendance: MaterialButton
+    private lateinit var progressBar: ProgressBar
+    private lateinit var tvNoStudents: TextView
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
 
     // Backend & Data
-    private lateinit var db: FirebaseFirestore
+    private lateinit var onlineDb: FirebaseFirestore
+    private lateinit var localDb: AppDatabase
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
     private var currentOrganizationId: String? = null
 
     private lateinit var dateForAttendance: String
-    private var existingAttendanceDocId: String? = null
-    private var isAttendanceDataLoadedForCurrentDate = false
     private lateinit var teacherDataViewModel: TeacherDataViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,7 +79,8 @@ class TakeAttendanceFragment : Fragment() {
             currentTeacherId = it.getString(ARG_TEACHER_ID_TAF)
             currentTeacherName = it.getString(ARG_TEACHER_NAME_TAF)
         }
-        db = FirebaseFirestore.getInstance()
+        onlineDb = FirebaseFirestore.getInstance()
+        localDb = AppDatabase.getDatabase(requireContext())
         dateForAttendance = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         teacherDataViewModel = ViewModelProvider(requireActivity()).get(TeacherDataViewModel::class.java)
         currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext())
@@ -90,14 +91,15 @@ class TakeAttendanceFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_take_attendance, container, false)
-        _tvClassName = view.findViewById(R.id.tvClassNameAttendance)
-        _tvAttendanceDate = view.findViewById(R.id.tvAttendanceDate)
-        _btnChangeDate = view.findViewById(R.id.btnChangeDate )
-        _recyclerViewStudents = view.findViewById(R.id.recyclerViewStudentsAttendance)
-        _btnSaveAttendance = view.findViewById(R.id.btnSaveAttendance)
-        _progressBar = view.findViewById(R.id.progressBarTakeAttendance)
-        _tvNoStudents = view.findViewById(R.id.tvNoStudentsForAttendance)
-        _swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout_attendance)
+        // Initialize views
+        tvClassName = view.findViewById(R.id.tvClassNameAttendance)
+        tvAttendanceDate = view.findViewById(R.id.tvAttendanceDate)
+        btnChangeDate = view.findViewById(R.id.btnChangeDate)
+        recyclerViewStudents = view.findViewById(R.id.recyclerViewStudentsAttendance)
+        btnSaveAttendance = view.findViewById(R.id.btnSaveAttendance)
+        progressBar = view.findViewById(R.id.progressBarTakeAttendance)
+        tvNoStudents = view.findViewById(R.id.tvNoStudentsForAttendance)
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout_attendance)
         return view
     }
 
@@ -105,8 +107,6 @@ class TakeAttendanceFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         if (currentTeacherId == null || currentOrganizationId == null) {
             Toast.makeText(context, "Teacher or Organization info missing.", Toast.LENGTH_LONG).show()
-            btnChangeDate.isEnabled = false
-            btnSaveAttendance.isEnabled = false
             return
         }
         tvClassName.text = "Class: ${currentTeacherName ?: "Unknown"}"
@@ -114,212 +114,172 @@ class TakeAttendanceFragment : Fragment() {
         setupRecyclerView()
         setupSwipeToRefresh()
         btnChangeDate.setOnClickListener { showDatePicker() }
-        btnSaveAttendance.setOnClickListener { saveAttendance() }
+        btnSaveAttendance.setOnClickListener { saveAttendanceLocally() } // Call the corrected local save function
 
         teacherDataViewModel.studentsDataMightHaveChanged.observe(viewLifecycleOwner) { event ->
             event.getContentIfNotHandled()?.let {
-                isAttendanceDataLoadedForCurrentDate = false
-                if (currentTeacherId != null) loadStudentsAndCheckExistingAttendance()
+                loadData()
             }
         }
-        if (!isAttendanceDataLoadedForCurrentDate) {
-            loadStudentsAndCheckExistingAttendance()
-        }
+        loadData()
     }
 
     private fun setupRecyclerView() {
-        if (!isAdded || context == null) return
-        _studentAdapter = StudentAttendanceAdapter(mutableListOf()) { _, _ -> }
+        studentAdapter = StudentAttendanceAdapter(mutableListOf()) { _, _ -> }
         recyclerViewStudents.layoutManager = LinearLayoutManager(context)
         recyclerViewStudents.adapter = studentAdapter
     }
 
-    private fun loadStudentsAndCheckExistingAttendance() {
-        if (currentTeacherId == null || currentOrganizationId == null || !isAdded) {
-            swipeRefreshLayout.isRefreshing = false
-            Log.w(TAG, "loadStudentsAndCheckExistingAttendance skipped: Teacher or Org ID missing, or fragment not added.")
-            return
-        }
+    private fun loadData() {
+        lifecycleScope.launch {
+            if (!swipeRefreshLayout.isRefreshing) progressBar.visibility = View.VISIBLE
+            tvNoStudents.visibility = View.GONE
+            recyclerViewStudents.visibility = View.GONE
+            btnSaveAttendance.isEnabled = false
 
-        if (!swipeRefreshLayout.isRefreshing) {
-            progressBar.visibility = View.VISIBLE
-        }
-        tvNoStudents.visibility = View.GONE
-        recyclerViewStudents.visibility = View.GONE
-        btnSaveAttendance.isEnabled = false
+            // 1. Try to load today's attendance from the local database
+            val localRecord = withContext(Dispatchers.IO) {
+                localDb.attendanceDao().getAttendanceForDate(dateForAttendance, currentTeacherId!!)
+            }
 
-        db.collection("organizations").document(currentOrganizationId!!)
-            .collection("attendanceRecords")
-            .whereEqualTo("teacherId", currentTeacherId)
-            .whereEqualTo("date", dateForAttendance).limit(1).get()
-            .addOnSuccessListener { attendanceSnapshot ->
-                if (!isAdded) return@addOnSuccessListener
-                val statuses = mutableMapOf<String, String>()
-                if (!attendanceSnapshot.isEmpty) {
-                    existingAttendanceDocId = attendanceSnapshot.documents[0].id
-                    (attendanceSnapshot.documents[0].get("studentAttendances") as? List<Map<String, Any>>)?.forEach {
-                        val sId = it["studentId"] as? String
-                        val st = it["status"] as? String
-                        if (sId != null && st != null) statuses[sId] = st
-                    }
-                } else {
-                    existingAttendanceDocId = null
-                }
-                fetchStudentsForClass(statuses)
+            if (localRecord != null) {
+                // If found locally, display it immediately
+                val studentList = Gson().fromJson(localRecord.studentAttendancesJson, Array<StudentAttendanceItem>::class.java).toList()
+                studentAdapter.submitList(studentList)
+                updateUiWithStudentList()
+                Log.d(TAG, "Loaded attendance from local DB for $dateForAttendance")
+            } else {
+                // 2. If not found locally, fetch the student list from Firestore
+                fetchStudentsForClassFromFirestore()
             }
-            .addOnFailureListener { e ->
-                if (!isAdded) return@addOnFailureListener
-                Log.e(TAG, "Error checking existing attendance: ", e)
-                Toast.makeText(context, "Could not check prior attendance. Marking fresh.", Toast.LENGTH_SHORT).show()
-                fetchStudentsForClass(mutableMapOf())
-            }
+        }
     }
 
-    private fun fetchStudentsForClass(statuses: Map<String, String>) {
-        if (currentTeacherId == null || currentOrganizationId == null || !isAdded) {
-            progressBar.visibility = View.GONE
-            swipeRefreshLayout.isRefreshing = false
-            Log.w(TAG, "fetchStudentsForClass skipped: Teacher or Org ID missing, or fragment not added.")
-            return
-        }
-        Log.d(TAG, "Fetching students for class: $currentTeacherId for attendance list in Org ID: $currentOrganizationId")
-
-        db.collection("organizations").document(currentOrganizationId!!)
+    private fun fetchStudentsForClassFromFirestore() {
+        Log.d(TAG, "No local record found. Fetching student roster from Firestore.")
+        onlineDb.collection("organizations").document(currentOrganizationId!!)
             .collection("students").whereEqualTo("teacherId", currentTeacherId)
             .whereEqualTo("isActive", true)
-            .orderBy("studentName", com.google.firebase.firestore.Query.Direction.ASCENDING).get()
+            .orderBy("studentName")
+            .get()
             .addOnSuccessListener { studentSnap ->
                 if (!isAdded) return@addOnSuccessListener
-                progressBar.visibility = View.GONE
-                swipeRefreshLayout.isRefreshing = false
-
-                val list = mutableListOf<StudentAttendanceItem>()
-                if (!studentSnap.isEmpty) {
-                    studentSnap.documents.forEach { doc ->
-                        val sId = doc.id
-                        val name = doc.getString("studentName") ?: "N/A"
-                        val imageUrl = doc.getString("profileImageUrl")
-                        list.add(StudentAttendanceItem(sId, name, statuses[sId] ?: "Present", imageUrl))
-                    }
-                    studentAdapter.submitList(list)
-                    recyclerViewStudents.visibility = View.VISIBLE
-                    tvNoStudents.visibility = View.GONE
-                    btnSaveAttendance.isEnabled = true
-                } else {
-                    tvNoStudents.text = getString(R.string.no_students_in_class)
-                    tvNoStudents.visibility = View.VISIBLE
-                    recyclerViewStudents.visibility = View.GONE
-                    btnSaveAttendance.isEnabled = false
-                    studentAdapter.submitList(emptyList())
+                val list = studentSnap.documents.map { doc ->
+                    StudentAttendanceItem(
+                        id = doc.id,
+                        name = doc.getString("studentName") ?: "N/A",
+                        status = "Present", // Default to present for a new list
+                        profileImageUrl = doc.getString("profileImageUrl")
+                    )
                 }
-                isAttendanceDataLoadedForCurrentDate = true
+                studentAdapter.submitList(list)
+                updateUiWithStudentList()
             }
             .addOnFailureListener { e ->
                 if (!isAdded) return@addOnFailureListener
                 progressBar.visibility = View.GONE
                 swipeRefreshLayout.isRefreshing = false
-                isAttendanceDataLoadedForCurrentDate = false
-                tvNoStudents.apply { text = "Error loading students."; visibility = View.VISIBLE }
-                btnSaveAttendance.isEnabled = false
-                Log.e(TAG, "Error fetching students for attendance list in Org ID: $currentOrganizationId", e)
+                tvNoStudents.text = "Error loading students. Check internet connection."
+                tvNoStudents.visibility = View.VISIBLE
+                Log.e(TAG, "Error fetching students for attendance", e)
             }
     }
 
-    private fun saveAttendance() {
-        if (currentTeacherId == null || currentOrganizationId == null || !isAdded) return
-        val data = studentAdapter.getAttendanceData()
-        if (data.isEmpty()) {
-            Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show(); return
+    private fun updateUiWithStudentList() {
+        progressBar.visibility = View.GONE
+        swipeRefreshLayout.isRefreshing = false
+        if (studentAdapter.itemCount > 0) {
+            recyclerViewStudents.visibility = View.VISIBLE
+            tvNoStudents.visibility = View.GONE
+            btnSaveAttendance.isEnabled = true
+        } else {
+            recyclerViewStudents.visibility = View.GONE
+            tvNoStudents.text = getString(R.string.no_students_in_class)
+            tvNoStudents.visibility = View.VISIBLE
+            btnSaveAttendance.isEnabled = false
         }
+    }
+
+    private fun saveAttendanceLocally() {
+        val attendanceData = studentAdapter.getAttendanceData()
+        if (attendanceData.isEmpty()) {
+            Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 1. Show the spinner immediately on the UI thread
         progressBar.visibility = View.VISIBLE
         btnSaveAttendance.isEnabled = false
 
-        val attData = data.map { studentItem ->
-            mapOf(
-                "studentId" to studentItem.id,
-                "studentName" to studentItem.name,
-                "status" to studentItem.status
-            )
-        }
-        val record = mapOf(
-            "date" to dateForAttendance,
-            "teacherId" to currentTeacherId!!,
-            "teacherName" to (currentTeacherName ?: "?"),
-            "studentAttendances" to attData,
-            "lastUpdatedAt" to FieldValue.serverTimestamp()
+        // Create the record object on the main thread (this is very fast)
+        val record = LocalAttendanceRecord(
+            date = dateForAttendance,
+            teacherId = currentTeacherId!!,
+            teacherName = currentTeacherName ?: "?",
+            organizationId = currentOrganizationId!!,
+            studentAttendancesJson = Gson().toJson(attendanceData),
+            isSynced = false
         )
 
-        val attendanceRecordsCollectionRef = db.collection("organizations").document(currentOrganizationId!!)
-            .collection("attendanceRecords")
+        // 2. Launch a coroutine to do the database work
+        lifecycleScope.launch {
+            // 3. Switch to a background thread ONLY for the database write
+            withContext(Dispatchers.IO) {
+                localDb.attendanceDao().upsertAttendance(record)
+            }
 
-        val task = if (existingAttendanceDocId != null) {
-            attendanceRecordsCollectionRef.document(existingAttendanceDocId!!).set(record)
-        } else {
-            attendanceRecordsCollectionRef.add(record)
-        }
+            // 4. Once the save is complete, the code below runs back on the main thread
+            if (!isAdded) return@launch // Safety check
 
-        task.addOnSuccessListener {
-            if (!isAdded) return@addOnSuccessListener
+            // 5. Hide the spinner and show success message IMMEDIATELY
             progressBar.visibility = View.GONE
             btnSaveAttendance.isEnabled = true
-            StatusDialogFragment.newInstance(true, "Attendance Saved!").show(parentFragmentManager, "successDialog")
-        }.addOnFailureListener { e ->
-            if (!isAdded) return@addOnFailureListener
-            progressBar.visibility = View.GONE
-            btnSaveAttendance.isEnabled = true
-            StatusDialogFragment.newInstance(false, "Failed to Save").show(parentFragmentManager, "failureDialog")
-            Log.e(TAG, "Error saving attendance", e)
+            StatusDialogFragment.newInstance(true, "Attendance Saved Locally!").show(parentFragmentManager, "successDialog")
+
+            // 6. Schedule the background sync as the very last step.
+            scheduleSync()
         }
     }
 
-    // --- Helper functions (unchanged) ---
-    override fun onResume() {
-        super.onResume()
-        if (currentTeacherId != null && currentOrganizationId != null && !isAttendanceDataLoadedForCurrentDate && isFragmentVisibleToUser) {
-            loadStudentsAndCheckExistingAttendance()
-        }
-    }
+    private fun scheduleSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
 
-    private val isFragmentVisibleToUser: Boolean
-        get() = viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        val syncWorkRequest = OneTimeWorkRequestBuilder<SyncAttendanceWorker>()
+            .setConstraints(constraints)
+            .build()
 
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _tvClassName = null; _tvAttendanceDate = null; _btnChangeDate = null
-        _recyclerViewStudents = null; _studentAdapter = null; _btnSaveAttendance = null
-        _progressBar = null; _tvNoStudents = null
-        _swipeRefreshLayout?.setOnRefreshListener(null)
-        _swipeRefreshLayout = null
+        WorkManager.getInstance(requireContext()).enqueue(syncWorkRequest)
+        Log.d(TAG, "Sync work request enqueued.")
     }
 
     private fun setupSwipeToRefresh() {
         swipeRefreshLayout.setOnRefreshListener {
-            Log.d(TAG, "Swipe to refresh triggered for attendance.")
-            isAttendanceDataLoadedForCurrentDate = false
-            loadStudentsAndCheckExistingAttendance()
+            Log.d(TAG, "Swipe to refresh triggered.")
+            // Force a fresh fetch from online to get the latest student list
+            fetchStudentsForClassFromFirestore()
         }
     }
 
     private fun updateDateDisplay() {
-        tvAttendanceDate.text = "Date: ${SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateForAttendance) ?: Date())}"
+        tvAttendanceDate.text = try {
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateForAttendance) ?: Date()
+            "Date: ${SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(date)}"
+        } catch (e: Exception) { "Date: $dateForAttendance" }
     }
 
     private fun showDatePicker() {
-        if (!isAdded || context == null || currentOrganizationId == null) return
         val calendar = Calendar.getInstance()
         try {
             SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateForAttendance)?.let { calendar.time = it }
-        } catch (e: Exception) { Log.e(TAG, "Error parsing date $dateForAttendance", e) }
+        } catch (e: Exception) { Log.e(TAG, "Error parsing date", e) }
 
         DatePickerDialog(requireContext(), R.style.DatePickerDialog_App_Monochrome,
             { _, year, month, dayOfMonth ->
-                val newSelectedDate = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month + 1, dayOfMonth)
-                if (newSelectedDate != dateForAttendance) {
-                    dateForAttendance = newSelectedDate
-                    updateDateDisplay()
-                    isAttendanceDataLoadedForCurrentDate = false
-                    loadStudentsAndCheckExistingAttendance()
-                }
+                dateForAttendance = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month + 1, dayOfMonth)
+                updateDateDisplay()
+                loadData()
             },
             calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)
         ).show()

@@ -11,18 +11,15 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.WriteBatch
-import com.google.firebase.firestore.DocumentSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class BulkAddStudentsActivity : AppCompatActivity() {
 
@@ -46,7 +43,7 @@ class BulkAddStudentsActivity : AppCompatActivity() {
         currentTeacherId = intent.getStringExtra("TEACHER_ID")
         currentTeacherName = intent.getStringExtra("TEACHER_NAME")
         currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
-        csvFileUri = intent.getStringExtra("CSV_FILE_URI")?.let { Uri.parse(it) }
+        csvFileUri = intent.data
 
         progressBar = findViewById(R.id.progressBarBulkAdd)
         tvStatus = findViewById(R.id.tvBulkAddStatus)
@@ -78,6 +75,7 @@ class BulkAddStudentsActivity : AppCompatActivity() {
             var finalMessage: String
             var successCount = 0
             var failureCount: Int
+            var combinedFailureDetails = listOf<String>()
 
             try {
                 val existingRegNos = withContext(Dispatchers.IO) {
@@ -87,46 +85,44 @@ class BulkAddStudentsActivity : AppCompatActivity() {
                     parseCsvFile(csvFileUri!!, existingRegNos)
                 }
 
+                combinedFailureDetails = parseFailures
+                failureCount = combinedFailureDetails.size
+
                 if (parsedStudents.isEmpty()) {
-                    failureCount = parseFailures.size
-                    finalMessage = if (failureCount > 0) "Import Failed. All records had parsing errors." else "No valid new students found in the file."
                     isSuccess = false
+                    finalMessage = "Import Failed. No valid new students found to import."
                 } else {
                     tvStatus.text = "Found ${parsedStudents.size} valid students. Saving to database..."
                     val (firestoreSuccessCount, firestoreFailures) = saveStudentsToFirestore(parsedStudents)
-                    val combinedFailureDetails = parseFailures + firestoreFailures
 
                     successCount = firestoreSuccessCount
+                    combinedFailureDetails = parseFailures + firestoreFailures
                     failureCount = combinedFailureDetails.size
 
-                    if (successCount > 0) {
-                        isSuccess = true
-                        finalMessage = "Import Complete!\nSuccess: $successCount, Failed: $failureCount"
-                    } else {
-                        isSuccess = false
-                        finalMessage = "Import Failed.\nAll ${failureCount} records had errors."
-                    }
-
-                    if (combinedFailureDetails.isNotEmpty()) {
-                        Log.e(TAG, "--- IMPORT FAILURES ---")
-                        combinedFailureDetails.forEach { Log.e(TAG, " - $it") }
-                    }
+                    isSuccess = successCount > 0
+                    finalMessage = "Import Complete!\nSuccess: $successCount, Failed: $failureCount"
                 }
+
             } catch (e: Exception) {
                 isSuccess = false
-                finalMessage = "A critical error occurred during import."
+                finalMessage = "A critical error occurred: ${e.message}"
                 Log.e(TAG, "Critical error during bulk import", e)
-                failureCount = -1 // Indicate a catastrophic failure
+                failureCount = -1
             }
 
-            // Show the final result dialog
             withContext(Dispatchers.Main) {
                 progressBar.visibility = View.GONE
-                tvStatus.text = finalMessage // Update the text view with the final status
 
+                // Build the detailed error message for the dialog
+                if (combinedFailureDetails.isNotEmpty()) {
+                    val errorDetails = combinedFailureDetails.joinToString("\n")
+                    finalMessage += "\n\nError Details:\n$errorDetails"
+                    Log.e(TAG, "--- IMPORT FAILURES ---\n$errorDetails")
+                }
+
+                tvStatus.text = "Import Finished. See dialog for results."
                 val resultIntent = Intent().apply {
                     putExtra("SUCCESS_COUNT", successCount)
-                    putExtra("FAILURE_COUNT", if (failureCount != -1) failureCount else 0)
                 }
                 setResult(Activity.RESULT_OK, resultIntent)
 
@@ -139,71 +135,85 @@ class BulkAddStudentsActivity : AppCompatActivity() {
         }
     }
 
-
     private suspend fun fetchExistingRegistrationNumbers(orgId: String): Set<String> {
         return try {
             val snapshot = db.collection("organizations").document(orgId).collection("students").get().await()
-            snapshot.documents.mapNotNull { it.getString("regNo") }.toSet()
+            snapshot.documents.mapNotNull { it.getString("regNo")?.trim() }.toSet()
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch registration numbers", e)
             emptySet()
         }
     }
 
+    // Helper to handle inconsistent CSV parsing for lines with commas inside quotes
     private fun parseCsvLine(line: String): List<String> {
-        val result = mutableListOf<String>()
-        val sb = StringBuilder()
-        var inQuotes = false
-        for (char in line) {
-            when {
-                char == '"' -> inQuotes = !inQuotes
-                char == ',' && !inQuotes -> {
-                    result.add(sb.toString())
-                    sb.clear()
-                }
-                else -> sb.append(char)
-            }
-        }
-        result.add(sb.toString())
-        return result
+        // This is a simple parser. For very complex CSVs, a more robust library might be needed.
+        return line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex())
+            .map { it.trim().removeSurrounding("\"") }
     }
 
     private fun parseCsvFile(uri: Uri, existingRegNos: Set<String>): Pair<List<StudentDetailsItem>, List<String>> {
         val students = mutableListOf<StudentDetailsItem>()
         val failures = mutableListOf<String>()
         val seenRegNosInThisBatch = mutableSetOf<String>()
-        var lineNumber = 1
+        var lineNumber = 1 // Start at 1 for the header line
 
         try {
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 BufferedReader(InputStreamReader(inputStream)).use { reader ->
-                    reader.readLine() // Skip header
+                    reader.readLine() // Skip header line
                     var line: String?
                     while (reader.readLine().also { line = it } != null) {
                         lineNumber++
                         if (line.isNullOrBlank()) continue
 
-                        val columns = parseCsvLine(line!!).map { it.trim() }
+                        val columns = parseCsvLine(line!!)
 
-                        if (columns.size < 8) {
-                            failures.add("Line $lineNumber: Not enough columns.")
-                            continue
+                        // --- START: DETAILED VALIDATION ---
+                        val studentName = columns.getOrNull(0)?.trim()
+                        val parentName = columns.getOrNull(1)?.trim()
+                        val parentMobile = columns.getOrNull(2)?.trim()
+                        val regNo = columns.getOrNull(3)?.trim()
+
+                        val validationErrors = mutableListOf<String>()
+
+                        if (studentName.isNullOrBlank()) validationErrors.add("Student Name is missing")
+                        if (parentName.isNullOrBlank()) validationErrors.add("Parent Name is missing")
+                        if (parentMobile.isNullOrBlank()) validationErrors.add("Parent Mobile Number is missing")
+
+                        if (regNo.isNullOrBlank()) {
+                            validationErrors.add("Registration Number is missing")
+                        } else {
+                            if (existingRegNos.contains(regNo)) {
+                                validationErrors.add("Reg No '$regNo' already exists in database")
+                            }
+                            if (seenRegNosInThisBatch.contains(regNo)) {
+                                validationErrors.add("Duplicate Reg No '$regNo' in this file")
+                            }
                         }
 
-                        val regNo = columns[3]
-                        if (regNo.isBlank() || existingRegNos.contains(regNo) || seenRegNosInThisBatch.contains(regNo)) {
-                            failures.add("Line $lineNumber: Invalid/duplicate Reg No '$regNo'.")
-                            continue
+                        if (validationErrors.isNotEmpty()) {
+                            val errorPrefix = "Line $lineNumber (Name: '${studentName ?: "N/A"}', Reg: '${regNo ?: "N/A"}')"
+                            failures.add("$errorPrefix: ${validationErrors.joinToString(", ")}.")
+                            continue // Skip this record
                         }
-                        seenRegNosInThisBatch.add(regNo)
+                        // --- END: DETAILED VALIDATION ---
+
+                        seenRegNosInThisBatch.add(regNo!!) // Add valid Reg No to check for duplicates within the file
 
                         students.add(
                             StudentDetailsItem(
-                                studentName = columns[0], parentName = columns[1], parentMobileNumber = columns[2],
-                                regNo = regNo, gender = columns[4], birthDate = columns[5], admissionDate = columns[6],
-                                monthlyFee = columns[7].toDoubleOrNull() ?: 0.0,
-                                alternateMobileNumber = columns.getOrNull(8)?.ifEmpty { null },
-                                address = columns.getOrNull(9)?.ifEmpty { null },
-                                profileImageUrl = columns.getOrNull(10)?.ifEmpty { null },
+                                studentName = studentName!!,
+                                parentName = parentName!!,
+                                parentMobileNumber = parentMobile!!,
+                                regNo = regNo,
+                                gender = columns.getOrNull(4)?.trim() ?: "",
+                                birthDate = columns.getOrNull(5)?.trim() ?: "",
+                                admissionDate = columns.getOrNull(6)?.trim() ?: "",
+                                monthlyFee = columns.getOrNull(7)?.trim()?.toDoubleOrNull() ?: 0.0,
+                                alternateMobileNumber = columns.getOrNull(8)?.trim()?.ifEmpty { null },
+                                address = columns.getOrNull(9)?.trim()?.ifEmpty { null },
+                                profileImageUrl = columns.getOrNull(10)?.trim()?.ifEmpty { null },
                                 teacherId = currentTeacherId!!,
                                 teacherName = currentTeacherName!!,
                                 isActive = true
@@ -213,7 +223,8 @@ class BulkAddStudentsActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
-            failures.add("File Read Error: ${e.message}")
+            failures.add("Critical File Read Error: ${e.message}")
+            Log.e(TAG, "Error reading or parsing CSV file", e)
         }
         return Pair(students, failures)
     }
@@ -221,14 +232,13 @@ class BulkAddStudentsActivity : AppCompatActivity() {
     private suspend fun saveStudentsToFirestore(students: List<StudentDetailsItem>): Pair<Int, List<String>> {
         var successCount = 0
         val failureDetails = mutableListOf<String>()
-        if (currentOrganizationId == null) return Pair(0, listOf("Organization ID missing."))
+        if (currentOrganizationId == null) return Pair(0, listOf("Critical Error: Organization ID missing."))
 
         val studentsCollection = db.collection("organizations").document(currentOrganizationId!!)
             .collection("students")
-        val chunks = students.chunked(490)
 
-        for (chunk in chunks) {
-            val batch: WriteBatch = db.batch()
+        students.chunked(490).forEach { chunk ->
+            val batch = db.batch()
             for (student in chunk) {
                 val newDocRef = studentsCollection.document()
                 val studentDataMap = mapOf(
@@ -247,15 +257,18 @@ class BulkAddStudentsActivity : AppCompatActivity() {
                     "teacherName" to student.teacherName,
                     "isActive" to student.isActive,
                     "createdAt" to FieldValue.serverTimestamp()
-                )
+                ).filterValues { it != null }
                 batch.set(newDocRef, studentDataMap)
             }
+
             try {
-                withContext(Dispatchers.IO) { batch.commit().await() }
+                batch.commit().await()
                 successCount += chunk.size
             } catch (e: Exception) {
-                val failedStudentNames = chunk.joinToString { it.studentName }
-                failureDetails.add("Batch failed for students: $failedStudentNames. Error: ${e.message}")
+                // If a whole batch fails, create a detailed error for it
+                val failedStudentInfo = chunk.joinToString(", ") { "'${it.studentName}' ('${it.regNo}')" }
+                failureDetails.add("Database Error: A batch of ${chunk.size} students failed to save. Students: $failedStudentInfo. Reason: ${e.message}")
+                Log.e(TAG, "Firestore batch commit failed", e)
             }
         }
         return Pair(successCount, failureDetails)

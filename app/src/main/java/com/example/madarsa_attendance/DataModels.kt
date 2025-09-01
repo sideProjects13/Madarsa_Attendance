@@ -10,7 +10,9 @@
         val mobileNumber: String? = null, // Ensure this field exists
         val email: String? = null, // This is the login email
         val profileImageUrl: String? = null,
-        val uid: String? = null // This will store the Firebase Auth UID
+        val uid: String? = null, // This will store the Firebase Auth UID
+        val createdAt: Timestamp? = null // <-- ADD THIS LINE
+
     )
 
     data class TeacherSpinnerItem(

@@ -119,18 +119,41 @@ class MainActivity : AppCompatActivity(),
     private val pickCsvFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
-                val intent = if (pendingTeacherAction == TeacherAction.BULK_ADD_TO_CLASS) {
-                    Intent(this, BulkAddStudentsActivity::class.java).apply {
-                        putExtra("CSV_FILE_URI", uri.toString())
-                        putExtra("TEACHER_ID", selectedTeacherForBulkAdd?.teacherId)
-                        putExtra("TEACHER_NAME", selectedTeacherForBulkAdd?.teacherName)
+
+                // This 'when' block reads the app's memory and routes to the correct screen.
+                // It cannot be confused by null values anymore.
+                val intent = when (pendingTeacherAction) {
+
+                    // If the app remembers you chose BULK_ADD_TO_CLASS...
+                    TeacherAction.BULK_ADD_TO_CLASS -> {
+                        // ...it correctly launches the screen for a specific class.
+                        Intent(this, BulkAddStudentsActivity::class.java).apply {
+                            data = uri // Use intent.data to pass the file URI
+                            putExtra("TEACHER_ID", selectedTeacherForBulkAdd?.teacherId)
+                            putExtra("TEACHER_NAME", selectedTeacherForBulkAdd?.teacherName)
+                        }
                     }
-                } else {
-                    Intent(this, BulkAddOrgActivity::class.java).apply { data = uri }
+
+                    // If the app remembers you chose BULK_ADD_TO_ORG...
+                    TeacherAction.BULK_ADD_TO_ORG -> {
+                        // ...it correctly launches the screen for the whole organization.
+                        Intent(this, BulkAddOrgActivity::class.java).apply {
+                            data = uri
+                        }
+                    }
+
+                    // A safety net for any other situation.
+                    else -> {
+                        Toast.makeText(this, "An unexpected error occurred. Please try again.", Toast.LENGTH_SHORT).show()
+                        null
+                    }
                 }
-                studentDataChangeLauncher.launch(intent)
+                // Launch the correct intent that was just created.
+                intent?.let { studentDataChangeLauncher.launch(it) }
             }
         }
+
+        // Reset the memory for the next operation.
         pendingTeacherAction = null
         selectedTeacherForBulkAdd = null
     }
@@ -138,58 +161,67 @@ class MainActivity : AppCompatActivity(),
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // --- START: NEW AND CORRECTED STARTUP ROUTING LOGIC ---
-        val auth = FirebaseAuth.getInstance() // Get instance for the check
+        // --- START: MEMORY RESTORE LOGIC ---
+        if (savedInstanceState != null) {
+            // Restore the pending action from its saved name
+            savedInstanceState.getString("PENDING_TEACHER_ACTION")?.let { actionName ->
+                pendingTeacherAction = try {
+                    TeacherAction.valueOf(actionName)
+                } catch (e: IllegalArgumentException) {
+                    null // Handle case where the name might be invalid
+                }
+            }
+            // Restore the selected teacher's info
+            val teacherId = savedInstanceState.getString("SELECTED_TEACHER_ID")
+            val teacherName = savedInstanceState.getString("SELECTED_TEACHER_NAME")
+            val teacherImageUrl = savedInstanceState.getString("SELECTED_TEACHER_IMAGE_URL")
+            if (teacherId != null && teacherName != null) {
+                selectedTeacherForBulkAdd = Teacher(
+                    teacherId = teacherId,
+                    teacherName = teacherName,
+                    profileImageUrl = teacherImageUrl
+                )
+            }
+        }
+        // --- END: MEMORY RESTORE LOGIC ---
 
-        // First, check if the user is logged in and their session data is valid.
+        // --- Startup routing logic ---
+        val auth = FirebaseAuth.getInstance()
         if (auth.currentUser == null || !FirebaseAuthManager.isLoggedInAndOrgSelected(this)) {
-            // If not, redirect to the Login screen immediately.
             startActivity(Intent(this, LoginActivity::class.java))
-            finish() // Close MainActivity so the user can't press "back" to it.
-            return   // Stop executing the rest of this function.
+            finish()
+            return
         }
 
-        // If the user IS logged in, now check their role.
         val role = FirebaseAuthManager.getUserRole(this)
         if (role == "teacher") {
-            // If the saved role is 'teacher', redirect to the Teacher Dashboard.
             startActivity(Intent(this, TeacherDashboardActivity::class.java))
-            finish() // Close MainActivity.
-            return   // Stop executing.
+            finish()
+            return
         }
-        // --- END: NEW AND CORRECTED STARTUP ROUTING LOGIC ---
-
-        // If the code reaches this point, it means the user is logged in AND their role is 'admin'.
-        // We can now safely set up the admin UI.
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
 
-        // Initialize UI components for the Admin Dashboard
         drawerLayout = findViewById(R.id.drawer_layout)
         toolbar = findViewById(R.id.toolbar)
         appBarLayout = findViewById(R.id.app_bar_layout)
-        feesReportGenerator = FeesReportGenerator(this, db) // Assuming 'db' is initialized as a class variable
+        feesReportGenerator = FeesReportGenerator(this, db)
 
-        // Setup Toolbar and Navigation Drawer
         setSupportActionBar(toolbar)
         toggle = ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.nav_open, R.string.nav_close)
         drawerLayout.addDrawerListener(toggle)
         toggle.syncState()
 
-        // Call your other setup methods
         setupCustomNavigationDrawer()
-//        updateNavHeader()
         applyWindowInsets()
 
-        // Load the initial fragment if the activity is newly created
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
                 .replace(R.id.fragment_container, DashboardFragment())
                 .commit()
         }
 
-        // Observe ViewModel for status updates
         resultViewModel.generationStatus.observe(this) { event ->
             event.getContentIfNotHandled()?.let { (isSuccess, message) ->
                 if (message.contains("...")) {
@@ -198,6 +230,57 @@ class MainActivity : AppCompatActivity(),
                     StatusDialogFragment.newInstance(isSuccess, message).show(supportFragmentManager, "statusDialog")
                 }
             }
+        }
+
+        // --- THIS IS THE CORRECTED CODE BLOCK ---
+        // It uses named arguments to avoid any confusion for the compiler.
+        UpdateManager.checkForUpdate(
+            context = this,
+            onUpdateAvailable = { updateInfo ->
+                showUpdateDialog(updateInfo)
+            }
+            // We don't need to provide onNoUpdate, as it has a default value.
+        )
+        // --- END OF CORRECTION ---
+    }
+    private fun showUpdateDialog(updateInfo: UpdateInfo) {
+        val message = "A new version (${updateInfo.versionName}) is available.\n\nWhat's New:\n${updateInfo.updateNotes}"
+
+        AlertDialog.Builder(this)
+            .setTitle("Update Available")
+            .setMessage(message)
+            .setCancelable(false) // User must make a choice
+            .setPositiveButton("Update Now") { dialog, _ ->
+                // Open the Firebase App Distribution link in a browser
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.updateUrl))
+                    startActivity(browserIntent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Could not open update link.", Toast.LENGTH_SHORT).show()
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Later") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .create()
+            .show()
+    }
+
+
+    // In MainActivity.kt
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Save the pending action's name so we can restore it later
+        pendingTeacherAction?.let {
+            outState.putString("PENDING_TEACHER_ACTION", it.name)
+        }
+        // Save the selected teacher's info if it exists
+        selectedTeacherForBulkAdd?.let {
+            outState.putString("SELECTED_TEACHER_ID", it.teacherId)
+            outState.putString("SELECTED_TEACHER_NAME", it.teacherName)
+            outState.putString("SELECTED_TEACHER_IMAGE_URL", it.profileImageUrl)
         }
     }
 
@@ -334,7 +417,7 @@ class MainActivity : AppCompatActivity(),
                     .show(supportFragmentManager, "TeacherSelectionDialog")
             }
             R.id.nav_bulk_add_org -> {
-                pendingTeacherAction = null
+                pendingTeacherAction = TeacherAction.BULK_ADD_TO_ORG // Use the explicit state
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "*/*"
@@ -458,10 +541,10 @@ class MainActivity : AppCompatActivity(),
                 title = "Download Data",
                 iconResId = R.drawable.ic_download,
                 children = listOf(
-                    NavigationItem.Child(R.id.nav_download_org_students, "Download All Students (Org)"),
-                    NavigationItem.Child(R.id.nav_download_class_students, "Download Class Students"),
-                    NavigationItem.Child(R.id.nav_download_class_sample, "Download Class CSV"),
-                    NavigationItem.Child(R.id.nav_download_org_sample, "Download Org Students CSV"),
+                    NavigationItem.Child(R.id.nav_download_org_students, "Download All Students Data(Org)"),
+                    NavigationItem.Child(R.id.nav_download_class_students, "Download Students Data(Class)"),
+                    NavigationItem.Child(R.id.nav_download_class_sample, "Download Sample CSV File(Class Data)"),
+                    NavigationItem.Child(R.id.nav_download_org_sample, "Download Sample CSV File(Org Data)"),
                 )
             ),
             NavigationItem.Header(
@@ -588,7 +671,7 @@ class MainActivity : AppCompatActivity(),
             }
             else -> Log.e(TAG, "onTeacherSelected called with unhandled TeacherAction: $pendingTeacherAction.")
         }
-        pendingTeacherAction = null
+//        pendingTeacherAction = null
     }
 
     override fun onFeesReportGenerated(teacherId: String, teacherName: String, reportType: String, month: Int?, year: Int?) {

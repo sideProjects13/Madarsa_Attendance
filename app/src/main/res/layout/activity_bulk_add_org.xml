@@ -12,11 +12,11 @@
         android:id="@+id/bulk_add_org_toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
+        android:background="@android:color/transparent"
         app:title="Bulk Add to Organization"
-        app:titleTextColor="?attr/colorOnPrimary"
+        app:titleTextColor="?attr/colorPrimary"
         app:navigationIcon="@drawable/ic_arrow_back"
-        app:navigationIconTint="?attr/colorOnPrimary" />
+        app:navigationIconTint="?attr/colorPrimary" />
 
     <ProgressBar
         android:id="@+id/progressBarBulkAddOrg"
