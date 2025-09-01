@@ -69,20 +69,17 @@ jobs:
       - name: Distribute and Update Remote Config
         if: steps.decode_keystore.outcome == 'success'
         run: |
+          set -e # This command ensures that the script will exit immediately if any command fails.
+
           echo "Step 1: Installing latest Firebase CLI..."
           npm install -g firebase-tools@latest
 
           echo "Step 2: Distributing to Firebase App Distribution..."
+          # We capture the output to extract the URL later
           DISTRIBUTION_OUTPUT=$(firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes-file "release_notes.txt" \
             --groups "qa-testers")
-
-          if [ $? -ne 0 ]; then
-            echo "::error::Firebase App Distribution command failed during upload."
-            echo "$DISTRIBUTION_OUTPUT"
-            exit 1
-          fi
           echo "Distribution successful."
 
           echo "Step 3: Extracting the update URL..."
@@ -92,7 +89,7 @@ jobs:
             echo "::error::CRITICAL: Could not find the 'Share this release' URL in the command output."
             echo "Full output was:"
             echo "$DISTRIBUTION_OUTPUT"
-            exit 1
+            exit 1 # Explicitly fail
           fi
           echo "Successfully extracted Update URL: $UPDATE_URL"
 
@@ -102,8 +99,11 @@ jobs:
           UPDATE_NOTES=$(cat release_notes.txt || echo "New update available.")
           echo "Version Code: $LATEST_VERSION_CODE | Version Name: $LATEST_VERSION_NAME"
 
-          echo "Step 5: Creating temporary config file..."
-          # The firebase deploy command for remote config expects a file named remoteconfig.template.json
+          echo "Step 5: Creating Firebase config files..."
+          # Create firebase.json required by the deploy command
+          echo '{"remoteconfig": {"template": "remoteconfig.template.json"}}' > firebase.json
+
+          # Create the remoteconfig.template.json file with the new version info
           jq -n \
             --arg code "$LATEST_VERSION_CODE" \
             --arg name "$LATEST_VERSION_NAME" \
@@ -117,14 +117,10 @@ jobs:
                 "update_url": {"defaultValue": {"value": $url}}
               }
             }' > remoteconfig.template.json
+          echo "Firebase config files created successfully."
 
-          # Step 6: Publish the config to Firebase. THIS IS THE CORRECTED COMMAND.
           echo "Step 6: Publishing updated configuration to Firebase Remote Config..."
+          # If this command fails, the 'set -e' at the top will cause the script to exit with an error.
           firebase deploy --only remoteconfig --project ${{ secrets.FIREBASE_PROJECT_ID }}
-
-          if [ $? -ne 0 ]; then
-            echo "::error::Failed to publish new version to Remote Config. The app was distributed, but the in-app prompt will not work."
-            exit 1
-          fi
 
           echo "✅ Remote Config published successfully! Workflow complete."
