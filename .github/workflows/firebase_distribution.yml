@@ -55,53 +55,50 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-      # 7. Authenticates with Google Cloud
-      - name: Authenticate with Google Cloud
-        if: steps.decode_keystore.outcome == 'success'
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
+      # ===================================================================================
+      # 7. DISTRIBUTE APP AND UPDATE REMOTE CONFIG (NEW ATOMIC APPROACH)
+      # ===================================================================================
 
-      # ===================================================================================
-      # 8. FINAL & BULLETPROOF: Distribute App AND Update Remote Config
-      # ===================================================================================
-      - name: Distribute and Update Remote Config
+      # Step 7a: Upload to Firebase App Distribution and CAPTURE the output
+      # We give this step an ID so we can use its output in the next step.
+      - name: Upload to Firebase App Distribution
         if: steps.decode_keystore.outcome == 'success'
+        id: distribute_app
+        uses: wzieba/firebase-app-distribution-github-action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          token: ${{ secrets.FIREBASE_TOKEN }}
+          groups: qa-testers
+          releaseNotesFile: release_notes.txt
+          file: app/build/outputs/apk/release/app-release.apk
+
+      # Step 7b: Use the output from the step above to update Remote Config
+      - name: Update Firebase Remote Config
+        if: steps.decode_keystore.outcome == 'success' && steps.distribute_app.outcome == 'success'
         run: |
           echo "Step 1: Installing Firebase CLI..."
           npm install -g firebase-tools
 
-          echo "Step 2: Distributing to Firebase App Distribution..."
-          DISTRIBUTION_OUTPUT=$(firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
-            --app "${{ secrets.FIREBASE_APP_ID }}" \
-            --release-notes-file "release_notes.txt" \
-            --groups "qa-testers")
-
-          if [ $? -ne 0 ]; then
-            echo "::error::Firebase App Distribution command failed during upload."
-            echo "$DISTRIBUTION_OUTPUT"
-            exit 1
-          fi
-          echo "Distribution successful."
-
-          echo "Step 3: Extracting the update URL..."
-          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Share this release" | grep -o 'https://appdistribution[^ ]*')
-
-          if [ -z "$UPDATE_URL" ]; then
-            echo "::error::CRITICAL: Could not find the 'Share this release' URL in the command output."
-            echo "Full output was:"
-            echo "$DISTRIBUTION_OUTPUT"
-            exit 1
-          fi
-          echo "Successfully extracted Update URL: $UPDATE_URL"
-
-          echo "Step 4: Parsing version info from Gradle..."
+          # Step 2: Get version info from Gradle (this part is already working)
+          echo "Step 2: Parsing version info from Gradle..."
           LATEST_VERSION_CODE=$(awk '/versionCode =/ {print $3}' app/build.gradle.kts)
           LATEST_VERSION_NAME=$(awk -F'"' '/versionName =/ {print $2}' app/build.gradle.kts)
           UPDATE_NOTES=$(cat release_notes.txt || echo "New update available.")
           echo "Version Code: $LATEST_VERSION_CODE | Version Name: $LATEST_VERSION_NAME"
 
-          echo "Step 5: Creating temporary config file..."
+          # Step 3: Extract the URL from the PREVIOUS step's output. This is the robust method.
+          echo "Step 3: Extracting the update URL from distribution output..."
+          # The action provides the full JSON response in this output variable. We use jq to parse it.
+          UPDATE_URL=$(echo '${{ steps.distribute_app.outputs.FIREBASE_APP_DISTRO_RELEASE }}' | jq -r '.firebaseConsoleUri')
+
+          if [ -z "$UPDATE_URL" ] || [ "$UPDATE_URL" == "null" ]; then
+            echo "::error::CRITICAL: Could not parse the update URL from the distribution action's output."
+            exit 1
+          fi
+          echo "Successfully extracted Update URL: $UPDATE_URL"
+
+          # Step 4: Create the Remote Config file
+          echo "Step 4: Creating temporary config file..."
           echo "{" > temp_config.json
           echo "  \"parameters\": {" >> temp_config.json
           echo "    \"latest_version_code\": {\"defaultValue\": {\"value\": \"$LATEST_VERSION_CODE\"}}," >> temp_config.json
@@ -111,10 +108,10 @@ jobs:
           echo "  }" >> temp_config.json
           echo "}" >> temp_config.json
           
-          # Step 6: Publish the config to Firebase. THIS IS THE CORRECTED COMMAND.
-          # The -f flag has been removed as it is not a valid option.
-          echo "Step 6: Publishing updated configuration to Firebase Remote Config..."
-          firebase remoteconfig:publish temp_config.json --project ${{ secrets.FIREBASE_PROJECT_ID }} --force
+          # Step 5: Publish the config to Firebase. THIS IS THE CORRECTED COMMAND WITH NO FLAGS.
+          # When run with a service account token, it is non-interactive by default.
+          echo "Step 5: Publishing updated configuration to Firebase Remote Config..."
+          firebase remoteconfig:publish temp_config.json --project ${{ secrets.FIREBASE_PROJECT_ID }} --token ${{ secrets.FIREBASE_TOKEN }}
 
           if [ $? -ne 0 ]; then
             echo "::error::Failed to publish new version to Remote Config. The app was distributed, but the in-app prompt will not work."
