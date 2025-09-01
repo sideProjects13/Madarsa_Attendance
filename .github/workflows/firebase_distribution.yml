@@ -1,15 +1,3 @@
-Latest Version Code: = 2
-Latest Version Name:         versionName = 2.1.0"```
-  This bad output is causing the rest of the script to fail.
-  
-  I am going to provide a final, bulletproof solution. This time, I am using a much more robust parsing method that cannot fail in the same way. I am also adding a small delay to prevent any race conditions with Firebase's backend.
-  
-  Please replace the entire content of your workflow file one last time. This version is built to be resilient.
-
----
-
-### Your Final, Corrected GitHub Actions Workflow File
-
 name: Build and Distribute to Firebase
 
 on:
@@ -86,17 +74,16 @@ jobs:
 
       # ===================================================================================
       # 9. FINAL & ROBUST: AUTOMATICALLY UPDATE FIREBASE REMOTE CONFIG
-      # This version uses robust parsing and adds a delay for stability.
       # ===================================================================================
       - name: Update Firebase Remote Config
         if: steps.decode_keystore.outcome == 'success'
         run: |
           echo "Updating Remote Config..."
           
-          # This is a much more robust way to parse the Gradle file.
-          # It finds the line and splits it by spaces or quotes to get the clean value.
-          LATEST_VERSION_CODE=$(awk '/versionCode / {print $2}' app/build.gradle.kts)
-          LATEST_VERSION_NAME=$(awk -F'"' '/versionName / {print $2}' app/build.gradle.kts)
+          # This is the new, robust parsing logic. It uses grep with Perl-compatible regex
+          # to look for the version code/name and extracts ONLY the value, ignoring extra text.
+          LATEST_VERSION_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          LATEST_VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
 
           echo "Latest Version Code: $LATEST_VERSION_CODE"
           echo "Latest Version Name: $LATEST_VERSION_NAME"
