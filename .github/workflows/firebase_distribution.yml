@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 3. Setup Node.js (needed to install Firebase CLI)
+      # 3. Setup Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -63,16 +63,17 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
 
       # ===================================================================================
-      # 8. FINAL & BULLETPROOF: Distribute App and Update Remote Config
-      # This single step captures the output directly, avoiding all previous errors.
+      # 8. FINAL & BULLETPROOF: Distribute App AND Update Remote Config
+      # This is now a single, atomic step. If any command fails, the whole step fails.
       # ===================================================================================
       - name: Distribute and Update Remote Config
         if: steps.decode_keystore.outcome == 'success'
         run: |
-          echo "Installing Firebase CLI and running distribution..."
+          echo "Step 1: Installing Firebase CLI..."
           npm install -g firebase-tools
-          
-          # Run the distribution command and capture ALL of its output into a variable.
+
+          echo "Step 2: Distributing to Firebase App Distribution..."
+          # We capture all output to a variable.
           DISTRIBUTION_OUTPUT=$(firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes-file "release_notes.txt" \
@@ -80,33 +81,34 @@ jobs:
 
           # Check if the distribution command itself failed
           if [ $? -ne 0 ]; then
-            echo "::error::Firebase App Distribution command failed."
+            echo "::error::Firebase App Distribution command failed during upload."
             echo "$DISTRIBUTION_OUTPUT"
             exit 1
           fi
+          echo "Distribution successful."
 
-          echo "Distribution successful. Full output:"
-          echo "$DISTRIBUTION_OUTPUT"
-
-          # This is the new, robust way to get the URL. We search the text for the link.
-          # We look for the line containing "Firebase App Distribution URL" and then extract the URL.
-          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Firebase App Distribution URL" | awk '{print $5}')
+          # Step 3: Extract the CORRECT URL from the output, based on your screenshot.
+          # We are now looking for the "Share this release" line.
+          echo "Step 3: Extracting the update URL..."
+          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Share this release" | awk '{print $6}')
 
           if [ -z "$UPDATE_URL" ]; then
-            echo "::error::Could not find the 'Firebase App Distribution URL' in the command output. The output format from Firebase might have changed."
+            echo "::error::CRITICAL: Could not find the 'Share this release' URL in the command output."
+            echo "Full output was:"
+            echo "$DISTRIBUTION_OUTPUT"
             exit 1
           fi
-          
           echo "Successfully extracted Update URL: $UPDATE_URL"
 
-          # Use robust awk parsing for version info
-          LATEST_VERSION_CODE=$(awk '/versionCode / {print $2}' app/build.gradle.kts)
-          LATEST_VERSION_NAME=$(awk -F'"' '/versionName / {print $2}' app/build.gradle.kts)
-          UPDATE_NOTES=$(cat release_notes.txt || true)
-          
+          # Step 4: Get version info from Gradle
+          echo "Step 4: Parsing version info from Gradle..."
+          LATEST_VERSION_CODE=$(awk '/versionCode =/ {print $3}' app/build.gradle.kts)
+          LATEST_VERSION_NAME=$(awk -F'"' '/versionName =/ {print $2}' app/build.gradle.kts)
+          UPDATE_NOTES=$(cat release_notes.txt || echo "New update available.")
           echo "Version Code: $LATEST_VERSION_CODE | Version Name: $LATEST_VERSION_NAME"
 
-          # Create the temporary config file for Remote Config
+          # Step 5: Create the Remote Config file
+          echo "Step 5: Creating temporary config file..."
           echo "{" > temp_config.json
           echo "  \"parameters\": {" >> temp_config.json
           echo "    \"latest_version_code\": {\"defaultValue\": {\"value\": \"$LATEST_VERSION_CODE\"}}," >> temp_config.json
@@ -115,8 +117,15 @@ jobs:
           echo "    \"update_url\": {\"defaultValue\": {\"value\": \"$UPDATE_URL\"}}" >> temp_config.json
           echo "  }" >> temp_config.json
           echo "}" >> temp_config.json
-
-          echo "Publishing updated configuration to Firebase Remote Config..."
+          
+          # Step 6: Publish the config to Firebase
+          echo "Step 6: Publishing updated configuration to Firebase Remote Config..."
           firebase remoteconfig:publish --project ${{ secrets.FIREBASE_PROJECT_ID }} --source temp_config.json -f
 
-          echo "Remote Config published successfully!"
+          # Check if the publish command failed
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to publish new version to Remote Config. The app was distributed, but the in-app prompt will not work."
+            exit 1
+          fi
+
+          echo "✅ Remote Config published successfully! Workflow complete."
