@@ -63,39 +63,37 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
 
       # ===================================================================================
-      # 8. FINAL & ROBUST: DISTRIBUTE APP AND UPDATE REMOTE CONFIG
-      # This single step now handles both the upload and the config update.
-      # It's more efficient and avoids the previous errors entirely.
+      # 8. FINAL & BULLETPROOF: Distribute App and Update Remote Config
+      # This single step captures the output directly, avoiding all previous errors.
       # ===================================================================================
       - name: Distribute and Update Remote Config
         if: steps.decode_keystore.outcome == 'success'
         run: |
-          echo "Installing Firebase CLI..."
+          echo "Installing Firebase CLI and running distribution..."
           npm install -g firebase-tools
-
-          echo "Distributing to Firebase App Distribution..."
-          # We add the --json flag to capture the output of the upload command
+          
+          # Run the distribution command and capture ALL of its output into a variable.
           DISTRIBUTION_OUTPUT=$(firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes-file "release_notes.txt" \
-            --groups "qa-testers" \
-            --json)
+            --groups "qa-testers")
 
           # Check if the distribution command itself failed
           if [ $? -ne 0 ]; then
-            echo "::error::Firebase App Distribution failed."
+            echo "::error::Firebase App Distribution command failed."
             echo "$DISTRIBUTION_OUTPUT"
             exit 1
           fi
 
-          echo "Distribution successful. Output:"
+          echo "Distribution successful. Full output:"
           echo "$DISTRIBUTION_OUTPUT"
 
-          # Extract the download URL directly from the successful output
-          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | jq -r '.firebaseConsoleUri')
+          # This is the new, robust way to get the URL. We search the text for the link.
+          # We look for the line containing "Firebase App Distribution URL" and then extract the URL.
+          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Firebase App Distribution URL" | awk '{print $5}')
 
-          if [ -z "$UPDATE_URL" ] || [ "$UPDATE_URL" == "null" ]; then
-            echo "::error::Could not extract update URL from distribution output."
+          if [ -z "$UPDATE_URL" ]; then
+            echo "::error::Could not find the 'Firebase App Distribution URL' in the command output. The output format from Firebase might have changed."
             exit 1
           fi
           
