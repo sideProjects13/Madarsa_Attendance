@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 3. NEW: Setup Node.js (needed to install Firebase CLI)
+      # 3. Setup Node.js (needed to install Firebase CLI)
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -36,20 +36,16 @@ jobs:
       # 5. Decodes the keystore. THIS IS THE NEW, ROBUST METHOD.
       - name: Decode Keystore
         id: decode_keystore
-        # We assign the secret to an environment variable first.
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-        # THEN, we check the environment variable. This avoids the parser error.
         if: env.KEYSTORE_B64 != ''
         run: |
           echo "Keystore secret found. Decoding..."
           keystore_path="${{ runner.temp }}/keystore.jks"
-          # Use the environment variable in the run command.
           echo "$KEYSTORE_B64" | base64 --decode > $keystore_path
           echo "keystore_path=$keystore_path" >> $GITHUB_OUTPUT
 
       # 6. Builds a SIGNED release APK.
-      # This step now checks if the "Decode Keystore" step SUCCEEDED.
       - name: Build with Gradle
         if: steps.decode_keystore.outcome == 'success'
         run: ./gradlew assembleRelease
@@ -60,7 +56,6 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
       # 7. Authenticates with Google Cloud.
-      # This step also only runs if the keystore was decoded successfully.
       - name: Authenticate with Google Cloud
         if: steps.decode_keystore.outcome == 'success'
         uses: google-github-actions/auth@v2
@@ -68,8 +63,6 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
 
       # 8. Uploads the signed APK to Firebase App Distribution.
-      # This final step also depends on the keystore step's success.
-      # I have updated the release notes to use the dedicated release_notes.txt file.
       - name: Upload artifact to Firebase App Distribution
         if: steps.decode_keystore.outcome == 'success'
         run: |
@@ -80,36 +73,39 @@ jobs:
             --groups "qa-testers"
 
       # ===================================================================================
-      # 9. NEW: AUTOMATICALLY UPDATE FIREBASE REMOTE CONFIG
-      # This step runs after the APK is successfully distributed.
+      # 9. NEW & IMPROVED: AUTOMATICALLY UPDATE FIREBASE REMOTE CONFIG
+      # This version has robust parsing and better error checking.
       # ===================================================================================
       - name: Update Firebase Remote Config
         if: steps.decode_keystore.outcome == 'success'
         run: |
           echo "Updating Remote Config..."
-          # The Firebase CLI is already installed from the previous step.
-
-          # Get the version code and name directly from the Gradle file
-          # This is robust and avoids hardcoding them.
-          LATEST_VERSION_CODE=$(grep "versionCode " app/build.gradle.kts | sed 's/.*versionCode //')
-          LATEST_VERSION_NAME=$(grep "versionName " app/build.gradle.kts | sed 's/.*versionName "//' | sed 's/"//')
+          
+          # Use a more robust grep command with Perl-compatible regex to extract values
+          LATEST_VERSION_CODE=$(grep -oP 'versionCode \K[0-9]+' app/build.gradle.kts)
+          LATEST_VERSION_NAME=$(grep -oP 'versionName "\K[^"]+' app/build.gradle.kts)
 
           echo "Latest Version Code: $LATEST_VERSION_CODE"
           echo "Latest Version Name: $LATEST_VERSION_NAME"
 
-          # Read the release notes from the text file you created in your project
-          # The "|| true" prevents the workflow from failing if the file is empty
+          # Read the release notes from the text file. The "|| true" prevents failure if the file is empty.
           UPDATE_NOTES=$(cat release_notes.txt || true)
 
-          # Get the latest release from App Distribution and extract its download link
-          # This requires jq, a command-line JSON processor, which is pre-installed on GitHub runners
           echo "Fetching latest release from App Distribution..."
+          # Fetch the list of releases from App Distribution as a JSON object
           LATEST_RELEASE_JSON=$(firebase appdistribution:releases:list ${{ secrets.FIREBASE_APP_ID }} --json)
-          # We get the first item ([0]) in the JSON array and extract its 'firebaseConsoleUri'
+          
+          # Add error checking for the firebase command
+          if [ $? -ne 0 ]; then
+            echo "::error::Failed to list releases from App Distribution. Please check the service account permissions. It may need the 'Firebase App Distribution Viewer' role in IAM."
+            exit 1
+          fi
+          
+          # Use jq to safely parse the JSON and get the URL of the newest release (which is the first item)
           UPDATE_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r '.[0].firebaseConsoleUri')
 
           if [ -z "$UPDATE_URL" ] || [ "$UPDATE_URL" == "null" ]; then
-            echo "::error::Failed to get update URL from App Distribution."
+            echo "::error::Could not find the update URL in the App Distribution response."
             exit 1
           fi
 
@@ -124,12 +120,11 @@ jobs:
           echo "    \"update_url\": {\"defaultValue\": {\"value\": \"$UPDATE_URL\"}}" >> temp_config.json
           echo "  }" >> temp_config.json
           echo "}" >> temp_config.json
-
+          
           echo "Temporary config file created:"
           cat temp_config.json
 
           # Import and publish the new config to your Firebase project
-          # The "-f" flag forces the publish without an interactive prompt
           firebase remoteconfig:publish --project ${{ secrets.FIREBASE_PROJECT_ID }} --source temp_config.json -f
 
           echo "Remote Config published successfully!"
