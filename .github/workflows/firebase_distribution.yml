@@ -23,11 +23,12 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 3. Setup Node.js
+      # 3. Setup Node.js - THIS IS THE FIX.
+      # We now request Node.js version 20, which is required by the latest Firebase CLI.
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       # 4. Grants execute permission for gradlew
       - name: Grant execute permission for gradlew
@@ -69,7 +70,7 @@ jobs:
       - name: Distribute and Update Remote Config
         if: steps.decode_keystore.outcome == 'success'
         run: |
-          # Step 1: Force install the LATEST version of Firebase CLI to guarantee all commands exist.
+          # Step 1: Force install the LATEST version of Firebase CLI
           echo "Step 1: Installing latest Firebase CLI..."
           npm install -g firebase-tools@latest
 
@@ -87,7 +88,7 @@ jobs:
           fi
           echo "Distribution successful."
 
-          # Step 3: Extract the URL robustly
+          # Step 3: Extract the CORRECT URL from the output.
           echo "Step 3: Extracting the update URL..."
           UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Share this release" | grep -o 'https://appdistribution[^ ]*')
 
@@ -99,7 +100,7 @@ jobs:
           fi
           echo "Successfully extracted Update URL: $UPDATE_URL"
 
-          # Step 4: Get version info from Gradle robustly
+          # Step 4: Get version info from Gradle
           echo "Step 4: Parsing version info from Gradle..."
           LATEST_VERSION_CODE=$(awk '/versionCode =/ {print $3}' app/build.gradle.kts)
           LATEST_VERSION_NAME=$(awk -F'"' '/versionName =/ {print $2}' app/build.gradle.kts)
@@ -122,8 +123,7 @@ jobs:
               }
             }' > temp_config.json
           
-          # Step 6: Publish the config to Firebase. THIS IS THE CORRECTED COMMAND.
-          # The --force flag is valid on the LATEST CLI and prevents hangs in CI.
+          # Step 6: Publish the config to Firebase.
           echo "Step 6: Publishing updated configuration to Firebase Remote Config..."
           firebase remoteconfig:publish temp_config.json --project ${{ secrets.FIREBASE_PROJECT_ID }} --force
 
@@ -132,13 +132,4 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Remote Config published successfully! Workflow complete."```
-
-### Why This Is the Final Fix:
-
-#  1.  **Forces Latest Tools:** The command `npm install -g firebase-tools@latest` **guarantees** that the runner is using the most modern version of the Firebase CLI. This directly fixes the `remoteconfig:publish is not a Firebase command` error.
-#  2.  **Correct Final Command:** The `firebase remoteconfig:publish ... --force` command is **correct for the latest version of the CLI**. The previous errors were because the old CLI version didn't have this command at all. Now that we're forcing the latest version, this command will work as intended and will not hang waiting for a "yes/no" prompt.
-#  3.  **Safer JSON Creation:** I've switched from using `echo` to create the `temp_config.json` file to using `jq`. This is a much safer method that correctly handles any special characters (like quotes or newlines) that might be in your release notes.
-#  4.  **Atomic Operation:** The entire process is still a single step. If any command fails, the whole step fails, the workflow gets a red X, and you will know the full process did not complete.
-#
-#  I am incredibly sorry for the stress and the multiple failed runs this has caused. This solution is built on a solid foundation and directly fixes every single error from your logs. It will work.
+          echo "✅ Remote Config published successfully! Workflow complete."
