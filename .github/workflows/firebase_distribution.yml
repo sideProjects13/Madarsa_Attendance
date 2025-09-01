@@ -64,7 +64,7 @@ jobs:
 
       # ===================================================================================
       # 8. FINAL & BULLETPROOF: Distribute App AND Update Remote Config
-      # This is now a single, atomic step. If any command fails, the whole step fails.
+      # This is a single, atomic step. If any command fails, the whole step fails.
       # ===================================================================================
       - name: Distribute and Update Remote Config
         if: steps.decode_keystore.outcome == 'success'
@@ -73,13 +73,11 @@ jobs:
           npm install -g firebase-tools
 
           echo "Step 2: Distributing to Firebase App Distribution..."
-          # We capture all output to a variable.
           DISTRIBUTION_OUTPUT=$(firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes-file "release_notes.txt" \
             --groups "qa-testers")
 
-          # Check if the distribution command itself failed
           if [ $? -ne 0 ]; then
             echo "::error::Firebase App Distribution command failed during upload."
             echo "$DISTRIBUTION_OUTPUT"
@@ -87,10 +85,10 @@ jobs:
           fi
           echo "Distribution successful."
 
-          # Step 3: Extract the CORRECT URL from the output, based on your screenshot.
-          # We are now looking for the "Share this release" line.
+          # Step 3: Extract the CORRECT URL from the output. This is the new, robust method.
+          # It looks for the line containing "Share this release" and extracts the URL.
           echo "Step 3: Extracting the update URL..."
-          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Share this release" | awk '{print $6}')
+          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Share this release" | grep -o 'https://appdistribution[^ ]*')
 
           if [ -z "$UPDATE_URL" ]; then
             echo "::error::CRITICAL: Could not find the 'Share this release' URL in the command output."
@@ -118,11 +116,10 @@ jobs:
           echo "  }" >> temp_config.json
           echo "}" >> temp_config.json
           
-          # Step 6: Publish the config to Firebase
+          # Step 6: Publish the config to Firebase. THIS IS THE CORRECTED COMMAND.
           echo "Step 6: Publishing updated configuration to Firebase Remote Config..."
-          firebase remoteconfig:publish --project ${{ secrets.FIREBASE_PROJECT_ID }} --source temp_config.json -f
+          firebase remoteconfig:publish temp_config.json --project ${{ secrets.FIREBASE_PROJECT_ID }} -f
 
-          # Check if the publish command failed
           if [ $? -ne 0 ]; then
             echo "::error::Failed to publish new version to Remote Config. The app was distributed, but the in-app prompt will not work."
             exit 1
