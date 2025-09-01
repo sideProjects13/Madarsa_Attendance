@@ -62,56 +62,53 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CREDENTIALS }}
 
-      # 8. Uploads the signed APK to Firebase App Distribution
-      - name: Upload artifact to Firebase App Distribution
+      # ===================================================================================
+      # 8. FINAL & ROBUST: DISTRIBUTE APP AND UPDATE REMOTE CONFIG
+      # This single step now handles both the upload and the config update.
+      # It's more efficient and avoids the previous errors entirely.
+      # ===================================================================================
+      - name: Distribute and Update Remote Config
         if: steps.decode_keystore.outcome == 'success'
         run: |
+          echo "Installing Firebase CLI..."
           npm install -g firebase-tools
-          firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
+
+          echo "Distributing to Firebase App Distribution..."
+          # We add the --json flag to capture the output of the upload command
+          DISTRIBUTION_OUTPUT=$(firebase appdistribution:distribute app/build/outputs/apk/release/app-release.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
             --release-notes-file "release_notes.txt" \
-            --groups "qa-testers"
+            --groups "qa-testers" \
+            --json)
 
-      # ===================================================================================
-      # 9. FINAL & ROBUST: AUTOMATICALLY UPDATE FIREBASE REMOTE CONFIG
-      # ===================================================================================
-      - name: Update Firebase Remote Config
-        if: steps.decode_keystore.outcome == 'success'
-        run: |
-          echo "Updating Remote Config..."
-          
-          # This is the new, robust parsing logic. It uses grep with Perl-compatible regex
-          # to look for the version code/name and extracts ONLY the value, ignoring extra text.
-          LATEST_VERSION_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
-          LATEST_VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
-
-          echo "Latest Version Code: $LATEST_VERSION_CODE"
-          echo "Latest Version Name: $LATEST_VERSION_NAME"
-
-          # Add a small delay to ensure App Distribution has processed the new release
-          echo "Waiting for 20 seconds for App Distribution to process the release..."
-          sleep 20
-
-          UPDATE_NOTES=$(cat release_notes.txt || true)
-
-          echo "Fetching latest release from App Distribution..."
-          LATEST_RELEASE_JSON=$(firebase appdistribution:releases:list ${{ secrets.FIREBASE_APP_ID }} --json)
-          
+          # Check if the distribution command itself failed
           if [ $? -ne 0 ]; then
-            echo "::error::Failed to list releases from App Distribution. Please check the service account permissions. It may need the 'Firebase App Distribution Viewer' role in IAM."
+            echo "::error::Firebase App Distribution failed."
+            echo "$DISTRIBUTION_OUTPUT"
             exit 1
           fi
-          
-          UPDATE_URL=$(echo "$LATEST_RELEASE_JSON" | jq -r '.[0].firebaseConsoleUri')
+
+          echo "Distribution successful. Output:"
+          echo "$DISTRIBUTION_OUTPUT"
+
+          # Extract the download URL directly from the successful output
+          UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | jq -r '.firebaseConsoleUri')
 
           if [ -z "$UPDATE_URL" ] || [ "$UPDATE_URL" == "null" ]; then
-            echo "::error::Could not find the update URL in the App Distribution response. This might be a timing issue or a permission problem."
+            echo "::error::Could not extract update URL from distribution output."
             exit 1
           fi
+          
+          echo "Successfully extracted Update URL: $UPDATE_URL"
 
-          echo "Update URL: $UPDATE_URL"
+          # Use robust awk parsing for version info
+          LATEST_VERSION_CODE=$(awk '/versionCode / {print $2}' app/build.gradle.kts)
+          LATEST_VERSION_NAME=$(awk -F'"' '/versionName / {print $2}' app/build.gradle.kts)
+          UPDATE_NOTES=$(cat release_notes.txt || true)
+          
+          echo "Version Code: $LATEST_VERSION_CODE | Version Name: $LATEST_VERSION_NAME"
 
-          # Create a temporary JSON file with the new config values
+          # Create the temporary config file for Remote Config
           echo "{" > temp_config.json
           echo "  \"parameters\": {" >> temp_config.json
           echo "    \"latest_version_code\": {\"defaultValue\": {\"value\": \"$LATEST_VERSION_CODE\"}}," >> temp_config.json
@@ -120,11 +117,8 @@ jobs:
           echo "    \"update_url\": {\"defaultValue\": {\"value\": \"$UPDATE_URL\"}}" >> temp_config.json
           echo "  }" >> temp_config.json
           echo "}" >> temp_config.json
-          
-          echo "Temporary config file created:"
-          cat temp_config.json
 
-          # Import and publish the new config to your Firebase project
+          echo "Publishing updated configuration to Firebase Remote Config..."
           firebase remoteconfig:publish --project ${{ secrets.FIREBASE_PROJECT_ID }} --source temp_config.json -f
 
           echo "Remote Config published successfully!"
