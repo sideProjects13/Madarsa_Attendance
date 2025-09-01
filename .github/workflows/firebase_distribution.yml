@@ -64,7 +64,6 @@ jobs:
 
       # ===================================================================================
       # 8. FINAL & BULLETPROOF: Distribute App AND Update Remote Config
-      # This is a single, atomic step. If any command fails, the whole step fails.
       # ===================================================================================
       - name: Distribute and Update Remote Config
         if: steps.decode_keystore.outcome == 'success'
@@ -85,8 +84,6 @@ jobs:
           fi
           echo "Distribution successful."
 
-          # Step 3: Extract the CORRECT URL from the output. This is the new, robust method.
-          # It looks for the line containing "Share this release" and extracts the URL.
           echo "Step 3: Extracting the update URL..."
           UPDATE_URL=$(echo "$DISTRIBUTION_OUTPUT" | grep "Share this release" | grep -o 'https://appdistribution[^ ]*')
 
@@ -98,14 +95,12 @@ jobs:
           fi
           echo "Successfully extracted Update URL: $UPDATE_URL"
 
-          # Step 4: Get version info from Gradle
           echo "Step 4: Parsing version info from Gradle..."
           LATEST_VERSION_CODE=$(awk '/versionCode =/ {print $3}' app/build.gradle.kts)
           LATEST_VERSION_NAME=$(awk -F'"' '/versionName =/ {print $2}' app/build.gradle.kts)
           UPDATE_NOTES=$(cat release_notes.txt || echo "New update available.")
           echo "Version Code: $LATEST_VERSION_CODE | Version Name: $LATEST_VERSION_NAME"
 
-          # Step 5: Create the Remote Config file
           echo "Step 5: Creating temporary config file..."
           echo "{" > temp_config.json
           echo "  \"parameters\": {" >> temp_config.json
@@ -117,8 +112,9 @@ jobs:
           echo "}" >> temp_config.json
           
           # Step 6: Publish the config to Firebase. THIS IS THE CORRECTED COMMAND.
+          # The -f flag has been removed as it is not a valid option.
           echo "Step 6: Publishing updated configuration to Firebase Remote Config..."
-          firebase remoteconfig:publish temp_config.json --project ${{ secrets.FIREBASE_PROJECT_ID }} -f
+          firebase remoteconfig:publish temp_config.json --project ${{ secrets.FIREBASE_PROJECT_ID }} --force
 
           if [ $? -ne 0 ]; then
             echo "::error::Failed to publish new version to Remote Config. The app was distributed, but the in-app prompt will not work."
