@@ -54,7 +54,7 @@ class StudentAttendanceAdapter(
         private val colorSelectedText: Int by lazy { ContextCompat.getColor(itemView.context, R.color.bw_theme_onPrimary) }
         private val colorUnselectedText: Int by lazy {
             val typedValue = TypedValue()
-            itemView.context.theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, typedValue, true)
+                itemView.context.theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, typedValue, true)
             typedValue.data
         }
         private val colorUnselectedStroke: Int by lazy { colorUnselectedText }

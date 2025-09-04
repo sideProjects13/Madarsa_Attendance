@@ -22,6 +22,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.madarsa_attendance.worker.SyncAttendanceWorker
 import com.google.android.material.button.MaterialButton
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -109,7 +110,9 @@ class TakeAttendanceFragment : Fragment() {
         setupRecyclerView()
         setupSwipeToRefresh()
         btnChangeDate.setOnClickListener { showDatePicker() }
-        btnSaveAttendance.setOnClickListener { saveAttendanceLocally() }
+
+        // The save button now calls our new intelligent save function
+        btnSaveAttendance.setOnClickListener { saveAttendance() }
 
         teacherDataViewModel.studentsDataMightHaveChanged.observe(viewLifecycleOwner) { event ->
             event.getContentIfNotHandled()?.let {
@@ -120,7 +123,6 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        // The callback is no longer needed as the adapter updates its own data
         studentAdapter = StudentAttendanceAdapter(mutableListOf())
         recyclerViewStudents.layoutManager = LinearLayoutManager(context)
         recyclerViewStudents.adapter = studentAdapter
@@ -134,7 +136,6 @@ class TakeAttendanceFragment : Fragment() {
             btnSaveAttendance.isEnabled = false
 
             try {
-                // Step 1: ALWAYS fetch the master student roster for the class from Firestore.
                 val studentRoster = fetchStudentRosterFromFirestore()
                 if (!isAdded) return@launch
 
@@ -143,7 +144,6 @@ class TakeAttendanceFragment : Fragment() {
                     return@launch
                 }
 
-                // Step 2: Check for a local (unsynced) attendance record for the selected date.
                 val localRecord = withContext(Dispatchers.IO) {
                     localDb.attendanceDao().getAttendanceForDate(dateForAttendance, currentTeacherId!!)
                 }
@@ -241,14 +241,81 @@ class TakeAttendanceFragment : Fragment() {
         }
     }
 
-    private fun saveAttendanceLocally() {
+    // --- NEW MASTER SAVE FUNCTION ---
+    private fun saveAttendance() {
         val attendanceData = studentAdapter.getAttendanceData()
         if (attendanceData.isEmpty()) {
             Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show()
             return
         }
+
         progressBar.visibility = View.VISIBLE
         btnSaveAttendance.isEnabled = false
+
+        lifecycleScope.launch {
+            if (NetworkUtils.isOnline(requireContext())) {
+                saveToFirestoreAndLocal(attendanceData)
+            } else {
+                saveToLocalOnly(attendanceData)
+            }
+        }
+    }
+
+    private suspend fun saveToFirestoreAndLocal(attendanceData: List<StudentAttendanceItem>) {
+        try {
+            val studentListForFirestore = attendanceData.map {
+                mapOf("studentId" to it.id, "studentName" to it.name, "status" to it.status)
+            }
+            val firestoreRecord = mapOf(
+                "date" to dateForAttendance,
+                "teacherId" to currentTeacherId!!,
+                "teacherName" to (currentTeacherName ?: "?"),
+                "organizationId" to currentOrganizationId!!,
+                "studentAttendances" to studentListForFirestore,
+                "lastUpdatedAt" to FieldValue.serverTimestamp()
+            )
+
+            val existingDoc = onlineDb.collection("organizations").document(currentOrganizationId!!)
+                .collection("attendanceRecords")
+                .whereEqualTo("date", dateForAttendance)
+                .whereEqualTo("teacherId", currentTeacherId!!)
+                .limit(1).get().await()
+
+            if (existingDoc.isEmpty) {
+                onlineDb.collection("organizations").document(currentOrganizationId!!)
+                    .collection("attendanceRecords").add(firestoreRecord).await()
+            } else {
+                val docId = existingDoc.documents[0].id
+                onlineDb.collection("organizations").document(currentOrganizationId!!)
+                    .collection("attendanceRecords").document(docId).set(firestoreRecord).await()
+            }
+
+            val localRecord = LocalAttendanceRecord(
+                date = dateForAttendance,
+                teacherId = currentTeacherId!!,
+                teacherName = currentTeacherName ?: "?",
+                organizationId = currentOrganizationId!!,
+                studentAttendancesJson = Gson().toJson(attendanceData),
+                isSynced = true // Mark as synced
+            )
+            localDb.attendanceDao().upsertAttendance(localRecord)
+
+            if (isAdded) {
+                StatusDialogFragment.newInstance(true, "Attendance Saved Successfully!").show(parentFragmentManager, "successDialog")
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving to Firestore, falling back to local save.", e)
+            saveToLocalOnly(attendanceData)
+        } finally {
+            if (isAdded) {
+                progressBar.visibility = View.GONE
+                btnSaveAttendance.isEnabled = true
+            }
+        }
+    }
+
+    private suspend fun saveToLocalOnly(attendanceData: List<StudentAttendanceItem>) {
         val record = LocalAttendanceRecord(
             date = dateForAttendance,
             teacherId = currentTeacherId!!,
@@ -257,14 +324,13 @@ class TakeAttendanceFragment : Fragment() {
             studentAttendancesJson = Gson().toJson(attendanceData),
             isSynced = false
         )
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                localDb.attendanceDao().upsertAttendance(record)
-            }
-            if (!isAdded) return@launch
+        withContext(Dispatchers.IO) {
+            localDb.attendanceDao().upsertAttendance(record)
+        }
+        if (isAdded) {
             progressBar.visibility = View.GONE
             btnSaveAttendance.isEnabled = true
-            StatusDialogFragment.newInstance(true, "Attendance Saved Locally!").show(parentFragmentManager, "successDialog")
+            StatusDialogFragment.newInstance(true, "Attendance Saved Locally (Offline)").show(parentFragmentManager, "successDialog")
             scheduleSync()
         }
     }
@@ -285,8 +351,8 @@ class TakeAttendanceFragment : Fragment() {
 
     private fun updateDateDisplay() {
         tvAttendanceDate.text = try {
-            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateForAttendance) ?: Date()
-            "Date: ${SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(date)}"
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateForAttendance)
+            "Date: ${SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(date!!)}"
         } catch (e: Exception) { "Date: $dateForAttendance" }
     }
 
