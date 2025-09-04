@@ -10,8 +10,7 @@ class TeacherOptionsPagerAdapter(
     private val teacherName: String
 ) : FragmentStateAdapter(fragmentActivity) {
 
-    // Updated tab titles: Manage Class, Attendance, Payments
-    val tabTitles = arrayOf("Attendance", "Manage Class", "Payments") // Order from previous step
+    val tabTitles = arrayOf("Attendance", "Manage Class", "Payments")
 
     override fun getItemCount(): Int = tabTitles.size
 
@@ -19,7 +18,7 @@ class TeacherOptionsPagerAdapter(
         return when (position) {
             0 -> TakeAttendanceFragment.newInstance(teacherId, teacherName)
             1 -> ManageClassFragment.newInstance(teacherId, teacherName)
-            2 -> PaymentSummaryFragment.newInstance(teacherId, teacherName)
+            2 -> PaymentSummaryFragment.newInstance(teacherId, teacherName) // Assuming this fragment exists
             else -> throw IllegalArgumentException("Invalid position for ViewPager: $position")
         }
     }

@@ -11,7 +11,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -26,6 +25,8 @@ import java.util.Locale
 class QuickFeesDialogFragment : DialogFragment() {
 
     private val viewModel: DashboardViewModel by activityViewModels()
+    // --- THIS IS THE FIX: Use your existing TeacherDataViewModel ---
+    private val sharedViewModel: TeacherDataViewModel by activityViewModels()
     private val TAG = "QuickFeesDialog"
 
     companion object {
@@ -96,7 +97,7 @@ class QuickFeesDialogFragment : DialogFragment() {
 
         if (context is FeeStudentSelectionListener) {
             listener = context as FeeStudentSelectionListener
-        } else { /* ... listener attachment logic ... */ }
+        }
 
         setupRecyclerView()
         setupSearch()
@@ -133,8 +134,8 @@ class QuickFeesDialogFragment : DialogFragment() {
             progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
             searchEditText.isEnabled = !isLoading
             if (isLoading) {
-                tvEmptyMessage.visibility = View.VISIBLE // Show a message while loading
                 tvEmptyMessage.text = "Loading students..."
+                tvEmptyMessage.visibility = View.VISIBLE
                 searchResultsRecyclerView.visibility = View.GONE
             }
         }
@@ -146,13 +147,21 @@ class QuickFeesDialogFragment : DialogFragment() {
                     tvEmptyMessage.visibility = View.VISIBLE
                     searchResultsRecyclerView.visibility = View.GONE
                 } else {
-                    // --- MODIFIED: Initially show a prompt to start typing ---
                     tvEmptyMessage.text = "Start typing to search for a student."
                     tvEmptyMessage.visibility = View.VISIBLE
                     searchResultsRecyclerView.visibility = View.GONE
-                    // Apply initial empty filter to clear the list
                     filterList(searchEditText.text.toString())
                 }
+            }
+        }
+
+        // --- THIS IS THE CORRECTED OBSERVER ---
+        sharedViewModel.studentsDataMightHaveChanged.observe(viewLifecycleOwner) { event ->
+            // We get the content of the Event wrapper
+            val shouldRefresh = event.getContentIfNotHandled()
+            // And check if it's not null (meaning it's a fresh event)
+            if (shouldRefresh != null) {
+                viewModel.fetchStudentListForSearch(forceRefresh = true)
             }
         }
     }
@@ -160,10 +169,8 @@ class QuickFeesDialogFragment : DialogFragment() {
     private fun filterList(query: String) {
         val allStudents = viewModel.allStudentsList.value ?: emptyList()
 
-        // --- MODIFIED: Only filter and show list if query is NOT blank ---
         if (query.isBlank()) {
-            studentSelectionAdapter.submitList(emptyList()) // Show an empty list
-            // Show a prompt if there are students available to be searched
+            studentSelectionAdapter.submitList(emptyList())
             if (allStudents.isNotEmpty()) {
                 tvEmptyMessage.text = "Start typing to search for a student."
                 tvEmptyMessage.visibility = View.VISIBLE
@@ -172,7 +179,6 @@ class QuickFeesDialogFragment : DialogFragment() {
             return
         }
 
-        // --- This part runs only when the user has typed something ---
         val lowerCaseQuery = query.lowercase(Locale.getDefault())
         val filtered = allStudents.filter {
             it.studentName.lowercase(Locale.getDefault()).contains(lowerCaseQuery) ||
@@ -180,7 +186,6 @@ class QuickFeesDialogFragment : DialogFragment() {
         }
         studentSelectionAdapter.submitList(filtered)
 
-        // Update UI based on filtered results
         if (filtered.isEmpty()) {
             tvEmptyMessage.text = "No students found matching '$query'."
             tvEmptyMessage.visibility = View.VISIBLE

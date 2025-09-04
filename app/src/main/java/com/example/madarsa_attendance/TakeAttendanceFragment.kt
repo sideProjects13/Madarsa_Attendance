@@ -20,14 +20,13 @@ import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.example.madarsa_attendance.AppDatabase
-import com.example.madarsa_attendance.LocalAttendanceRecord
 import com.example.madarsa_attendance.worker.SyncAttendanceWorker
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -52,7 +51,6 @@ class TakeAttendanceFragment : Fragment() {
         }
     }
 
-    // Views
     private lateinit var tvClassName: TextView
     private lateinit var tvAttendanceDate: TextView
     private lateinit var btnChangeDate: ImageButton
@@ -63,13 +61,11 @@ class TakeAttendanceFragment : Fragment() {
     private lateinit var tvNoStudents: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
 
-    // Backend & Data
     private lateinit var onlineDb: FirebaseFirestore
     private lateinit var localDb: AppDatabase
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
     private var currentOrganizationId: String? = null
-
     private lateinit var dateForAttendance: String
     private lateinit var teacherDataViewModel: TeacherDataViewModel
 
@@ -91,7 +87,6 @@ class TakeAttendanceFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_take_attendance, container, false)
-        // Initialize views
         tvClassName = view.findViewById(R.id.tvClassNameAttendance)
         tvAttendanceDate = view.findViewById(R.id.tvAttendanceDate)
         btnChangeDate = view.findViewById(R.id.btnChangeDate)
@@ -114,7 +109,7 @@ class TakeAttendanceFragment : Fragment() {
         setupRecyclerView()
         setupSwipeToRefresh()
         btnChangeDate.setOnClickListener { showDatePicker() }
-        btnSaveAttendance.setOnClickListener { saveAttendanceLocally() } // Call the corrected local save function
+        btnSaveAttendance.setOnClickListener { saveAttendanceLocally() }
 
         teacherDataViewModel.studentsDataMightHaveChanged.observe(viewLifecycleOwner) { event ->
             event.getContentIfNotHandled()?.let {
@@ -130,6 +125,7 @@ class TakeAttendanceFragment : Fragment() {
         recyclerViewStudents.adapter = studentAdapter
     }
 
+    // --- THIS IS THE NEW, CORRECTED DATA LOADING LOGIC ---
     private fun loadData() {
         lifecycleScope.launch {
             if (!swipeRefreshLayout.isRefreshing) progressBar.visibility = View.VISIBLE
@@ -137,58 +133,109 @@ class TakeAttendanceFragment : Fragment() {
             recyclerViewStudents.visibility = View.GONE
             btnSaveAttendance.isEnabled = false
 
-            // 1. Try to load today's attendance from the local database
-            val localRecord = withContext(Dispatchers.IO) {
-                localDb.attendanceDao().getAttendanceForDate(dateForAttendance, currentTeacherId!!)
-            }
+            try {
+                // Step 1: ALWAYS fetch the master student roster for the class from Firestore.
+                val studentRoster = fetchStudentRosterFromFirestore()
+                if (!isAdded) return@launch
 
-            if (localRecord != null) {
-                // If found locally, display it immediately
-                val studentList = Gson().fromJson(localRecord.studentAttendancesJson, Array<StudentAttendanceItem>::class.java).toList()
-                studentAdapter.submitList(studentList)
-                updateUiWithStudentList()
-                Log.d(TAG, "Loaded attendance from local DB for $dateForAttendance")
-            } else {
-                // 2. If not found locally, fetch the student list from Firestore
-                fetchStudentsForClassFromFirestore()
-            }
-        }
-    }
-
-    private fun fetchStudentsForClassFromFirestore() {
-        Log.d(TAG, "No local record found. Fetching student roster from Firestore.")
-        onlineDb.collection("organizations").document(currentOrganizationId!!)
-            .collection("students").whereEqualTo("teacherId", currentTeacherId)
-            .whereEqualTo("isActive", true)
-            .orderBy("studentName")
-            .get()
-            .addOnSuccessListener { studentSnap ->
-                if (!isAdded) return@addOnSuccessListener
-                val list = studentSnap.documents.map { doc ->
-                    StudentAttendanceItem(
-                        id = doc.id,
-                        name = doc.getString("studentName") ?: "N/A",
-                        status = "Present", // Default to present for a new list
-                        profileImageUrl = doc.getString("profileImageUrl")
-                    )
+                if (studentRoster.isEmpty()) {
+                    updateUiWithStudentList(emptyList())
+                    return@launch
                 }
-                studentAdapter.submitList(list)
-                updateUiWithStudentList()
-            }
-            .addOnFailureListener { e ->
-                if (!isAdded) return@addOnFailureListener
+
+                // Step 2: Check for a local (unsynced) attendance record for the selected date.
+                val localRecord = withContext(Dispatchers.IO) {
+                    localDb.attendanceDao().getAttendanceForDate(dateForAttendance, currentTeacherId!!)
+                }
+
+                val finalStudentList: List<StudentAttendanceItem>
+                if (localRecord != null) {
+                    // If a local record exists, merge its data with the master roster.
+                    Log.d(TAG, "Found local record. Merging with Firestore roster.")
+                    val localAttendanceMap = Gson().fromJson(localRecord.studentAttendancesJson, Array<StudentAttendanceItem>::class.java)
+                        .associateBy { it.id }
+
+                    finalStudentList = studentRoster.map { rosterStudent ->
+                        rosterStudent.copy(status = localAttendanceMap[rosterStudent.id]?.status ?: "Present")
+                    }
+                } else {
+                    // If no local record, check Firestore for a synced record.
+                    Log.d(TAG, "No local record. Checking Firestore for synced record.")
+                    val firestoreRecord = fetchSyncedAttendanceFromFirestore()
+                    if (firestoreRecord != null) {
+                        // If a synced record exists, merge its data.
+                        Log.d(TAG, "Found synced Firestore record. Merging.")
+                        val firestoreAttendanceMap = firestoreRecord.associateBy { it.id }
+                        finalStudentList = studentRoster.map { rosterStudent ->
+                            rosterStudent.copy(status = firestoreAttendanceMap[rosterStudent.id]?.status ?: "Present")
+                        }
+                    } else {
+                        // If no record exists anywhere, the roster itself is the final list (all Present).
+                        Log.d(TAG, "No records found anywhere. Using fresh roster.")
+                        finalStudentList = studentRoster
+                    }
+                }
+
+                studentAdapter.submitList(finalStudentList)
+                updateUiWithStudentList(finalStudentList)
+
+            } catch (e: Exception) {
+                if (!isAdded) return@launch
                 progressBar.visibility = View.GONE
                 swipeRefreshLayout.isRefreshing = false
                 tvNoStudents.text = "Error loading students. Check internet connection."
                 tvNoStudents.visibility = View.VISIBLE
-                Log.e(TAG, "Error fetching students for attendance", e)
+                Log.e(TAG, "Error in master loadData function", e)
             }
+        }
     }
 
-    private fun updateUiWithStudentList() {
+    // Helper function to specifically fetch the student roster
+    private suspend fun fetchStudentRosterFromFirestore(): List<StudentAttendanceItem> {
+        val studentSnap = onlineDb.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").whereEqualTo("teacherId", currentTeacherId)
+            .whereEqualTo("isActive", true)
+            .orderBy("studentName")
+            .get().await()
+
+        return studentSnap.documents.map { doc ->
+            StudentAttendanceItem(
+                id = doc.id,
+                name = doc.getString("studentName") ?: "N/A",
+                status = "Present",
+                profileImageUrl = doc.getString("profileImageUrl")
+            )
+        }
+    }
+
+    // Helper function to fetch an already synced record from Firestore
+    private suspend fun fetchSyncedAttendanceFromFirestore(): List<StudentAttendanceItem>? {
+        val attendanceSnap = onlineDb.collection("organizations").document(currentOrganizationId!!)
+            .collection("attendanceRecords")
+            .whereEqualTo("teacherId", currentTeacherId)
+            .whereEqualTo("date", dateForAttendance)
+            .limit(1)
+            .get().await()
+
+        if (attendanceSnap.isEmpty) {
+            return null
+        }
+
+        val doc = attendanceSnap.documents[0]
+        val studentAttendancesMap = doc.get("studentAttendances") as? List<Map<String, Any>>
+        return studentAttendancesMap?.map { map ->
+            StudentAttendanceItem(
+                id = map["studentId"] as? String ?: "",
+                name = map["studentName"] as? String ?: "N/A",
+                status = map["status"] as? String ?: "Present"
+            )
+        }
+    }
+
+    private fun updateUiWithStudentList(list: List<StudentAttendanceItem>) {
         progressBar.visibility = View.GONE
         swipeRefreshLayout.isRefreshing = false
-        if (studentAdapter.itemCount > 0) {
+        if (list.isNotEmpty()) {
             recyclerViewStudents.visibility = View.VISIBLE
             tvNoStudents.visibility = View.GONE
             btnSaveAttendance.isEnabled = true
@@ -201,17 +248,14 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     private fun saveAttendanceLocally() {
+        // This function's logic is already correct and does not need to change.
         val attendanceData = studentAdapter.getAttendanceData()
         if (attendanceData.isEmpty()) {
             Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show()
             return
         }
-
-        // 1. Show the spinner immediately on the UI thread
         progressBar.visibility = View.VISIBLE
         btnSaveAttendance.isEnabled = false
-
-        // Create the record object on the main thread (this is very fast)
         val record = LocalAttendanceRecord(
             date = dateForAttendance,
             teacherId = currentTeacherId!!,
@@ -220,36 +264,21 @@ class TakeAttendanceFragment : Fragment() {
             studentAttendancesJson = Gson().toJson(attendanceData),
             isSynced = false
         )
-
-        // 2. Launch a coroutine to do the database work
         lifecycleScope.launch {
-            // 3. Switch to a background thread ONLY for the database write
             withContext(Dispatchers.IO) {
                 localDb.attendanceDao().upsertAttendance(record)
             }
-
-            // 4. Once the save is complete, the code below runs back on the main thread
-            if (!isAdded) return@launch // Safety check
-
-            // 5. Hide the spinner and show success message IMMEDIATELY
+            if (!isAdded) return@launch
             progressBar.visibility = View.GONE
             btnSaveAttendance.isEnabled = true
             StatusDialogFragment.newInstance(true, "Attendance Saved Locally!").show(parentFragmentManager, "successDialog")
-
-            // 6. Schedule the background sync as the very last step.
             scheduleSync()
         }
     }
 
     private fun scheduleSync() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val syncWorkRequest = OneTimeWorkRequestBuilder<SyncAttendanceWorker>()
-            .setConstraints(constraints)
-            .build()
-
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val syncWorkRequest = OneTimeWorkRequestBuilder<SyncAttendanceWorker>().setConstraints(constraints).build()
         WorkManager.getInstance(requireContext()).enqueue(syncWorkRequest)
         Log.d(TAG, "Sync work request enqueued.")
     }
@@ -257,8 +286,7 @@ class TakeAttendanceFragment : Fragment() {
     private fun setupSwipeToRefresh() {
         swipeRefreshLayout.setOnRefreshListener {
             Log.d(TAG, "Swipe to refresh triggered.")
-            // Force a fresh fetch from online to get the latest student list
-            fetchStudentsForClassFromFirestore()
+            loadData() // The new loadData function handles refresh correctly
         }
     }
 
@@ -277,7 +305,7 @@ class TakeAttendanceFragment : Fragment() {
 
         DatePickerDialog(requireContext(), R.style.DatePickerDialog_App_Monochrome,
             { _, year, month, dayOfMonth ->
-                dateForAttendance = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month + 1, dayOfMonth)
+                dateForAttendance = String.format(Locale.getDefault(), "%d-%0You have2d-%02d", year, month + 1, dayOfMonth)
                 updateDateDisplay()
                 loadData()
             },

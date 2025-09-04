@@ -20,6 +20,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
@@ -142,7 +143,7 @@ class AddTeacherActivity : AppCompatActivity() {
         var isValid = true
 
         if (etTeacherName.text.toString().trim().isEmpty()) {
-            tilTeacherName.error = "Teacher name cannot be empty"
+            tilTeacherName.error = "Class/Teacher name cannot be empty"
             isValid = false
         }
         if (etTeacherMobile.text.toString().trim().length != 10) {
@@ -177,32 +178,10 @@ class AddTeacherActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.Main).launch {
             try {
-                // Check if a user document (admin or teacher) already exists for this email
-                val userQuery = db.collection("users").whereEqualTo("email", email).limit(1).get().await()
-                if (!userQuery.isEmpty) {
-                    throw Exception("A user with this email already exists. Please use a different email.")
-                }
+                val teacherUid = getOrCreateAuthUser(email, password, teacherName)
 
-                // --- NEW CORRECT LOGIC ---
-                // 1. Create the Auth user using the secondary instance
-                val authResult = secondaryAuth.createUserWithEmailAndPassword(email, password).await()
-                val teacherUid = authResult.user?.uid ?: throw Exception("Failed to create Auth account.")
-                secondaryAuth.signOut() // Sign out the temporary user
-                mainAuth.currentUser?.reload()?.await() // Refresh admin session to be safe
-
-                // 2. Create the record in the top-level /users collection
-                val userRecord = hashMapOf(
-                    "role" to "teacher",
-                    "organizationId" to currentOrganizationId,
-                    "email" to email,
-                    "name" to teacherName
-                )
-                db.collection("users").document(teacherUid).set(userRecord).await()
-
-                // 3. Upload image if it exists
                 val imageUrl = imageUri?.let { withContext(Dispatchers.IO) { uploadImage(it) } }
 
-                // 4. Create the teacher document in the organization's subcollection
                 val teacherData = hashMapOf(
                     "teacherName" to teacherName,
                     "mobileNumber" to mobileNumber,
@@ -214,15 +193,47 @@ class AddTeacherActivity : AppCompatActivity() {
                 db.collection("organizations").document(currentOrganizationId!!)
                     .collection("teachers").add(teacherData).await()
 
-                // Success
-                StatusDialogFragment.newInstance(true, "Teacher Added Successfully!", true)
+                StatusDialogFragment.newInstance(true, "Class Added Successfully!", true)
                     .show(supportFragmentManager, "successDialog")
                 setResult(Activity.RESULT_OK)
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error during teacher creation", e)
+                Log.e(TAG, "Error during teacher/class creation", e)
                 handleSaveFailure(e, e.message ?: "An unknown error occurred.")
             }
+        }
+    }
+
+    private suspend fun getOrCreateAuthUser(email: String, password: String, teacherName: String): String {
+        try {
+            // Try to create a new user.
+            val authResult = secondaryAuth.createUserWithEmailAndPassword(email, password).await()
+            val newUid = authResult.user?.uid ?: throw Exception("Failed to get UID for new Auth account.")
+
+            // If creation is successful, also create the top-level user document.
+            val userRecord = hashMapOf(
+                "role" to "teacher",
+                "organizationId" to currentOrganizationId,
+                "email" to email,
+                "name" to teacherName // Use the first name given for the main user record
+            )
+            db.collection("users").document(newUid).set(userRecord).await()
+
+            secondaryAuth.signOut()
+            mainAuth.currentUser?.reload()?.await()
+
+            return newUid
+        } catch (e: FirebaseAuthUserCollisionException) {
+            // This is the expected error if the user already exists.
+            Log.d(TAG, "Auth user with email $email already exists. Fetching UID.")
+
+            // Find the user's UID from the 'users' collection.
+            val userQuery = db.collection("users").whereEqualTo("email", email).limit(1).get().await()
+            if (userQuery.isEmpty) {
+                // This is a rare edge case: Auth user exists but no Firestore doc.
+                throw Exception("User login exists, but profile is missing. Please contact support.")
+            }
+            return userQuery.documents[0].id
         }
     }
 

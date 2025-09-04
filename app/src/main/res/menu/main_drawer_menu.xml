@@ -19,6 +19,7 @@
     <item android:title="Student Management" android:icon="@drawable/ic_student_management">
         <menu>
             <item android:id="@+id/nav_quick_add_student" android:title="Add Student" />
+            <item android:id="@+id/nav_student_profile" android:title="Student Profile"/>
             <item android:id="@+id/nav_edit_student" android:title="Edit Student" />
             <item android:id="@+id/nav_delete_student" android:title="Delete Student" />
             <item android:id="@+id/nav_inactivate_student" android:title="Inactivate a Student" />
@@ -47,6 +48,7 @@
     <!-- Fee Management Category -->
     <item android:title="Fee Management" android:icon="@drawable/ic_fee_management">
         <menu>
+            <item android:id="@+id/nav_fees_dashboard" android:title="Fees Collection"/>
             <item android:id="@+id/nav_record_student_fee" android:title="Record Student Fee" />
             <item android:id="@+id/nav_student_fee_history" android:title="Student Fee History" />
             <item android:id="@+id/nav_class_fee_summary" android:title="Class Fee Summary" />
@@ -61,6 +63,7 @@
             <item android:id="@+id/nav_bulk_add_org" android:title="Bulk Add Students to Org" />
             <item android:id="@+id/nav_download_class_sample" android:title="Download Class Sample CSV" />
             <item android:id="@+id/nav_download_org_sample" android:title="Download Org Sample CSV" />
+            <item android:id="@+id/nav_bulk_move_students" android:title="Bulk Move Students"/>
             <!-- NEW ITEM FOR TEACHER SAMPLE -->
             <item android:id="@+id/nav_download_teacher_sample" android:title="Download Teacher Sample CSV" />
         </menu>

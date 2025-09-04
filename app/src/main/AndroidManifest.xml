@@ -10,6 +10,7 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".MyApplication"
@@ -22,6 +23,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
+        <activity
+            android:name=".FeesDashboardActivity"
+            android:exported="false" />
+        <activity
+            android:name=".BulkMoveStudentsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".StudentProfileActivity"
+            android:exported="false" />
         <activity
             android:name=".MarksReportActivity"
             android:exported="false" />
@@ -140,5 +150,9 @@
                 android:resource="@xml/file_paths" />
         </provider>
     </application>
+
+    <queries>
+        <package android:name="com.whatsapp" />
+    </queries>
 
 </manifest>

@@ -5,7 +5,7 @@
     import java.util.Date
 
     data class Teacher(
-        @DocumentId val teacherId: String = "",
+        @DocumentId var teacherId: String = "",
         val teacherName: String = "",
         val mobileNumber: String? = null, // Ensure this field exists
         val email: String? = null, // This is the login email

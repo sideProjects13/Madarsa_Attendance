@@ -71,6 +71,24 @@
                         android:minLines="2" />
                 </com.google.android.material.textfield.TextInputLayout>
 
+                <!-- === NEW INPUT FIELD FOR ABSENCE THRESHOLD === -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/til_absence_threshold"
+                    style="?attr/textInputOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:hint="High Absence Threshold (e.g., 3)">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_absence_threshold"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number" />
+                </com.google.android.material.textfield.TextInputLayout>
+                <!-- === END OF NEW FIELD === -->
+
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

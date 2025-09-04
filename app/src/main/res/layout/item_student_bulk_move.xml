@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp"
+    android:gravity="center_vertical"
+    android:background="?attr/selectableItemBackground">
+
+    <com.google.android.material.checkbox.MaterialCheckBox
+        android:id="@+id/checkbox_student"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"/>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_student_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="Student Name"
+            android:textColor="@color/mono_palette_black"
+            android:textAppearance="?attr/textAppearanceBodyLarge"/>
+
+        <TextView
+            android:id="@+id/tv_reg_no"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="Reg No: 123"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="@color/mono_palette_black"/>
+    </LinearLayout>
+</LinearLayout>

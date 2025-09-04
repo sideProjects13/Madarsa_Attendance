@@ -25,16 +25,6 @@
                 android:visibility="invisible"
                 tools:visibility="visible">
 
-<!--                <TextView-->
-<!--                    android:id="@+id/tv_greeting"-->
-<!--                    android:layout_width="wrap_content"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:layout_marginStart="8dp"-->
-<!--                    android:layout_marginTop="8dp"-->
-<!--                    android:layout_marginBottom="16dp"-->
-<!--                    android:textAppearance="?attr/textAppearanceHeadlineSmall"-->
-<!--                    tools:text="Good Morning!" />-->
-
                 <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -54,16 +44,24 @@
                             <TextView android:id="@+id/tvTotalTeachersCount" style="@style/DashboardCardValue" tools:text="8" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
-                    <com.google.android.material.card.MaterialCardView style="@style/DashboardCard">
+
+                    <!-- === NEW CARD: INACTIVE STUDENTS (Replaces Fees Month) === -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/inactiveStudentsCard"
+                        style="@style/DashboardCard">
                         <LinearLayout style="@style/DashboardCardContent">
-                            <TextView style="@style/DashboardCardTitle" android:text="Fees This Month" />
-                            <TextView android:id="@+id/tvFeesCollectedMonth" style="@style/DashboardCardValue" tools:text="₹45,000" />
+                            <TextView style="@style/DashboardCardTitle" android:text="Inactive Students" />
+                            <TextView android:id="@+id/tvTotalInactiveStudentsCount" style="@style/DashboardCardValue" tools:text="5" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
-                    <com.google.android.material.card.MaterialCardView style="@style/DashboardCard">
+
+                    <!-- === NEW CARD: HIGH ABSENCES (Replaces Fees Year) === -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/highAbsenceCard"
+                        style="@style/DashboardCard">
                         <LinearLayout style="@style/DashboardCardContent">
-                            <TextView style="@style/DashboardCardTitle" android:text="Fees This Year" />
-                            <TextView android:id="@+id/tvFeesCollectedYear" style="@style/DashboardCardValue" tools:text="₹3,15,000" />
+                            <TextView style="@style/DashboardCardTitle" android:text="High Absences" />
+                            <TextView android:id="@+id/tvHighAbsenceStudentsCount" style="@style/DashboardCardValue" tools:text="3" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
                 </GridLayout>
@@ -89,7 +87,6 @@
 
                         <View android:layout_width="1dp" android:layout_height="match_parent" android:background="?attr/colorOutline" android:layout_marginHorizontal="8dp"/>
 
-                        <!-- CORRECTED: Added the ID to this LinearLayout -->
                         <LinearLayout
                             android:id="@+id/absent_card_section"
                             android:layout_width="0dp"

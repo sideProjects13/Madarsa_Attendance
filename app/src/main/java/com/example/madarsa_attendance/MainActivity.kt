@@ -45,6 +45,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObjects
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -55,6 +56,8 @@ class MainActivity : AppCompatActivity(),
     QuickFeesDialogFragment.FeeStudentSelectionListener {
 
     private val TAG = "MainActivity"
+
+    private val sharedViewModel: TeacherDataViewModel by viewModels()
 
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var toolbar: MaterialToolbar
@@ -109,12 +112,24 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
-    private val studentDataChangeLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    internal val studentDataChangeLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
+            Log.d(TAG, "Data changed. Forcing refresh of student list and dashboard.")
+            // This forces the ViewModel to re-fetch from Firestore
             dashboardViewModel.fetchStudentListForSearch(forceRefresh = true)
             dashboardViewModel.refreshData()
         }
     }
+
+    private val bulkMoveLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            // When BulkMoveStudentsActivity finishes successfully, send the refresh signal
+            Log.d(TAG, "Bulk move successful, notifying for refresh.")
+            sharedViewModel.notifyStudentDataChanged()
+            dashboardViewModel.refreshData()
+        }
+    }
+
 
     private val pickCsvFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -215,6 +230,8 @@ class MainActivity : AppCompatActivity(),
 
         setupCustomNavigationDrawer()
         applyWindowInsets()
+        setupSharedViewModelObserver() // Add this call here
+
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
@@ -308,6 +325,14 @@ class MainActivity : AppCompatActivity(),
                 TeacherSelectionDialogFragment.newInstance("Select Teacher for Attendance")
                     .show(supportFragmentManager, "TeacherSelectionDialog")
             }
+
+            R.id.nav_student_profile -> {
+            // This is the FIX. It now uses the QuickFeesDialogFragment to select a student.
+            pendingStudentAction = StudentAction.VIEW_PROFILE
+            QuickFeesDialogFragment.newInstance("Select Student to View Profile", StudentAction.VIEW_PROFILE)
+                .show(supportFragmentManager, "StudentProfileSelectionDialog")
+        }
+
             R.id.nav_dashboard -> {
                 toolbar.title = "Dashboard"
                 supportFragmentManager.beginTransaction()
@@ -402,10 +427,15 @@ class MainActivity : AppCompatActivity(),
 
 
             }R.id.nav_manage_subjects -> {
-                pendingTeacherAction = TeacherAction.MANAGE_SUBJECTS
-                TeacherSelectionDialogFragment.newInstance("Select Class For Manage Subject")
-                    .show(supportFragmentManager, "TeacherSelectionDialog")
+            pendingTeacherAction = TeacherAction.MANAGE_SUBJECTS
+            TeacherSelectionDialogFragment.newInstance("Select Class For Manage Subject")
+                .show(supportFragmentManager, "TeacherSelectionDialog")
+        }
+
+            R.id.nav_fees_dashboard -> {
+                startActivity(Intent(this, FeesDashboardActivity::class.java))
             }
+
             R.id.nav_download_fees_report_class -> {
                 pendingTeacherAction = TeacherAction.DOWNLOAD_FEES_REPORT_CLASS
                 TeacherSelectionDialogFragment.newInstance("Select Class for Fees Report")
@@ -424,6 +454,12 @@ class MainActivity : AppCompatActivity(),
                     putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/csv", "text/comma-separated-values"))
                 }
                 pickCsvFileLauncher.launch(intent)
+            }
+
+            R.id.nav_bulk_move_students -> {
+                pendingTeacherAction = TeacherAction.BULK_MOVE_STUDENTS
+                TeacherSelectionDialogFragment.newInstance("Select Class to Move Students FROM")
+                    .show(supportFragmentManager, "BulkMoveSourceClassDialog")
             }
             R.id.nav_download_class_sample -> {
                 downloadCsvFile(SAMPLE_CLASS_CSV_FILENAME, SAMPLE_CLASS_CSV_CONTENT)
@@ -462,6 +498,8 @@ class MainActivity : AppCompatActivity(),
             R.id.nav_download_marks_report -> {
                 startActivity(Intent(this, MarksReportActivity::class.java))
             }
+
+
             R.id.nav_quick_add_subject -> {
                 pendingTeacherAction = TeacherAction.ADD_SUBJECT
                 TeacherSelectionDialogFragment.newInstance("Select Class to Add Subject")
@@ -490,6 +528,8 @@ class MainActivity : AppCompatActivity(),
             NavigationItem.SingleItem(R.id.nav_quick_attendance, "Attendance", R.drawable.ic_attendance_checklist),
             NavigationItem.SingleItem(R.id.nav_dashboard, "Dashboard", R.drawable.ic_dashboard),
             NavigationItem.SingleItem(R.id.nav_leaderboard, "Leaderboard", R.drawable.ic_leaderboard_trophy),
+            NavigationItem.SingleItem(R.id.nav_student_profile, "Student Profile", R.drawable.ic_person_outlined),
+
             NavigationItem.Header(
                 title = "Student Management",
                 iconResId = R.drawable.ic_school,
@@ -522,6 +562,7 @@ class MainActivity : AppCompatActivity(),
                 title = "Fee Management",
                 iconResId = R.drawable.ic_payments,
                 children = listOf(
+                    NavigationItem.Child(R.id.nav_fees_dashboard, "Fees Dashboard"),
                     NavigationItem.Child(R.id.nav_record_student_fee, "Record Student Fee"),
                     NavigationItem.Child(R.id.nav_student_fee_history, "Student Fee History"),
                     NavigationItem.Child(R.id.nav_class_fee_summary, "Class Fee Summary"),
@@ -534,6 +575,8 @@ class MainActivity : AppCompatActivity(),
                 children = listOf(
                     NavigationItem.Child(R.id.nav_bulk_add_class, "Bulk Add Students to Class"),
                     NavigationItem.Child(R.id.nav_bulk_add_org, "Bulk Add Students to Org"),
+                    NavigationItem.Child(R.id.nav_bulk_move_students, "Bulk Move Students")
+
 //                    NavigationItem.Child(R.id.nav_download_teacher_sample, "Download Teacher Sample CSV")
                 )
             ),
@@ -573,7 +616,7 @@ class MainActivity : AppCompatActivity(),
                     NavigationItem.Child(R.id.nav_student_reports, "Student Info Reports"),
                     NavigationItem.Child(R.id.nav_custom_student_info_report, "Custom Student Info Report"),
 
-                )
+                    )
             ),
             NavigationItem.SingleItemWithDivider(R.id.nav_admin_profile,"Admin Profile",R.drawable.ic_person_outlined),
             NavigationItem.SingleItemWithDivider(R.id.nav_logout, "Logout", R.drawable.ic_logout)
@@ -644,12 +687,20 @@ class MainActivity : AppCompatActivity(),
             TeacherAction.MANAGE_MARKS, TeacherAction.GENERATE_CLASS_RESULT -> {
                 showExamSelectionDialog(teacher = teacher, action = pendingTeacherAction)
             }
+
+            TeacherAction.BULK_MOVE_STUDENTS -> {
+                val intent = Intent(this, BulkMoveStudentsActivity::class.java).apply {
+                    putExtra("SOURCE_TEACHER_ID", teacher.teacherId)
+                    putExtra("SOURCE_TEACHER_NAME", teacher.teacherName)
+                }
+                studentDataChangeLauncher.launch(intent)            }
             TeacherAction.MANAGE_SUBJECTS -> {
                 val intent = Intent(this, ManageSubjectsActivity::class.java).apply {
                     putExtra(ManageSubjectsActivity.EXTRA_TEACHER_ID_CONTEXT, teacher.teacherId)
                     putExtra(ManageSubjectsActivity.EXTRA_TEACHER_NAME_CONTEXT, teacher.teacherName)
                 }
-                startActivity(intent)
+//                startActivity(intent)
+                bulkMoveLauncher.launch(intent)
             }
             TeacherAction.MANAGE_CLASS -> {
                 val intent = Intent(this, TeacherOptionsActivity::class.java).apply {
@@ -686,6 +737,12 @@ class MainActivity : AppCompatActivity(),
                     putExtra("TEACHER_NAME", student.teacherName)
                 }
                 studentDataChangeLauncher.launch(intent)
+            }
+            StudentAction.VIEW_PROFILE -> {
+                val intent = Intent(this, StudentProfileActivity::class.java).apply {
+                    putExtra(StudentProfileActivity.EXTRA_STUDENT_ID, student.id)
+                }
+                startActivity(intent)
             }
             StudentAction.DELETE_STUDENT -> confirmDeleteStudent(student)
             StudentAction.INACTIVATE_STUDENT -> confirmInactivateStudent(student)
@@ -1072,19 +1129,92 @@ class MainActivity : AppCompatActivity(),
 
     private fun moveStudentToNewClass(student: StudentDetailsItem, newTeacher: TeacherSpinnerItem) {
         val organizationId = FirebaseAuthManager.getOrganizationId(this) ?: return
-        val updates = mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name)
-        db.collection("organizations").document(organizationId)
-            .collection("students").document(student.id).update(updates)
-            .addOnSuccessListener {
-                StatusDialogFragment.newInstance(true, "Student Moved Successfully").show(supportFragmentManager, "successDialog")
-                dashboardViewModel.fetchStudentListForSearch(forceRefresh = true)
-                dashboardViewModel.refreshData()
+
+        val loadingDialog = StatusDialogFragment.newInstance(true, "Moving student and updating all records...").apply {
+            isCancelable = false
+        }
+        loadingDialog.show(supportFragmentManager, "movingStudentDialog")
+
+        lifecycleScope.launch {
+            try {
+                val batch = db.batch()
+                val originalTeacherId = student.teacherId
+
+                // 1. Update the student document itself
+                val studentRef = db.collection("organizations").document(organizationId)
+                    .collection("students").document(student.id)
+                val studentUpdates = mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name)
+                batch.update(studentRef, studentUpdates)
+
+                // 2. Find and update all fee payments
+                val feesSnapshot = db.collection("organizations").document(organizationId)
+                    .collection("feePayments").whereEqualTo("studentId", student.id).get().await()
+                feesSnapshot.documents.forEach { doc ->
+                    batch.update(doc.reference, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
+                }
+
+                // 3. Find and update all exam results
+                val examsSnapshot = db.collection("organizations").document(organizationId)
+                    .collection("examResults").whereEqualTo("studentId", student.id).get().await()
+                examsSnapshot.documents.forEach { doc ->
+                    batch.update(doc.reference, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
+                }
+
+                // 4. Find and update all relevant attendance records
+                val attendanceSnapshot = db.collection("organizations").document(organizationId)
+                    .collection("attendanceRecords")
+                    .whereEqualTo("teacherId", originalTeacherId)
+                    .get().await()
+
+                for (doc in attendanceSnapshot.documents) {
+                    val studentAttendances = doc.get("studentAttendances") as? List<Map<String, Any>>
+                    if (studentAttendances?.any { it["studentId"] == student.id } == true) {
+                        // --- THIS IS THE NEW, CRITICAL LOGIC ---
+                        // We need to rebuild the array with the updated student info
+                        val updatedStudentAttendances = studentAttendances.map {
+                            if (it["studentId"] == student.id) {
+                                // This is the student we're moving, update their details
+                                it.toMutableMap().apply {
+                                    this["teacherName"] = newTeacher.name
+                                    // You can also update studentName here if it might change
+                                    // this["studentName"] = student.studentName
+                                }
+                            } else {
+                                // This is a different student, leave them as is
+                                it
+                            }
+                        }
+                        // Update the top-level fields AND the modified array
+                        batch.update(doc.reference, mapOf(
+                            "teacherId" to newTeacher.id,
+                            "teacherName" to newTeacher.name,
+                            "studentAttendances" to updatedStudentAttendances
+                        ))
+                        // --- END OF NEW LOGIC ---
+                    }
+                }
+
+                // 5. Commit all the changes at once
+                batch.commit().await()
+
+                // Success
+                if (!isFinishing) {
+                    loadingDialog.dismiss()
+                    StatusDialogFragment.newInstance(true, "Student moved successfully!").show(supportFragmentManager, "successDialog")
+                    dashboardViewModel.refreshData()
+                    sharedViewModel.notifyStudentDataChanged()
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error moving student and updating records", e)
+                if (!isFinishing) {
+                    loadingDialog.dismiss()
+                    StatusDialogFragment.newInstance(false, "Failed to move student: ${e.message}").show(supportFragmentManager, "failureDialog")
+                }
             }
-            .addOnFailureListener { e ->
-                StatusDialogFragment.newInstance(false, "Failed to Move Student").show(supportFragmentManager, "failureDialog")
-                Log.e(TAG, "Error moving student", e)
-            }
+        }
     }
+
 
     private fun requestStoragePermission(onGrantedAction: () -> Unit) {
         this.onPermissionGranted = onGrantedAction
@@ -1162,6 +1292,15 @@ class MainActivity : AppCompatActivity(),
         }
     }
 
+    private fun setupSharedViewModelObserver() {
+        sharedViewModel.studentsDataMightHaveChanged.observe(this) { event ->
+            event.getContentIfNotHandled()?.let {
+                // When a change is notified, force a refresh of the student list
+                // which is used by the QuickFeesDialogFragment search.
+                dashboardViewModel.fetchStudentListForSearch(forceRefresh = true)
+            }
+        }
+    }
 //    private fun updateNavHeader() {
 //        try {
 //            val customNavView = findViewById<View>(R.id.custom_nav_view)

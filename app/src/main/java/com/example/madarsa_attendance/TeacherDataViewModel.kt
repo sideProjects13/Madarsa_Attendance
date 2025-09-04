@@ -9,19 +9,19 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObjects
 
 // Event class to handle one-time events
-open class Event<out T>(private val content: T) {
-    var hasBeenHandled = false
-        private set
-    fun getContentIfNotHandled(): T? {
-        return if (hasBeenHandled) {
-            null
-        } else {
-            hasBeenHandled = true
-            content
-        }
-    }
-    fun peekContent(): T = content
-}
+//open class Event<out T>(private val content: T) {
+//    var hasBeenHandled = false
+//        private set
+//    fun getContentIfNotHandled(): T? {
+//        return if (hasBeenHandled) {
+//            null
+//        } else {
+//            hasBeenHandled = true
+//            content
+//        }
+//    }
+//    fun peekContent(): T = content
+//}
 
 class TeacherDataViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -35,11 +35,15 @@ class TeacherDataViewModel(application: Application) : AndroidViewModel(applicat
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
 
-    private val _studentsDataMightHaveChanged = MutableLiveData<Event<Unit>>()
-    val studentsDataMightHaveChanged: LiveData<Event<Unit>> get() = _studentsDataMightHaveChanged
+    private val _studentsDataMightHaveChanged = MutableLiveData<Event<Boolean>>()
+    val studentsDataMightHaveChanged: LiveData<Event<Boolean>> = _studentsDataMightHaveChanged
 
+    /**
+     * Call this from anywhere to signal that student data has changed
+     * and other parts of the app should refresh.
+     */
     fun notifyStudentDataChanged() {
-        _studentsDataMightHaveChanged.value = Event(Unit)
+        _studentsDataMightHaveChanged.value = Event(true)
     }
 
     // --- THIS IS THE MISSING FUNCTION ---

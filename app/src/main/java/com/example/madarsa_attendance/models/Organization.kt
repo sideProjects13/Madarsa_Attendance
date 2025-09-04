@@ -12,5 +12,7 @@ data class Organization(
     @get:Exclude var createdAt: FieldValue? = null,
 
     val address: String? = null,
-    val logoUrl: String? = null // Only one logo URL is needed now
+    val logoUrl: String? = null, // Only one logo URL is needed now
+    val highAbsenceThreshold: Int? = null
+
 )
