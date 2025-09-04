@@ -70,7 +70,6 @@ class ManageClassFragment : Fragment() {
     val viewModel: ManageClassViewModel by viewModels()
     private lateinit var sharedViewModel: TeacherDataViewModel
 
-    // This launcher correctly handles results for Add/Edit and refreshes the fragment's list.
     private val studentActionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
@@ -223,7 +222,6 @@ class ManageClassFragment : Fragment() {
         }
     }
 
-    // --- THIS FUNCTION IS NOW CORRECTED ---
     private fun showAddStudentOptionsDialog() {
         if (!isAdded) return
         val dialogView =
@@ -241,7 +239,6 @@ class ManageClassFragment : Fragment() {
                 putExtra("PRESELECTED_TEACHER_ID", currentTeacherId)
                 putExtra("PRESELECTED_TEACHER_NAME", currentTeacherName)
             }
-            // Use the fragment's own launcher
             studentActionLauncher.launch(intent)
         }
         btnAddBulk.setOnClickListener {
@@ -336,7 +333,7 @@ class ManageClassFragment : Fragment() {
         })
     }
 
-    // --- THIS FUNCTION IS ALSO CORRECTED ---
+    // --- THIS FUNCTION IS CORRECTED TO PREVENT THE CRASH ---
     private fun showStudentOptionsDialog(student: StudentDetailsItem) {
         if (!isAdded) return
         val options = arrayOf(
@@ -354,12 +351,12 @@ class ManageClassFragment : Fragment() {
                         val intent = Intent(activity, EditStudentActivity::class.java).apply {
                             putExtra("STUDENT_ID", student.id)
                         }
-                        // Use the fragment's own launcher
                         studentActionLauncher.launch(intent)
                     }
-
                     1 -> confirmInactivateStudent(student)
-                    2 -> (requireActivity() as MainActivity).confirmDeleteStudent(student)
+                    // THIS IS THE FIX: It now calls the fragment's local delete function
+                    // instead of trying to cast the Activity to MainActivity.
+                    2 -> confirmDeleteStudent(student)
                     3 -> showMoveStudentDialog(student)
                     4 -> {
                         val calendar = Calendar.getInstance()
@@ -383,6 +380,44 @@ class ManageClassFragment : Fragment() {
             .setMessage("Are you sure you want to inactivate ${student.studentName}?")
             .setPositiveButton("Inactivate") { _, _ -> inactivateStudentInFirestore(student.id) }
             .setNegativeButton("Cancel", null).show()
+    }
+
+    // --- NEW FUNCTION: Moved from MainActivity to make this fragment self-contained ---
+    private fun confirmDeleteStudent(student: StudentDetailsItem) {
+        AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
+            .setTitle("Delete Student")
+            .setMessage("Are you sure you want to permanently delete ${student.studentName}? This action cannot be undone.")
+            .setPositiveButton("Delete") { _, _ -> deleteStudentFromFirestore(student.id) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // --- NEW FUNCTION: Moved from MainActivity and adapted for this fragment ---
+    private fun deleteStudentFromFirestore(studentId: String) {
+        if (currentOrganizationId == null) return
+        progressBar.visibility = View.VISIBLE // Show progress indicator
+
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId).delete()
+            .addOnSuccessListener {
+                if (isAdded) { // Check if fragment is still attached
+                    Toast.makeText(context, "Student deleted successfully", Toast.LENGTH_SHORT).show()
+                    // Notify other parts of the app that data has changed
+                    sharedViewModel.notifyStudentDataChanged()
+                    // Refresh this fragment's list
+                    viewModel.refreshStudents()
+                }
+            }
+            .addOnFailureListener { e ->
+                if (isAdded) {
+                    Toast.makeText(context, "Failed to delete student: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            .addOnCompleteListener {
+                if (isAdded) {
+                    progressBar.visibility = View.GONE // Hide progress indicator
+                }
+            }
     }
 
     private fun inactivateStudentInFirestore(studentId: String) {
@@ -467,26 +502,22 @@ class ManageClassFragment : Fragment() {
                 val batch = db.batch()
                 val originalTeacherId = student.teacherId
 
-                // 1. Update the student document
                 val studentRef = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("students").document(student.id)
                 batch.update(studentRef, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
 
-                // 2. Find and update fee payments
                 val feesSnapshot = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("feePayments").whereEqualTo("studentId", student.id).get().await()
                 feesSnapshot.documents.forEach { doc ->
                     batch.update(doc.reference, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
                 }
 
-                // 3. Find and update exam results
                 val examsSnapshot = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("examResults").whereEqualTo("studentId", student.id).get().await()
                 examsSnapshot.documents.forEach { doc ->
                     batch.update(doc.reference, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
                 }
 
-                // 4. Find and update attendance records
                 val attendanceSnapshot = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("attendanceRecords")
                     .whereEqualTo("teacherId", originalTeacherId)
@@ -512,10 +543,8 @@ class ManageClassFragment : Fragment() {
                     }
                 }
 
-                // 5. Commit all changes
                 batch.commit().await()
 
-                // Success
                 if (isAdded) {
                     loadingDialog.dismiss()
                     Toast.makeText(context, "Student moved successfully!", Toast.LENGTH_SHORT).show()

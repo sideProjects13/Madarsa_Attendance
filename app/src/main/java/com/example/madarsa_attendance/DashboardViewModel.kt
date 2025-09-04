@@ -23,6 +23,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val TAG = "DashboardViewModel"
     private val DEFAULT_ABSENCE_THRESHOLD = 3
 
+    // LiveData declarations...
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
     private val _isStudentListLoading = MutableLiveData<Boolean>()
@@ -78,6 +79,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                // Fetch all necessary data concurrently
                 val orgDocDeferred = async {
                     db.collection("organizations").document(organizationId).get().await()
                 }
@@ -85,35 +87,42 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     db.collection("organizations").document(organizationId)
                         .collection("teachers").get().await().toObjects<Teacher>()
                 }
-                val allStudentsDeferred = async { // Fetch ALL students, active or not
+                // --- THIS IS THE OPTIMIZED APPROACH ---
+                // Fetch ALL students once, then filter in code.
+                val allStudentsDeferred = async {
                     db.collection("organizations").document(organizationId)
                         .collection("students").get().await().toObjects<StudentDetailsItem>()
                 }
 
+                // Await all results
                 val orgDocument = orgDocDeferred.await()
                 val allTeachers = allTeachersDeferred.await()
                 val allStudents = allStudentsDeferred.await()
 
-                // Filter students in code for reliability
-                val allActiveStudents = allStudents.filter { it.isActive ?: true }
-                val allInactiveStudents = allStudents.filter { it.isActive == false }
+                // Filter students in-memory for consistency across all calculations
+                val allActiveStudents = allStudents.filter { it.isActive }
+                val allInactiveStudents = allStudents.filter { !it.isActive }
 
+                // Extract organization settings
                 val orgData = orgDocument.toObject(Organization::class.java)
                 val highAbsenceThreshold = orgData?.highAbsenceThreshold ?: DEFAULT_ABSENCE_THRESHOLD
 
+                // Post simple counts to the UI
                 _totalStudents.postValue(allActiveStudents.size.toLong())
                 _totalTeachers.postValue(allTeachers.size.toLong())
                 _totalInactiveStudents.postValue(allInactiveStudents.size)
 
+                // Defer more complex calculations, passing the consistent, filtered lists
                 val classDistDeferred = async { fetchClassDistribution(allActiveStudents) }
                 // --- THIS IS THE FIX ---
-                // Pass the reliable, already fetched list of students to the function
+                // Pass the reliable list of active students to the attendance function.
                 val attendanceDeferred = async { fetchTodaysAttendanceStats(organizationId, allActiveStudents, allTeachers) }
                 val highAbsenceDeferred = async { calculateHighAbsenceStats(organizationId, allActiveStudents, highAbsenceThreshold) }
 
+                // Await and post the final results
                 classDistDeferred.await()
                 attendanceDeferred.await()
-                _highAbsenceStudents.postValue(highAbsenceDeferred.await() ?: emptyList())
+                _highAbsenceStudents.postValue(highAbsenceDeferred.await())
 
                 isDashboardDataLoaded = true
             } catch (e: Exception) {
@@ -125,34 +134,27 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun fetchStudentListForSearch(forceRefresh: Boolean) {
-        if (organizationId == null) return
-        if (!forceRefresh && !_allStudentsList.value.isNullOrEmpty()) {
+        if (organizationId == null || isStudentListFetchInProgress || (!forceRefresh && !_allStudentsList.value.isNullOrEmpty())) {
             return
         }
-        if (isStudentListFetchInProgress) return
-
         isStudentListFetchInProgress = true
         _isStudentListLoading.postValue(true)
         db.collection("organizations").document(organizationId)
             .collection("students").whereEqualTo("isActive", true)
             .orderBy("studentName")
             .get()
-            .addOnSuccessListener { documents ->
-                _allStudentsList.postValue(documents.toObjects())
-            }
-            .addOnFailureListener {
-                _allStudentsList.postValue(emptyList())
-            }
-            .addOnCompleteListener {
-                isStudentListFetchInProgress = false
-                _isStudentListLoading.postValue(false)
-            }
+            .addOnSuccessListener { documents -> _allStudentsList.postValue(documents.toObjects()) }
+            .addOnFailureListener { _allStudentsList.postValue(emptyList()) }
+            .addOnCompleteListener { isStudentListFetchInProgress = false; _isStudentListLoading.postValue(false) }
     }
 
-    // --- THIS FUNCTION IS NOW CORRECTED ---
+    // --- THIS FUNCTION IS NOW FULLY CORRECTED ---
     private suspend fun fetchTodaysAttendanceStats(orgId: String, allActiveStudents: List<StudentDetailsItem>, allTeachers: List<Teacher>) {
         try {
-            val totalActiveStudentsCount = allActiveStudents.size // Use the reliable count
+            // Create a Set of active student IDs for very fast lookups.
+            val activeStudentIds = allActiveStudents.map { it.id }.toSet()
+            val totalActiveStudentsCount = activeStudentIds.size
+
             val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             val attendanceQuery = db.collection("organizations").document(orgId)
                 .collection("attendanceRecords").whereEqualTo("date", todayDateStr).get().await()
@@ -166,28 +168,37 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 markedTeacherIds.add(doc.getString("teacherId") ?: "")
                 val studentAttendances = doc.get("studentAttendances") as? List<Map<String, Any>>
                 studentAttendances?.forEach { studentMap ->
-                    when (studentMap["status"] as? String) {
-                        "Present" -> present++
-                        "Absent" -> {
-                            absent++
-                            absentStudentItems.add(
-                                DashboardStudentItem(
-                                    id = studentMap["studentId"] as? String ?: "",
-                                    name = studentMap["studentName"] as? String ?: "Unknown",
-                                    imageUrl = null,
-                                    subtitle = doc.getString("teacherName")
+                    val studentId = studentMap["studentId"] as? String
+
+                    // --- THIS IS THE CORE FIX ---
+                    // Only count the attendance if the student is in our active list.
+                    if (studentId != null && activeStudentIds.contains(studentId)) {
+                        when (studentMap["status"] as? String) {
+                            "Present" -> present++
+                            "Absent" -> {
+                                absent++
+                                // Also ensure we only add valid absentees to the list
+                                absentStudentItems.add(
+                                    DashboardStudentItem(
+                                        id = studentId,
+                                        name = studentMap["studentName"] as? String ?: "Unknown",
+                                        imageUrl = null, // You might fetch this from the student list if needed
+                                        subtitle = doc.getString("teacherName")
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
             }
 
+            // The calculation is now correct and will never be negative.
             _presentCount.postValue(present)
             _absentCount.postValue(absent)
             _notMarkedCount.postValue(totalActiveStudentsCount - (present + absent))
             _absentStudents.postValue(absentStudentItems)
 
+            // Unmarked teachers logic remains the same
             val unmarked = allTeachers.filterNot { markedTeacherIds.contains(it.teacherId) }
             _unmarkedTeachers.postValue(unmarked)
 
@@ -195,7 +206,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             Log.e(TAG, "Error fetching attendance stats", e)
             _presentCount.postValue(0)
             _absentCount.postValue(0)
-            _notMarkedCount.postValue(allActiveStudents.size)
+            _notMarkedCount.postValue(allActiveStudents.size) // Fallback to total active students on error
             _absentStudents.postValue(emptyList())
             _unmarkedTeachers.postValue(allTeachers)
         }
