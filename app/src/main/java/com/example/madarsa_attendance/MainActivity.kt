@@ -339,6 +339,30 @@ class MainActivity : AppCompatActivity(),
                     .replace(R.id.fragment_container, DashboardFragment())
                     .commit()
             }
+
+            R.id.nav_manage_inventory -> {
+                startActivity(Intent(this, ManageInventoryActivity::class.java))
+            }
+
+            R.id.nav_sell_item -> {
+                // Set the pending action and launch the student search dialog
+                pendingStudentAction = StudentAction.SELL_ITEM
+                QuickFeesDialogFragment.newInstance("Sell Item To", StudentAction.SELL_ITEM)
+                    .show(supportFragmentManager, "SellItemDialog")
+            }
+
+            R.id.nav_sales_history -> {
+                // For Phase 3 - for now, you can create a placeholder activity or show a Toast
+                 startActivity(Intent(this, SalesHistoryActivity::class.java))
+//                Toast.makeText(this, "Sales History coming soon!", Toast.LENGTH_SHORT).show()
+            }
+
+            R.id.nav_donations_management -> {
+                // For Phase 4 - for now, you can create a placeholder activity or show a Toast
+                 startActivity(Intent(this, ManageDonationsActivity::class.java))
+            }
+            //
+
             R.id.nav_leaderboard -> startActivity(Intent(this, LeaderboardActivity::class.java))
             R.id.nav_quick_add_student -> {
                 pendingTeacherAction = TeacherAction.ADD_STUDENT
@@ -420,7 +444,9 @@ class MainActivity : AppCompatActivity(),
                     .show(supportFragmentManager, "TeacherSelectionDialog")
             }
 
-            R.id.nav_quick_add_subject -> {
+            R.id.nav_teacher_attendance_report -> {
+                startActivity(Intent(this, TeacherAttendanceReportActivity::class.java))
+            }            R.id.nav_quick_add_subject -> {
                 pendingTeacherAction = TeacherAction.ADD_SUBJECT
                 TeacherSelectionDialogFragment.newInstance("Select Class Add Subject")
                     .show(supportFragmentManager, "TeacherSelectionDialog")
@@ -554,6 +580,8 @@ class MainActivity : AppCompatActivity(),
                     NavigationItem.Child(R.id.nav_edit_teacher, "Edit Teacher"),
                     NavigationItem.Child(R.id.nav_delete_teacher, "Delete Teacher"),
                     NavigationItem.Child(R.id.nav_manage_teachers, "Manage Teachers"),
+                    NavigationItem.Child(R.id.nav_teacher_attendance_report, "Teacher Attendance Report"),
+
 //                    NavigationItem.Child(R.id.nav_bulk_add_teachers, "Bulk Add Teachers"),
                     NavigationItem.Child(R.id.nav_download_teacher_data, "Download Teacher Data")
                 )
@@ -567,6 +595,27 @@ class MainActivity : AppCompatActivity(),
                     NavigationItem.Child(R.id.nav_student_fee_history, "Student Fee History"),
                     NavigationItem.Child(R.id.nav_class_fee_summary, "Class Fee Summary"),
                     NavigationItem.Child(R.id.nav_download_fees_report_class, "Download Fees Report (Class)")
+                )
+            ),
+            NavigationItem.Header(
+                title = "Exam Management",
+                iconResId = R.drawable.ic_description,
+                children = listOf(
+                    NavigationItem.Child(R.id.nav_exams, "Manage Exams"),
+                    NavigationItem.Child(R.id.nav_add_update_marks, "Add/Update Marks"),
+                    NavigationItem.Child(R.id.nav_generate_student_result, "Generate Student Result"),
+                    NavigationItem.Child(R.id.nav_generate_class_result, "Generate Class Result"),
+                    NavigationItem.Child(R.id.nav_download_marks_report, "Marks Report")
+
+                )
+            ),
+            NavigationItem.Header(
+                title = "Store Management",
+                iconResId = R.drawable.ic_store, // Use the new icon
+                children = listOf(
+                    NavigationItem.Child(R.id.nav_manage_inventory, "Manage Inventory"),
+                    NavigationItem.Child(R.id.nav_sell_item, "Sell Item"),
+                    NavigationItem.Child(R.id.nav_sales_history, "View Sales History")
                 )
             ),
             NavigationItem.Header(
@@ -591,17 +640,6 @@ class MainActivity : AppCompatActivity(),
                 )
             ),
             NavigationItem.Header(
-                title = "Exam Management",
-                iconResId = R.drawable.ic_description,
-                children = listOf(
-                    NavigationItem.Child(R.id.nav_exams, "Manage Exams"),
-                    NavigationItem.Child(R.id.nav_add_update_marks, "Add/Update Marks"),
-                    NavigationItem.Child(R.id.nav_generate_student_result, "Generate Student Result"),
-                    NavigationItem.Child(R.id.nav_generate_class_result, "Generate Class Result"),
-                    NavigationItem.Child(R.id.nav_download_marks_report, "Marks Report")
-
-                )
-            ),NavigationItem.Header(
                 title = "Subject Management",
                 iconResId = R.drawable.ic_subject_book,
                 children = listOf(
@@ -616,6 +654,12 @@ class MainActivity : AppCompatActivity(),
                     NavigationItem.Child(R.id.nav_student_reports, "Student Info Reports"),
                     NavigationItem.Child(R.id.nav_custom_student_info_report, "Custom Student Info Report"),
 
+                    )
+            ),NavigationItem.Header(
+                title = "Donation Mangement",
+                iconResId = R.drawable.ic_receipt,
+                children = listOf(
+                    NavigationItem.Child(R.id.nav_donations_management, "Manage Donations"),
                     )
             ),
             NavigationItem.SingleItemWithDivider(R.id.nav_admin_profile,"Admin Profile",R.drawable.ic_person_outlined),
@@ -755,6 +799,15 @@ class MainActivity : AppCompatActivity(),
             StudentAction.GENERATE_STUDENT_RESULT -> {
                 showExamSelectionDialog(student = student, action = action)
             }
+
+            StudentAction.SELL_ITEM -> {
+                val intent = Intent(this, SellItemActivity::class.java).apply {
+                    // Pass the entire selected student object to the next activity
+                    putExtra(SellItemActivity.EXTRA_STUDENT, student)
+                }
+                startActivity(intent)
+            }
+
             StudentAction.VIEW_FEE_HISTORY -> {
                 val intent = Intent(this, StudentPaymentHistoryActivity::class.java).apply {
                     putExtra("STUDENT_ID", student.id)

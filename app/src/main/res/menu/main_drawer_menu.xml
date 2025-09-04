@@ -39,6 +39,7 @@
             <item android:id="@+id/nav_edit_teacher" android:title="Edit Teacher" />
             <item android:id="@+id/nav_delete_teacher" android:title="Delete Teacher" />
             <item android:id="@+id/nav_manage_teachers" android:title="Manage Teachers" />
+            <item android:id="@+id/nav_teacher_attendance_report" android:title="Teacher Atterndance Report"/>
             <!-- NEW ITEMS FOR TEACHER MANAGEMENT -->
             <item android:id="@+id/nav_bulk_add_teachers" android:title="Bulk Add Teachers" />
             <item android:id="@+id/nav_download_teacher_data" android:title="Download Teacher Data" />
@@ -90,6 +91,26 @@
         </menu>
     </item>
 
+    <item android:title="Store Management" android:icon="@drawable/ic_store"> <!-- You will need a new icon here -->
+        <menu>
+            <item
+                android:id="@+id/nav_manage_inventory"
+                android:title="Manage Inventory" />
+            <item
+                android:id="@+id/nav_sell_item"
+                android:title="Sell Item" />
+            <item
+                android:id="@+id/nav_sales_history"
+                android:title="View Sales History" />
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/nav_donations_management"
+        android:icon="@drawable/ic_volunteer_activism"
+        android:title="Donations Management" />
+    <!-- === END OF NEW ITEM === -->
+
     <!-- Prints Category -->
     <item android:title="Prints" android:icon="@drawable/ic_prints">
         <menu>
@@ -97,6 +118,11 @@
             <item android:id="@+id/nav_custom_student_info_report" android:title="Custom Student Info Report" />
         </menu>
     </item>
+<!--    <item android:title="Donations" android:icon="@drawable/ic_receipt">-->
+<!--        <menu>-->
+<!--            <item android:id="@+id/nav_donations_management" android:title="Manage Donations" />-->
+<!--        </menu>-->
+<!--    </item>-->
 
     <!-- Account (Bottom) -->
     <item android:title="Account" android:icon="@drawable/ic_account">

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp"
+    android:gravity="center_vertical"
+    android:background="?attr/selectableItemBackground">
+
+    <ImageView
+        android:id="@+id/iv_teacher_icon"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="16dp"
+        tools:src="@drawable/molana"/>
+
+    <TextView
+        android:id="@+id/tv_teacher_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        tools:text="Teacher Name" />
+
+    <TextView
+        android:id="@+id/tv_attendance_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp"
+        android:textAppearance="?attr/textAppearanceLabelLarge"
+        android:textStyle="bold"
+        tools:text="Present"
+        tools:background="@color/status_paid_green"
+        tools:textColor="@color/status_text_white"/>
+</LinearLayout>

@@ -13,7 +13,6 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-
     <queries>
         <package android:name="com.whatsapp" />
     </queries>
@@ -29,6 +28,27 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
+        <activity
+            android:name=".TeacherAttendanceReportActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AddEditDonationActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManageDonationsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SalesHistoryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AddEditInventoryItemActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SellItemActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManageInventoryActivity"
+            android:exported="false" />
         <activity
             android:name=".StudentProfileActivity"
             android:exported="false" />

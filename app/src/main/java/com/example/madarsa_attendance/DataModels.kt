@@ -2,6 +2,7 @@
 
     import com.google.firebase.Timestamp
     import com.google.firebase.firestore.DocumentId
+    import java.io.Serializable
     import java.util.Date
 
     data class Teacher(
@@ -31,7 +32,7 @@
         val parentName: String? = null,
         val parentMobileNumber: String? = null,
         val profileImageUrl: String? = null,
-        val createdAt: Timestamp? = null,
+        val createdAt: Date? = null,
         val regNo: String? = null,
         val gender: String? = null,
         val admissionDate: String? = null,
@@ -40,7 +41,7 @@
         val monthlyFee: Double? = null,
         val alternateMobileNumber: String? = null,
         val address: String? = null
-    )
+    ): Serializable
 
     data class Student(
         @DocumentId val id: String = "",
@@ -118,4 +119,59 @@
         val name: String,
         val imageUrl: String?,
         val subtitle: String? = null
+    )
+
+    data class InventoryItem(
+        @DocumentId var id: String = "",
+        val itemName: String = "",
+        var stockQuantity: Int = 0,
+        val sellingPrice: Double = 0.0,
+        val imageUrl: String? = null,
+        val createdAt: Date? = null
+    ) : Serializable
+
+    data class SaleRecord(
+        @DocumentId val id: String = "",
+        val studentId: String = "",
+        val studentName: String = "",
+        val studentRegNo: String? = null,
+        val parentName: String? = null,
+        val itemId: String = "",
+        val itemName: String = "",
+        val itemImageUrl: String? = null,
+        val quantitySold: Int = 1,
+        val pricePerItem: Double = 0.0,
+        val totalAmount: Double = 0.0,
+        val amountPaid: Double = 0.0,
+        val amountDue: Double = 0.0,
+        val saleDate: Date? = null
+    ) : Serializable
+
+    data class DonationRecord(
+        @DocumentId val id: String = "",
+        val donorName: String = "",
+        val amount: Double = 0.0,
+        val purpose: String? = null,
+        val donorMobile: String? = null,
+        val donationDate: Date? = null
+    ): Serializable
+
+//    data class Donation(
+//        @DocumentId val id: String = "",
+//        val donorName: String = "",
+//        val donorMobile: String = "",
+//        val amount: Double = 0.0,
+//        val paymentDate: Date? = null,
+//        val paymentMode: String? = null, // e.g., "Cash", "Online"
+//        val notes: String? = null,
+//        val recordedAt: Timestamp? = null
+//    )
+
+    data class TeacherAttendanceRecord(
+        @DocumentId val id: String = "",
+        val teacherId: String = "", // The ID from the 'teachers' collection
+        val teacherName: String = "",
+        val date: String = "", // Format "YYYY-MM-DD"
+        val status: String = "", // "Present", "Absent"
+        val organizationId: String = ""
     )

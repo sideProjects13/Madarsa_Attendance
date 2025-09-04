@@ -91,7 +91,7 @@ class ManageTeachersFragment : Fragment() {
 
     private fun setupRecyclerView() {
         manageTeachersAdapter = ManageTeachersAdapter(
-            teachers = teacherDisplayList,
+            teachers = emptyList(),
             onTeacherCardClick = { selectedTeacher ->
                 val intent = Intent(requireContext(), TeacherOptionsActivity::class.java).apply {
                     putExtra("TEACHER_ID", selectedTeacher.id)
@@ -100,6 +100,14 @@ class ManageTeachersFragment : Fragment() {
                 }
                 startActivity(intent)
             },
+            // --- THIS IS THE FIX ---
+            // Provide the new onTeacherCardLongClick listener.
+            // We can leave it empty since admins don't mark attendance here.
+            onTeacherCardLongClick = { teacher ->
+                // You could add functionality here later if you want, like showing a toast.
+                // For now, it does nothing.
+            },
+            // --- END OF FIX ---
             onEditTeacherClick = { selectedTeacher ->
                 val intent = Intent(requireContext(), EditTeacherActivity::class.java).apply {
                     putExtra("TEACHER_ID", selectedTeacher.id)

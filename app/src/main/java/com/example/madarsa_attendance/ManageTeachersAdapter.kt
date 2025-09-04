@@ -1,6 +1,6 @@
 package com.example.madarsa_attendance
 
-import android.graphics.Color // Import for Color.BLACK, Color.WHITE etc.
+import android.graphics.Color
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.util.Log
@@ -10,13 +10,13 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
-import androidx.core.content.ContextCompat // If you want to use color from R.color.*
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 
 class ManageTeachersAdapter(
     private var teachers: List<TeacherSpinnerItem>,
     private val onTeacherCardClick: (TeacherSpinnerItem) -> Unit,
+    private val onTeacherCardLongClick: (TeacherSpinnerItem) -> Unit, // New long click listener
     private val onEditTeacherClick: (TeacherSpinnerItem) -> Unit,
     private val onDeleteTeacherClick: (TeacherSpinnerItem) -> Unit
 ) : RecyclerView.Adapter<ManageTeachersAdapter.TeacherViewHolder>() {
@@ -29,7 +29,7 @@ class ManageTeachersAdapter(
 
     override fun onBindViewHolder(holder: TeacherViewHolder, position: Int) {
         val teacher = teachers[position]
-        holder.bind(teacher, onTeacherCardClick, onEditTeacherClick, onDeleteTeacherClick)
+        holder.bind(teacher, onTeacherCardClick, onTeacherCardLongClick, onEditTeacherClick, onDeleteTeacherClick)
     }
 
     override fun getItemCount(): Int = teachers.size
@@ -48,11 +48,12 @@ class ManageTeachersAdapter(
         fun bind(
             teacher: TeacherSpinnerItem,
             onCardClick: (TeacherSpinnerItem) -> Unit,
+            onCardLongClick: (TeacherSpinnerItem) -> Unit, // New parameter
             onEditClick: (TeacherSpinnerItem) -> Unit,
             onDeleteClick: (TeacherSpinnerItem) -> Unit
         ) {
             teacherNameTextView.text = teacher.name
-            teacherSubtitleTextView.text = "Tap for class options"
+            teacherSubtitleTextView.text = "Tap for options, long press for attendance" // Updated subtitle
 
             if (!teacher.profileImageUrl.isNullOrEmpty()) {
                 Glide.with(itemView.context)
@@ -65,8 +66,11 @@ class ManageTeachersAdapter(
                 teacherIconImageView.setImageResource(R.drawable.molana)
             }
 
-            itemView.findViewById<View>(R.id.cardTeacherItemContainer).setOnClickListener {
-                onCardClick(teacher)
+            val cardContainer = itemView.findViewById<View>(R.id.cardTeacherItemContainer)
+            cardContainer.setOnClickListener { onCardClick(teacher) }
+            cardContainer.setOnLongClickListener {
+                onCardLongClick(teacher)
+                true // Consume the long click event
             }
 
             menuIconImageView.setOnClickListener { view ->
@@ -80,30 +84,23 @@ class ManageTeachersAdapter(
             onEdit: (TeacherSpinnerItem) -> Unit,
             onDelete: (TeacherSpinnerItem) -> Unit
         ) {
-            // No ContextThemeWrapper needed for this approach
             val popup = PopupMenu(anchorView.context, anchorView)
             popup.menuInflater.inflate(R.menu.teacher_item_options_menu, popup.menu)
 
-            // --- Directly set text color for menu items ---
             try {
-                // Define your static text color here
-                // val staticTextColor = ContextCompat.getColor(anchorView.context, R.color.mono_palette_black) // Using color resource
-                val staticTextColor = Color.BLACK // Using direct Color constant for black
-
+                val staticTextColor = Color.BLACK
                 for (i in 0 until popup.menu.size()) {
                     val menuItem = popup.menu.getItem(i)
                     val title = menuItem.title
-                    if (title != null) { // Check for null title
+                    if (title != null) {
                         val spannableTitle = SpannableString(title)
                         spannableTitle.setSpan(ForegroundColorSpan(staticTextColor), 0, spannableTitle.length, 0)
                         menuItem.title = spannableTitle
                     }
                 }
             } catch (e: Exception) {
-                // Log error if any issue with styling menu items programmatically
                 Log.e("ManageTeachersAdapter", "Error styling popup menu items", e)
             }
-            // --- End of direct text color setting ---
 
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
