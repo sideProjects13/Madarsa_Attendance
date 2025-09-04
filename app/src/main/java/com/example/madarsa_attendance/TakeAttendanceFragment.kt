@@ -120,12 +120,12 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        studentAdapter = StudentAttendanceAdapter(mutableListOf()) { _, _ -> }
+        // The callback is no longer needed as the adapter updates its own data
+        studentAdapter = StudentAttendanceAdapter(mutableListOf())
         recyclerViewStudents.layoutManager = LinearLayoutManager(context)
         recyclerViewStudents.adapter = studentAdapter
     }
 
-    // --- THIS IS THE NEW, CORRECTED DATA LOADING LOGIC ---
     private fun loadData() {
         lifecycleScope.launch {
             if (!swipeRefreshLayout.isRefreshing) progressBar.visibility = View.VISIBLE
@@ -150,7 +150,6 @@ class TakeAttendanceFragment : Fragment() {
 
                 val finalStudentList: List<StudentAttendanceItem>
                 if (localRecord != null) {
-                    // If a local record exists, merge its data with the master roster.
                     Log.d(TAG, "Found local record. Merging with Firestore roster.")
                     val localAttendanceMap = Gson().fromJson(localRecord.studentAttendancesJson, Array<StudentAttendanceItem>::class.java)
                         .associateBy { it.id }
@@ -159,18 +158,15 @@ class TakeAttendanceFragment : Fragment() {
                         rosterStudent.copy(status = localAttendanceMap[rosterStudent.id]?.status ?: "Present")
                     }
                 } else {
-                    // If no local record, check Firestore for a synced record.
                     Log.d(TAG, "No local record. Checking Firestore for synced record.")
                     val firestoreRecord = fetchSyncedAttendanceFromFirestore()
                     if (firestoreRecord != null) {
-                        // If a synced record exists, merge its data.
                         Log.d(TAG, "Found synced Firestore record. Merging.")
                         val firestoreAttendanceMap = firestoreRecord.associateBy { it.id }
                         finalStudentList = studentRoster.map { rosterStudent ->
                             rosterStudent.copy(status = firestoreAttendanceMap[rosterStudent.id]?.status ?: "Present")
                         }
                     } else {
-                        // If no record exists anywhere, the roster itself is the final list (all Present).
                         Log.d(TAG, "No records found anywhere. Using fresh roster.")
                         finalStudentList = studentRoster
                     }
@@ -190,7 +186,6 @@ class TakeAttendanceFragment : Fragment() {
         }
     }
 
-    // Helper function to specifically fetch the student roster
     private suspend fun fetchStudentRosterFromFirestore(): List<StudentAttendanceItem> {
         val studentSnap = onlineDb.collection("organizations").document(currentOrganizationId!!)
             .collection("students").whereEqualTo("teacherId", currentTeacherId)
@@ -208,7 +203,6 @@ class TakeAttendanceFragment : Fragment() {
         }
     }
 
-    // Helper function to fetch an already synced record from Firestore
     private suspend fun fetchSyncedAttendanceFromFirestore(): List<StudentAttendanceItem>? {
         val attendanceSnap = onlineDb.collection("organizations").document(currentOrganizationId!!)
             .collection("attendanceRecords")
@@ -248,7 +242,6 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     private fun saveAttendanceLocally() {
-        // This function's logic is already correct and does not need to change.
         val attendanceData = studentAdapter.getAttendanceData()
         if (attendanceData.isEmpty()) {
             Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show()
@@ -286,7 +279,7 @@ class TakeAttendanceFragment : Fragment() {
     private fun setupSwipeToRefresh() {
         swipeRefreshLayout.setOnRefreshListener {
             Log.d(TAG, "Swipe to refresh triggered.")
-            loadData() // The new loadData function handles refresh correctly
+            loadData()
         }
     }
 
@@ -305,7 +298,7 @@ class TakeAttendanceFragment : Fragment() {
 
         DatePickerDialog(requireContext(), R.style.DatePickerDialog_App_Monochrome,
             { _, year, month, dayOfMonth ->
-                dateForAttendance = String.format(Locale.getDefault(), "%d-%0You have2d-%02d", year, month + 1, dayOfMonth)
+                dateForAttendance = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month + 1, dayOfMonth)
                 updateDateDisplay()
                 loadData()
             },

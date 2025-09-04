@@ -4,12 +4,13 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.madarsa_attendance.StudentAttendanceItem // <-- Make sure this is imported
 import com.example.madarsa_attendance.AppDatabase
+import com.example.madarsa_attendance.StudentAttendanceItem
+import com.example.madarsa_attendance.StudentDetailsItem
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken // <-- Import TypeToken
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.tasks.await
 
 class SyncAttendanceWorker(appContext: Context, workerParams: WorkerParameters) :
@@ -34,33 +35,34 @@ class SyncAttendanceWorker(appContext: Context, workerParams: WorkerParameters) 
         var allSucceeded = true
         for (record in unsyncedRecords) {
             try {
-                // --- THIS IS THE CORRECTED LOGIC ---
-                // 1. Define the correct type for Gson (a List of StudentAttendanceItem)
                 val listType = object : TypeToken<List<StudentAttendanceItem>>() {}.type
-
-                // 2. Deserialize the JSON string back into a list of our custom objects
                 val studentAttendanceItems: List<StudentAttendanceItem> = Gson().fromJson(record.studentAttendancesJson, listType)
 
-                // 3. Map our list of objects to a list of Maps, which is what Firestore expects
+                // --- NEW LOGIC: Refresh student names before uploading ---
+                val studentIds = studentAttendanceItems.map { it.id }
+                val studentsSnapshot = db.collection("organizations").document(record.organizationId)
+                    .collection("students").whereIn("id", studentIds).get().await()
+                val studentNamesMap = studentsSnapshot.toObjects(StudentDetailsItem::class.java).associateBy { it.id }
+                // --- END OF NEW LOGIC ---
+
                 val studentListForFirestore = studentAttendanceItems.map { item ->
                     mapOf(
                         "studentId" to item.id,
-                        "studentName" to item.name,
+                        // Use the latest name from Firestore, or fall back to the locally stored name
+                        "studentName" to (studentNamesMap[item.id]?.studentName ?: item.name),
                         "status" to item.status
                     )
                 }
-                // --- END OF CORRECTION ---
 
                 val firestoreRecord = mapOf(
                     "date" to record.date,
                     "teacherId" to record.teacherId,
                     "teacherName" to record.teacherName,
                     "organizationId" to record.organizationId,
-                    "studentAttendances" to studentListForFirestore, // Use the correctly formatted list
+                    "studentAttendances" to studentListForFirestore,
                     "lastUpdatedAt" to FieldValue.serverTimestamp()
                 )
 
-                // Check if a document already exists for this date to either set or add
                 val existingDoc = db.collection("organizations").document(record.organizationId)
                     .collection("attendanceRecords")
                     .whereEqualTo("date", record.date)
@@ -70,17 +72,14 @@ class SyncAttendanceWorker(appContext: Context, workerParams: WorkerParameters) 
                     .await()
 
                 if (existingDoc.isEmpty) {
-                    // Add new document
                     db.collection("organizations").document(record.organizationId)
                         .collection("attendanceRecords").add(firestoreRecord).await()
                 } else {
-                    // Update existing document
                     val docId = existingDoc.documents[0].id
                     db.collection("organizations").document(record.organizationId)
                         .collection("attendanceRecords").document(docId).set(firestoreRecord).await()
                 }
 
-                // If upload is successful, mark it as synced in the local DB
                 attendanceDao.markAsSynced(record.date, record.teacherId)
                 Log.d(TAG, "Successfully synced record for ${record.date}")
 

@@ -6,7 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.example.madarsa_attendance.models.Organization // Import the Organization data class
+import com.example.madarsa_attendance.models.Organization
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.async
@@ -21,13 +21,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val db = FirebaseFirestore.getInstance()
     private val TAG = "DashboardViewModel"
-
-    // --- 1. MODIFIED: The hardcoded threshold is replaced by a default value ---
-    // This is used only if the value is not found in Firestore.
     private val DEFAULT_ABSENCE_THRESHOLD = 3
-    // --- END OF MODIFICATION ---
 
-    // LiveData declarations...
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
     private val _isStudentListLoading = MutableLiveData<Boolean>()
@@ -36,14 +31,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val totalStudents: LiveData<Long> = _totalStudents
     private val _totalTeachers = MutableLiveData<Long>()
     val totalTeachers: LiveData<Long> = _totalTeachers
-
-    /*
-    private val _feesThisMonth = MutableLiveData<Double>()
-    val feesThisMonth: LiveData<Double> = _feesThisMonth
-    private val _feesThisYear = MutableLiveData<Double>()
-    val feesThisYear: LiveData<Double> = _feesThisYear
-    */
-
     private val _totalInactiveStudents = MutableLiveData<Int>()
     val totalInactiveStudents: LiveData<Int> = _totalInactiveStudents
     private val _highAbsenceStudents = MutableLiveData<List<DashboardStudentItem>>()
@@ -71,8 +58,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         loadInitialData()
     }
 
-
-
     private fun loadInitialData() {
         if (organizationId != null) {
             if (!isDashboardDataLoaded) {
@@ -84,8 +69,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-
-
     fun refreshData() {
         if (organizationId == null) {
             Log.e(TAG, "Cannot refresh data: Organization ID is null.")
@@ -95,14 +78,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // --- 2. NEW: Concurrently fetch the main organization document ---
-                // This is needed to get the custom threshold value set by the admin.
                 val orgDocDeferred = async {
                     db.collection("organizations").document(organizationId).get().await()
                 }
-                // --- END OF NEW FETCH ---
-
-                // Other concurrent fetches remain the same
                 val allTeachersDeferred = async {
                     db.collection("organizations").document(organizationId)
                         .collection("teachers").get().await().toObjects<Teacher>()
@@ -116,34 +94,29 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                         .collection("students").whereEqualTo("isActive", false).get().await()
                 }
 
-                // Await all results
                 val orgDocument = orgDocDeferred.await()
                 val allTeachers = allTeachersDeferred.await()
                 val allActiveStudents = allActiveStudentsDeferred.await()
                 val allInactiveStudents = allInactiveStudentsDeferred.await()
 
-                // --- 3. NEW: Extract the threshold from the fetched organization data ---
                 val orgData = orgDocument.toObject(Organization::class.java)
                 val highAbsenceThreshold = orgData?.highAbsenceThreshold ?: DEFAULT_ABSENCE_THRESHOLD
-                // --- END OF EXTRACTION ---
 
-                // Post basic counts
                 _totalStudents.postValue(allActiveStudents.size.toLong())
                 _totalTeachers.postValue(allTeachers.size.toLong())
                 _totalInactiveStudents.postValue(allInactiveStudents.size())
 
-                // Defer other complex calculations
                 val classDistDeferred = async { fetchClassDistribution(allActiveStudents) }
                 val attendanceDeferred = async { fetchTodaysAttendanceStats(organizationId, allActiveStudents.size, allTeachers) }
-
-                // --- 4. MODIFIED: Pass the fetched threshold to the calculation function ---
                 val highAbsenceDeferred = async { calculateHighAbsenceStats(organizationId, allActiveStudents, highAbsenceThreshold) }
-                // --- END OF MODIFICATION ---
 
-                // Await and post the final results
                 classDistDeferred.await()
                 attendanceDeferred.await()
-                _highAbsenceStudents.postValue(highAbsenceDeferred.await())
+
+                // --- THIS IS THE FIX ---
+                // Use the Elvis operator (?:) to provide an empty list if the result is null.
+                _highAbsenceStudents.postValue(highAbsenceDeferred.await() ?: emptyList())
+                // --- END OF FIX ---
 
                 isDashboardDataLoaded = true
             } catch (e: Exception) {
@@ -156,7 +129,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun fetchStudentListForSearch(forceRefresh: Boolean) {
         if (organizationId == null) return
-        // Only fetch if a refresh is forced or if the list is currently empty.
         if (!forceRefresh && !_allStudentsList.value.isNullOrEmpty()) {
             return
         }
@@ -166,7 +138,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         _isStudentListLoading.postValue(true)
         db.collection("organizations").document(organizationId)
             .collection("students").whereEqualTo("isActive", true)
-            .orderBy("studentName") // Good practice to order
+            .orderBy("studentName")
             .get()
             .addOnSuccessListener { documents ->
                 _allStudentsList.postValue(documents.toObjects())
@@ -242,14 +214,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // --- 5. MODIFIED: The function signature now accepts the threshold as a parameter ---
     private suspend fun calculateHighAbsenceStats(
         orgId: String,
         activeStudents: List<StudentDetailsItem>,
-        threshold: Int // <-- It receives the value fetched in refreshData()
+        threshold: Int
     ): List<DashboardStudentItem> {
         try {
-            // Get the date range for the current month
             val calendar = Calendar.getInstance()
             val year = calendar.get(Calendar.YEAR)
             val month = calendar.get(Calendar.MONTH) + 1
@@ -257,14 +227,12 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             val firstDayOfMonth = String.format(Locale.getDefault(), "%d-%02d-01", year, month)
             val lastDayOfMonth = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
 
-            // Fetch all attendance records for the current month
             val monthlyAttendanceRecords = db.collection("organizations").document(orgId)
                 .collection("attendanceRecords")
                 .whereGreaterThanOrEqualTo("date", firstDayOfMonth)
                 .whereLessThanOrEqualTo("date", lastDayOfMonth)
                 .get().await()
 
-            // Count absences for each student
             val absentCounts = mutableMapOf<String, Int>()
             for (doc in monthlyAttendanceRecords.documents) {
                 val studentAttendances = doc.get("studentAttendances") as? List<Map<String, Any>>
@@ -278,16 +246,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
 
-            // --- 6. MODIFIED: Use the dynamic `threshold` parameter in the filter ---
             val highAbsenceStudentIds = absentCounts.filterValues { it >= threshold }.keys
-            // --- END OF MODIFICATION ---
-
             if (highAbsenceStudentIds.isEmpty()) return emptyList()
 
-            // For efficient lookup, create a map of active students by their ID
             val activeStudentsMap = activeStudents.associateBy { it.id }
 
-            // Create the final list of DashboardStudentItem objects
             return highAbsenceStudentIds.mapNotNull { studentId ->
                 activeStudentsMap[studentId]?.let { studentDetails ->
                     DashboardStudentItem(
@@ -300,7 +263,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error calculating high absence stats", e)
-            return emptyList() // Return an empty list on error
+            return emptyList()
         }
     }
 }
