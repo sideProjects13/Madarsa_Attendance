@@ -1,8 +1,5 @@
-Teacher can be now added Using Same Email
-Fees Data is now removed from Dashboard and will be added later
-now multiple students can be selected and move to new class
-inactive total and absentees more then thresold value is added to dashboard
-thresold value can be changed from admin profile
-student profile page has been added
-attendance can be taken now in offline mode
-whatsapp message can be sent to absent's parent now
+New Functionalities :
+    Store Management
+    Donation Management
+    Teacher Attendance and Management
+Bugs Resolved of Dashboard and Navigation Drawer

@@ -13,12 +13,18 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ManageTeachersFragment : Fragment() {
 
@@ -33,6 +39,7 @@ class ManageTeachersFragment : Fragment() {
     private lateinit var tvNoTeachers: TextView
     private lateinit var db: FirebaseFirestore
     private var currentOrganizationId: String? = null
+    private val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
     private val teacherDisplayList = mutableListOf<TeacherSpinnerItem>()
 
@@ -48,6 +55,7 @@ class ManageTeachersFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        // The layout file name seems to be activity_manage_teachers_fragment.xml based on your code
         return inflater.inflate(R.layout.activity_manage_teachers_fragment, container, false)
     }
 
@@ -101,11 +109,9 @@ class ManageTeachersFragment : Fragment() {
                 startActivity(intent)
             },
             // --- THIS IS THE FIX ---
-            // Provide the new onTeacherCardLongClick listener.
-            // We can leave it empty since admins don't mark attendance here.
+            // Implement the long click listener to show the attendance dialog
             onTeacherCardLongClick = { teacher ->
-                // You could add functionality here later if you want, like showing a toast.
-                // For now, it does nothing.
+                showAttendanceDialog(teacher)
             },
             // --- END OF FIX ---
             onEditTeacherClick = { selectedTeacher ->
@@ -122,7 +128,59 @@ class ManageTeachersFragment : Fragment() {
         recyclerViewManageTeachers.adapter = manageTeachersAdapter
     }
 
-    // --- FIX 2: Changed to public ---
+    private fun showAttendanceDialog(teacher: TeacherSpinnerItem) {
+        val options = arrayOf("Mark Present", "Mark Absent")
+        AlertDialog.Builder(requireContext())
+            .setTitle("Mark Today's Attendance for ${teacher.name}")
+            .setItems(options) { _, which ->
+                val status = if (which == 0) "Present" else "Absent"
+                markTeacherAttendance(teacher, status)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun markTeacherAttendance(teacher: TeacherSpinnerItem, status: String) {
+        if (currentOrganizationId == null) return
+        val loadingDialog = StatusDialogFragment.newInstance(true, "Saving...").apply { isCancelable = false }
+        loadingDialog.show(parentFragmentManager, "savingAttendance")
+
+        lifecycleScope.launch {
+            try {
+                val query = db.collection("organizations").document(currentOrganizationId!!)
+                    .collection("teacherAttendance")
+                    .whereEqualTo("teacherId", teacher.id)
+                    .whereEqualTo("date", todayDateStr)
+                    .limit(1)
+                    .get().await()
+
+                val attendanceRecord = TeacherAttendanceRecord(
+                    teacherId = teacher.id,
+                    teacherName = teacher.name,
+                    date = todayDateStr,
+                    status = status,
+                    organizationId = currentOrganizationId!!
+                )
+
+                if (query.isEmpty) {
+                    db.collection("organizations").document(currentOrganizationId!!)
+                        .collection("teacherAttendance").add(attendanceRecord).await()
+                } else {
+                    val docId = query.documents[0].id
+                    db.collection("organizations").document(currentOrganizationId!!)
+                        .collection("teacherAttendance").document(docId).set(attendanceRecord).await()
+                }
+
+                loadingDialog.dismiss()
+                StatusDialogFragment.newInstance(true, "Attendance marked as $status").show(parentFragmentManager, "successDialog")
+
+            } catch (e: Exception) {
+                loadingDialog.dismiss()
+                StatusDialogFragment.newInstance(false, "Error: ${e.message}").show(parentFragmentManager, "errorDialog")
+            }
+        }
+    }
+
     public fun loadTeachers() {
         if (!isAdded || currentOrganizationId == null) return
         progressBar.visibility = View.VISIBLE
@@ -154,11 +212,12 @@ class ManageTeachersFragment : Fragment() {
                 manageTeachersAdapter.updateData(teacherDisplayList)
             }
             .addOnFailureListener { e ->
-                if (!isAdded)
+                if (isAdded) {
                     progressBar.visibility = View.GONE
-                tvNoTeachers.text = "Error loading teachers."
-                tvNoTeachers.visibility = View.VISIBLE
-                manageTeachersAdapter.updateData(emptyList())
+                    tvNoTeachers.text = "Error loading teachers."
+                    tvNoTeachers.visibility = View.VISIBLE
+                    manageTeachersAdapter.updateData(emptyList())
+                }
             }
     }
 }

@@ -1,5 +1,8 @@
 package com.example.madarsa_attendance
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageView
@@ -36,6 +39,12 @@ class StudentProfileActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var contentLayout: MaterialCardView
 
+    // New copy icon views
+    private lateinit var ivCopyName: ImageView
+    private lateinit var ivCopyRegNo: ImageView
+    private lateinit var ivCopyParentInfo: ImageView
+    private lateinit var ivCopyContactInfo: ImageView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_student_profile)
@@ -47,13 +56,11 @@ class StudentProfileActivity : AppCompatActivity() {
             return
         }
 
-        // Initialize ViewModel the standard, simple way
         viewModel = ViewModelProvider(this)[StudentProfileViewModel::class.java]
 
         initializeViews()
         setupObservers()
 
-        // Fetch the data
         viewModel.loadStudentData(studentId!!)
     }
 
@@ -76,6 +83,12 @@ class StudentProfileActivity : AppCompatActivity() {
         tvAttendancePercentage = findViewById(R.id.tv_attendance_percentage)
         progressBar = findViewById(R.id.progressBar_student_profile)
         contentLayout = findViewById(R.id.card_student_profile_content)
+
+        // Initialize the new copy icon views
+        ivCopyName = findViewById(R.id.iv_copy_name)
+        ivCopyRegNo = findViewById(R.id.iv_copy_reg_no)
+        ivCopyParentInfo = findViewById(R.id.iv_copy_parent_info)
+        ivCopyContactInfo = findViewById(R.id.iv_copy_contact_info)
     }
 
     private fun setupObservers() {
@@ -100,10 +113,8 @@ class StudentProfileActivity : AppCompatActivity() {
     }
 
     private fun populateStudentDetails(student: StudentDetailsItem) {
-        // Set title
         supportActionBar?.title = student.studentName
 
-        // Load image
         Glide.with(this)
             .load(student.profileImageUrl)
             .circleCrop()
@@ -111,20 +122,39 @@ class StudentProfileActivity : AppCompatActivity() {
             .error(R.drawable.student)
             .into(ivProfile)
 
-        // Populate text fields
         tvStudentName.text = student.studentName
         tvTeacherName.text = "Class: ${student.teacherName}"
         tvRegNo.text = "Reg No: ${student.regNo ?: "N/A"}"
-
         tvParentInfo.text = "Parent: ${student.parentName}"
         tvContactInfo.text = "Mobile: ${student.parentMobileNumber}\nAlternate: ${student.alternateMobileNumber ?: "N/A"}"
         tvPersonalInfo.text = "Gender: ${student.gender ?: "N/A"}\nDOB: ${student.birthDate ?: "N/A"}"
         tvAcademicInfo.text = "Admission: ${student.admissionDate ?: "N/A"}\nFee: ₹${student.monthlyFee ?: "0.0"}"
+
+        // --- NEW: Setup click listeners for copy icons ---
+        setupCopyAction(ivCopyName, "Student Name", student.studentName)
+        setupCopyAction(ivCopyRegNo, "Registration No.", student.regNo ?: "")
+        setupCopyAction(ivCopyParentInfo, "Parent Name", student.parentName ?: "")
+        setupCopyAction(ivCopyContactInfo, "Contact Info", "Mobile: ${student.parentMobileNumber}, Alternate: ${student.alternateMobileNumber ?: "N/A"}")
     }
 
     private fun populateAttendanceSummary(summary: AttendanceSummary) {
         tvAttendancePresent.text = summary.presentDays.toString()
         tvAttendanceAbsent.text = summary.absentDays.toString()
         tvAttendancePercentage.text = String.format("%.1f%%", summary.percentage)
+    }
+
+    // --- NEW: Helper function to handle copying text ---
+    private fun setupCopyAction(imageView: ImageView, label: String, textToCopy: String) {
+        if (textToCopy.isNotBlank()) {
+            imageView.visibility = View.VISIBLE
+            imageView.setOnClickListener {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText(label, textToCopy)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(this, "$label copied to clipboard", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            imageView.visibility = View.GONE
+        }
     }
 }

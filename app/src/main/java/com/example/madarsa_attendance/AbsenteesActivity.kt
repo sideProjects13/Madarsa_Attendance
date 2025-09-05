@@ -28,6 +28,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.core.net.toUri
 
 class AbsenteesActivity : AppCompatActivity() {
 
@@ -226,7 +227,8 @@ class AbsenteesActivity : AppCompatActivity() {
 
         try {
             val intent = Intent(Intent.ACTION_VIEW)
-            intent.data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanNumber&text=${Uri.encode(message)}")
+            intent.data =
+                "https://api.whatsapp.com/send?phone=$cleanNumber&text=${Uri.encode(message)}".toUri()
             intent.setPackage("com.whatsapp")
             whatsAppMessageLauncher.launch(intent)
         } catch (e: ActivityNotFoundException) {
