@@ -19,10 +19,12 @@ import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.madarsa_attendance.utils.AttendanceAlarmScheduler
 import com.google.android.material.appbar.AppBarLayout
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -31,6 +33,7 @@ import java.util.Locale
 
 class TeacherDashboardActivity : AppCompatActivity() {
 
+    // --- Existing properties (Unchanged) ---
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: ManageTeachersAdapter
     private lateinit var progressBar: ProgressBar
@@ -40,6 +43,8 @@ class TeacherDashboardActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
     private var organizationId: String? = null
     private val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    // --- End of Existing properties ---
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,11 +71,10 @@ class TeacherDashboardActivity : AppCompatActivity() {
         setupRecyclerView()
         loadTeacherClasses()
 
-        // ADDED: Listen for announcements
         listenForAnnouncements()
     }
 
-    // NEW FUNCTION
+    // --- Existing listenForAnnouncements function (Unchanged) ---
     private fun listenForAnnouncements() {
         val prefs = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
         val lastShownAnnouncementId = prefs.getString("last_announcement_id", null)
@@ -98,6 +102,7 @@ class TeacherDashboardActivity : AppCompatActivity() {
             }
     }
 
+    // --- Existing setupRecyclerView function (Unchanged) ---
     private fun setupRecyclerView() {
         adapter = ManageTeachersAdapter(
             teachers = emptyList(),
@@ -120,6 +125,7 @@ class TeacherDashboardActivity : AppCompatActivity() {
         recyclerView.adapter = adapter
     }
 
+    // --- Existing showAttendanceDialog function (Unchanged) ---
     private fun showAttendanceDialog(teacher: TeacherSpinnerItem) {
         val options = arrayOf("Mark Present", "Mark Absent")
         AlertDialog.Builder(this)
@@ -132,6 +138,7 @@ class TeacherDashboardActivity : AppCompatActivity() {
             .show()
     }
 
+    // --- Existing markTeacherAttendance function (Unchanged) ---
     private fun markTeacherAttendance(teacher: TeacherSpinnerItem, status: String) {
         if (organizationId == null) {
             Toast.makeText(this, "Error: Organization ID not found.", Toast.LENGTH_SHORT).show()
@@ -176,6 +183,7 @@ class TeacherDashboardActivity : AppCompatActivity() {
         }
     }
 
+    // --- MODIFIED loadTeacherClasses function ---
     private fun loadTeacherClasses() {
         val currentUser = auth.currentUser
         if (currentUser == null || organizationId == null) {
@@ -196,10 +204,18 @@ class TeacherDashboardActivity : AppCompatActivity() {
                 if (documents.isEmpty) {
                     tvNoClasses.visibility = View.VISIBLE
                 } else {
-                    val teacherClasses = documents.toObjects(Teacher::class.java).map {
+                    // This part is the same
+                    val teacherClassesForAdapter = documents.toObjects(Teacher::class.java).map {
                         TeacherSpinnerItem(id = it.teacherId, name = it.teacherName, profileImageUrl = it.profileImageUrl)
                     }
-                    adapter.updateData(teacherClasses)
+                    adapter.updateData(teacherClassesForAdapter)
+
+                    // --- NEW: Schedule reminders for each class the teacher is assigned to ---
+                    val teacherFullDetailsList = documents.toObjects(Teacher::class.java)
+                    teacherFullDetailsList.forEach { teacher ->
+                        AttendanceAlarmScheduler.scheduleReminderForTeacher(this, teacher)
+                    }
+                    // --- END OF NEW LOGIC ---
                 }
             }
             .addOnFailureListener { e ->
@@ -209,7 +225,9 @@ class TeacherDashboardActivity : AppCompatActivity() {
                 Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
+    // --- END OF MODIFIED FUNCTION ---
 
+    // --- Existing menu functions (Unchanged) ---
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.teacher_dashboard_menu, menu)
         return true
@@ -218,7 +236,7 @@ class TeacherDashboardActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == R.id.action_logout) {
             FirebaseAuthManager.logout(this)
-            startActivity(Intent(this, LoginActivity::class.java))
+            // The logout function already handles starting the LoginActivity
             finish()
             return true
         }

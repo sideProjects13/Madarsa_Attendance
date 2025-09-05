@@ -28,6 +28,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
+
+        <service
+            android:name=".MyFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        
         <activity
             android:name=".SuperAdminDashboardActivity"
             android:exported="false" />

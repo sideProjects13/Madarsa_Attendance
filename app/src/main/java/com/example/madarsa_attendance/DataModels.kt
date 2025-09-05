@@ -12,7 +12,10 @@
         val email: String? = null, // This is the login email
         val profileImageUrl: String? = null,
         val uid: String? = null, // This will store the Firebase Auth UID
-        val createdAt: Timestamp? = null // <-- ADD THIS LINE
+        val createdAt: Timestamp? = null, // <-- ADD THIS LINE
+
+        val startTime: String? = null, // e.g., "07:00"
+        val endTime: String? = null    // e.g., "10:00"
 
     )
 

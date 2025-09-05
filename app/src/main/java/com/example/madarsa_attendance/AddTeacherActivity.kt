@@ -39,7 +39,12 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.bumptech.glide.Glide
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 import com.google.firebase.ktx.app
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class AddTeacherActivity : AppCompatActivity() {
 
@@ -48,6 +53,7 @@ class AddTeacherActivity : AppCompatActivity() {
         private const val PERMISSION_REQUEST_CODE = 101
     }
 
+    // Existing Views
     private lateinit var etTeacherName: TextInputEditText
     private lateinit var etTeacherMobile: TextInputEditText
     private lateinit var etTeacherEmail: TextInputEditText
@@ -64,6 +70,14 @@ class AddTeacherActivity : AppCompatActivity() {
     private lateinit var btnSaveTeacher: MaterialButton
     private lateinit var progressBar: ProgressBar
 
+    // --- NEW Views for Class Timing ---
+    private lateinit var etStartTime: TextInputEditText
+    private lateinit var etEndTime: TextInputEditText
+    private lateinit var tilStartTime: TextInputLayout
+    private lateinit var tilEndTime: TextInputLayout
+    // --- END of NEW Views ---
+
+    // Existing Properties
     private lateinit var db: FirebaseFirestore
     private lateinit var mainAuth: FirebaseAuth
     private lateinit var secondaryAuth: FirebaseAuth
@@ -117,6 +131,13 @@ class AddTeacherActivity : AppCompatActivity() {
         tilTeacherEmail = findViewById(R.id.tilTeacherEmail)
         tilTeacherPassword = findViewById(R.id.tilTeacherPassword)
         tilTeacherConfirmPassword = findViewById(R.id.tilTeacherConfirmPassword)
+
+        // --- NEW: Initialize time fields ---
+        etStartTime = findViewById(R.id.etStartTime)
+        etEndTime = findViewById(R.id.etEndTime)
+        tilStartTime = findViewById(R.id.tilStartTime)
+        tilEndTime = findViewById(R.id.tilEndTime)
+        // --- END of NEW Initialization ---
     }
 
     private fun setupListeners() {
@@ -132,6 +153,11 @@ class AddTeacherActivity : AppCompatActivity() {
         btnSelectImage.setOnClickListener(imageClickListener)
         cardViewProfileImage.setOnClickListener(imageClickListener)
         btnSaveTeacher.setOnClickListener { saveTeacherFlow() }
+
+        // --- NEW: Time Picker Listeners ---
+        etStartTime.setOnClickListener { showTimePicker(isStartTime = true) }
+        etEndTime.setOnClickListener { showTimePicker(isStartTime = false) }
+        // --- END of NEW Listeners ---
     }
 
     private fun validateInputs(): Boolean {
@@ -140,6 +166,10 @@ class AddTeacherActivity : AppCompatActivity() {
         tilTeacherEmail.error = null
         tilTeacherPassword.error = null
         tilTeacherConfirmPassword.error = null
+        // --- NEW: Clear time field errors ---
+        tilStartTime.error = null
+        tilEndTime.error = null
+        // --- END of NEW ---
         var isValid = true
 
         if (etTeacherName.text.toString().trim().isEmpty()) {
@@ -164,6 +194,16 @@ class AddTeacherActivity : AppCompatActivity() {
             tilTeacherConfirmPassword.error = "Passwords do not match"
             isValid = false
         }
+        // --- NEW: Add validation for time fields ---
+        if (etStartTime.text.toString().isBlank()) {
+            tilStartTime.error = "Required"
+            isValid = false
+        }
+        if (etEndTime.text.toString().isBlank()) {
+            tilEndTime.error = "Required"
+            isValid = false
+        }
+        // --- END of NEW Validation ---
         return isValid
     }
 
@@ -175,6 +215,10 @@ class AddTeacherActivity : AppCompatActivity() {
         val mobileNumber = etTeacherMobile.text.toString().trim()
         val email = etTeacherEmail.text.toString().trim()
         val password = etTeacherPassword.text.toString().trim()
+        // --- NEW: Get time values from the tag (24-hour format) ---
+        val startTime = etStartTime.tag as? String ?: ""
+        val endTime = etEndTime.tag as? String ?: ""
+        // --- END of NEW ---
 
         CoroutineScope(Dispatchers.Main).launch {
             try {
@@ -188,7 +232,11 @@ class AddTeacherActivity : AppCompatActivity() {
                     "email" to email,
                     "uid" to teacherUid,
                     "profileImageUrl" to (imageUrl ?: ""),
-                    "createdAt" to FieldValue.serverTimestamp()
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    // --- NEW: Add time fields to the data map ---
+                    "startTime" to startTime,
+                    "endTime" to endTime
+                    // --- END of NEW ---
                 )
                 db.collection("organizations").document(currentOrganizationId!!)
                     .collection("teachers").add(teacherData).await()
@@ -204,18 +252,56 @@ class AddTeacherActivity : AppCompatActivity() {
         }
     }
 
+    // --- NEW: Function to show the time picker dialog ---
+    private fun showTimePicker(isStartTime: Boolean) {
+        val calendar = Calendar.getInstance()
+        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = calendar.get(Calendar.MINUTE)
+
+        val timePicker = MaterialTimePicker.Builder()
+            .setTimeFormat(TimeFormat.CLOCK_12H)
+            .setHour(currentHour)
+            .setMinute(currentMinute)
+            .setTitleText(if (isStartTime) "Select Start Time" else "Select End Time")
+            .build()
+
+        timePicker.addOnPositiveButtonClickListener {
+            val hour = timePicker.hour
+            val minute = timePicker.minute
+
+            // Format to HH:mm (24-hour) for saving to Firestore
+            val formattedTimeForDb = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
+
+            // Format for display (12-hour with AM/PM)
+            val displayFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+            val calendarForDisplay = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, minute)
+            }
+            val displayTime = displayFormat.format(calendarForDisplay.time)
+
+            if (isStartTime) {
+                etStartTime.setText(displayTime)
+                etStartTime.tag = formattedTimeForDb // Store 24-hour format in tag for saving
+            } else {
+                etEndTime.setText(displayTime)
+                etEndTime.tag = formattedTimeForDb // Store 24-hour format in tag for saving
+            }
+        }
+        timePicker.show(supportFragmentManager, if (isStartTime) "startTimePicker" else "endTimePicker")
+    }
+    // --- END of NEW Function ---
+
     private suspend fun getOrCreateAuthUser(email: String, password: String, teacherName: String): String {
         try {
-            // Try to create a new user.
             val authResult = secondaryAuth.createUserWithEmailAndPassword(email, password).await()
             val newUid = authResult.user?.uid ?: throw Exception("Failed to get UID for new Auth account.")
 
-            // If creation is successful, also create the top-level user document.
             val userRecord = hashMapOf(
                 "role" to "teacher",
                 "organizationId" to currentOrganizationId,
                 "email" to email,
-                "name" to teacherName // Use the first name given for the main user record
+                "name" to teacherName
             )
             db.collection("users").document(newUid).set(userRecord).await()
 
@@ -224,13 +310,10 @@ class AddTeacherActivity : AppCompatActivity() {
 
             return newUid
         } catch (e: FirebaseAuthUserCollisionException) {
-            // This is the expected error if the user already exists.
             Log.d(TAG, "Auth user with email $email already exists. Fetching UID.")
 
-            // Find the user's UID from the 'users' collection.
             val userQuery = db.collection("users").whereEqualTo("email", email).limit(1).get().await()
             if (userQuery.isEmpty) {
-                // This is a rare edge case: Auth user exists but no Firestore doc.
                 throw Exception("User login exists, but profile is missing. Please contact support.")
             }
             return userQuery.documents[0].id
@@ -271,6 +354,10 @@ class AddTeacherActivity : AppCompatActivity() {
         btnSelectImage.isEnabled = enabled
         cardViewProfileImage.isEnabled = enabled
         btnSaveTeacher.isEnabled = enabled
+        // --- NEW: Enable/disable time fields ---
+        etStartTime.isEnabled = enabled
+        etEndTime.isEnabled = enabled
+        // --- END of NEW ---
         progressBar.visibility = if (enabled) View.GONE else View.VISIBLE
     }
 

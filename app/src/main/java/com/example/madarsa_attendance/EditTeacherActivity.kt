@@ -19,17 +19,19 @@ import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import com.google.firebase.ktx.Firebase
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class EditTeacherActivity : AppCompatActivity() {
 
     private companion object {
         private const val TAG = "EditTeacherActivity"
-        // <<< --- THIS IS THE FIX ---
         private const val UNSIGNED_UPLOAD_PRESET = "BIBI_AYESHA_MASJID"
     }
 
@@ -42,6 +44,11 @@ class EditTeacherActivity : AppCompatActivity() {
     private lateinit var btnSaveChanges: Button
     private lateinit var btnResetPassword: Button
     private lateinit var progressBar: ProgressBar
+
+    // --- NEW Views for Class Timing ---
+    private lateinit var etStartTime: TextInputEditText
+    private lateinit var etEndTime: TextInputEditText
+    // --- END of NEW Views ---
 
     // Firebase & Data
     private lateinit var db: FirebaseFirestore
@@ -92,6 +99,11 @@ class EditTeacherActivity : AppCompatActivity() {
         btnSaveChanges = findViewById(R.id.btnSaveChangesTeacher)
         btnResetPassword = findViewById(R.id.btnResetPassword)
         progressBar = findViewById(R.id.progressBarEditTeacher)
+
+        // --- NEW: Initialize time fields ---
+        etStartTime = findViewById(R.id.etStartTimeEdit)
+        etEndTime = findViewById(R.id.etEndTimeEdit)
+        // --- END of NEW Initialization ---
     }
 
     private fun setupListeners() {
@@ -101,6 +113,11 @@ class EditTeacherActivity : AppCompatActivity() {
         }
         btnSaveChanges.setOnClickListener { validateAndSaveChanges() }
         btnResetPassword.setOnClickListener { sendPasswordReset() }
+
+        // --- NEW: Time Picker Listeners ---
+        etStartTime.setOnClickListener { showTimePicker(isStartTime = true) }
+        etEndTime.setOnClickListener { showTimePicker(isStartTime = false) }
+        // --- END of NEW Listeners ---
     }
 
     private fun loadTeacherDetails() {
@@ -120,6 +137,12 @@ class EditTeacherActivity : AppCompatActivity() {
                     if (!existingImageUrl.isNullOrEmpty()) {
                         Glide.with(this).load(existingImageUrl).circleCrop().placeholder(R.drawable.molana).into(ivProfileImage)
                     }
+
+                    // --- NEW: Load and display existing times ---
+                    teacher?.startTime?.let { formatAndSetTime(it, etStartTime) }
+                    teacher?.endTime?.let { formatAndSetTime(it, etEndTime) }
+                    // --- END of NEW ---
+
                 } else {
                     Toast.makeText(this, "Details not found.", Toast.LENGTH_SHORT).show()
                     finish()
@@ -142,6 +165,13 @@ class EditTeacherActivity : AppCompatActivity() {
             etTeacherMobile.error = "Enter a valid 10-digit number"
             return
         }
+        // --- NEW: Validation for time fields ---
+        if (etStartTime.text.toString().isBlank() || etEndTime.text.toString().isBlank()) {
+            Toast.makeText(this, "Please select both start and end times", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // --- END of NEW ---
+
         setInputsEnabled(false)
 
         if (imageUri != null) {
@@ -167,10 +197,19 @@ class EditTeacherActivity : AppCompatActivity() {
     }
 
     private fun updateTeacherInFirestore(name: String, mobile: String, imageUrl: String?) {
+        // --- NEW: Get time values from the tag (24-hour format) ---
+        val startTime = etStartTime.tag as? String ?: ""
+        val endTime = etEndTime.tag as? String ?: ""
+        // --- END of NEW ---
+
         val teacherData = mapOf(
             "teacherName" to name,
             "mobileNumber" to mobile,
-            "profileImageUrl" to (imageUrl ?: existingImageUrl ?: "")
+            "profileImageUrl" to (imageUrl ?: existingImageUrl ?: ""),
+            // --- NEW: Add time fields to the update map ---
+            "startTime" to startTime,
+            "endTime" to endTime
+            // --- END of NEW ---
         )
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("teachers").document(teacherDocId!!)
@@ -207,6 +246,10 @@ class EditTeacherActivity : AppCompatActivity() {
         etTeacherName.isEnabled = enabled
         etTeacherMobile.isEnabled = enabled
         btnResetPassword.isEnabled = enabled
+        // --- NEW: Enable/disable time fields ---
+        etStartTime.isEnabled = enabled
+        etEndTime.isEnabled = enabled
+        // --- END of NEW ---
     }
 
     private fun handleFailure(e: Exception, customMessage: String? = null) {
@@ -214,5 +257,65 @@ class EditTeacherActivity : AppCompatActivity() {
         val msg = customMessage ?: "An error occurred"
         StatusDialogFragment.newInstance(false, msg).show(supportFragmentManager, "failureDialog")
         Log.e(TAG, "$msg: Full error", e)
+    }
+
+    // --- NEW: Function to show the time picker dialog (reusable) ---
+    private fun showTimePicker(isStartTime: Boolean) {
+        val calendar = Calendar.getInstance()
+        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+        val currentMinute = calendar.get(Calendar.MINUTE)
+
+        val timePicker = MaterialTimePicker.Builder()
+            .setTimeFormat(TimeFormat.CLOCK_12H)
+            .setHour(currentHour)
+            .setMinute(currentMinute)
+            .setTitleText(if (isStartTime) "Select Start Time" else "Select End Time")
+            .build()
+
+        timePicker.addOnPositiveButtonClickListener {
+            val hour = timePicker.hour
+            val minute = timePicker.minute
+
+            val formattedTimeForDb = String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
+
+            val displayFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+            val calendarForDisplay = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, minute)
+            }
+            val displayTime = displayFormat.format(calendarForDisplay.time)
+
+            if (isStartTime) {
+                etStartTime.setText(displayTime)
+                etStartTime.tag = formattedTimeForDb
+            } else {
+                etEndTime.setText(displayTime)
+                etEndTime.tag = formattedTimeForDb
+            }
+        }
+        timePicker.show(supportFragmentManager, if (isStartTime) "editStartTimePicker" else "editEndTimePicker")
+    }
+
+    // --- NEW: Helper to format and display time when loading data ---
+    private fun formatAndSetTime(time24h: String, editText: TextInputEditText) {
+        try {
+            val parts = time24h.split(":")
+            val hour = parts[0].toInt()
+            val minute = parts[1].toInt()
+
+            val displayFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, minute)
+            }
+            val displayTime = displayFormat.format(calendar.time)
+
+            editText.setText(displayTime)
+            editText.tag = time24h // Keep the original 24h format in the tag
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse time: $time24h", e)
+            editText.setText(time24h) // Fallback to raw string
+            editText.tag = time24h
+        }
     }
 }

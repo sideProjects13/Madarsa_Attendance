@@ -1,5 +1,2 @@
-New Functionalities :
-    Store Management
-    Donation Management
-    Teacher Attendance and Management
-Bugs Resolved of Dashboard and Navigation Drawer
+Implemented Notification 
+Student History classes/Exams

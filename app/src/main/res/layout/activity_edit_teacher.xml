@@ -100,13 +100,73 @@
                     android:maxLines="1"/>
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- NEW: Email Field (Not editable for security) -->
+            <!-- === NEW: Class Timing Section === -->
+            <com.google.android.material.divider.MaterialDivider
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginVertical="24dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Class Timings"
+                android:textAppearance="?attr/textAppearanceTitleMedium"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilStartTimeEdit"
+                    style="?attr/textInputOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:layout_height="wrap_content"
+                    android:hint="Start Time"
+                    app:startIconDrawable="@drawable/ic_time">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etStartTimeEdit"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:focusableInTouchMode="false"
+                        android:clickable="true"
+                        android:focusable="false" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilEndTimeEdit"
+                    style="?attr/textInputOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:layout_height="wrap_content"
+                    android:hint="End Time"
+                    app:startIconDrawable="@drawable/ic_time">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etEndTimeEdit"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:focusableInTouchMode="false"
+                        android:clickable="true"
+                        android:focusable="false" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
+            <com.google.android.material.divider.MaterialDivider
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginVertical="24dp"/>
+            <!-- === END OF NEW SECTION === -->
+
+
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilTeacherEmailEdit"
                 style="?attr/textInputOutlinedStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
                 android:hint="Login Email (Cannot be changed)">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -119,7 +179,6 @@
                     android:maxLines="1"/>
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- NEW: Reset Password Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnResetPassword"
                 style="@style/Widget.Material3.Button.TextButton"
