@@ -1,12 +1,8 @@
 package com.example.madarsa_attendance
 
-import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.MenuItem
-import android.view.View
-import android.widget.ImageView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -16,15 +12,13 @@ import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
-import com.bumptech.glide.Glide
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ktx.toObjects
 
-class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.OnNavigationItemSelectedListener
+class TeacherOptionsActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "TeacherOptionsActivity"
@@ -32,11 +26,19 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
         const val EXTRA_TEACHER_NAME = "TEACHER_NAME"
         const val EXTRA_TEACHER_IMAGE_URL = "TEACHER_IMAGE_URL"
         const val EXTRA_START_FRAGMENT = "START_FRAGMENT"
-        const val FRAGMENT_MANAGE_CLASS = 0 // Index for ManageClassFragment
+
+        // Constants for identifying the user's role
+        const val EXTRA_USER_ROLE = "USER_ROLE"
+        const val ROLE_ADMIN = "ADMIN"
+        const val ROLE_TEACHER = "TEACHER"
+
+        // Fragment indices for Admin view
+        const val FRAGMENT_MANAGE_CLASS = 0
         const val FRAGMENT_TAKE_ATTENDANCE = 1
         const val FRAGMENT_FEE_SUMMARY = 2
     }
 
+    private var userRole: String = ROLE_ADMIN // Default to Admin for safety
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
     private var currentTeacherEmail: String? = null
@@ -45,16 +47,11 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var appBarLayout: AppBarLayout
-    // REMOVED DrawerLayout and NavigationView
-    // REMOVED ActionBarDrawerToggle
-
     private lateinit var tabLayout: TabLayout
     private lateinit var viewPager: ViewPager2
     private lateinit var pagerAdapter: TeacherOptionsPagerAdapter
 
     private lateinit var db: FirebaseFirestore
-
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,12 +63,9 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
 
         toolbar = findViewById(R.id.teacher_options_toolbar)
         appBarLayout = findViewById(R.id.app_bar_layout_teacher_options)
-        // REMOVED findViewById for drawerLayout and navigationView
         tabLayout = findViewById(R.id.tabLayoutTeacherOptions)
         viewPager = findViewById(R.id.viewPagerTeacherOptions)
 
-
-        // Apply window insets to the AppBarLayout and ViewPager
         ViewCompat.setOnApplyWindowInsetsListener(appBarLayout) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.updatePadding(top = insets.top)
@@ -79,7 +73,6 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
         }
         ViewCompat.setOnApplyWindowInsetsListener(viewPager) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-            // Adjusted padding because AppBarLayout now takes care of top inset
             view.updatePadding(bottom = insets.bottom)
             windowInsets
         }
@@ -89,9 +82,10 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
         val intentTeacherId = intent.getStringExtra(EXTRA_TEACHER_ID)
         val intentTeacherName = intent.getStringExtra(EXTRA_TEACHER_NAME)
         val intentTeacherImageUrl = intent.getStringExtra(EXTRA_TEACHER_IMAGE_URL)
-        val startFragmentIndex = intent.getIntExtra(EXTRA_START_FRAGMENT, FRAGMENT_MANAGE_CLASS)
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
+        var startFragmentIndex = intent.getIntExtra(EXTRA_START_FRAGMENT, FRAGMENT_MANAGE_CLASS)
 
+        userRole = intent.getStringExtra(EXTRA_USER_ROLE) ?: ROLE_ADMIN
+        currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
 
         if (intentTeacherId == null || intentTeacherName == null) {
             Log.e(TAG, "Critical: Teacher ID or Name not passed. Finishing.")
@@ -105,18 +99,21 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
             return
         }
 
-
         currentTeacherId = intentTeacherId
         currentTeacherName = intentTeacherName
         currentTeacherProfileUrl = intentTeacherImageUrl
 
-        // REMOVED ActionBarDrawerToggle initialization and drawer listener setup
-        // REMOVED navigationView.setNavigationItemSelectedListener(this)
-        // REMOVED navigationView.inflateHeaderView(R.layout.teacher_options_nav_header)
+        // Adjust start fragment index for teachers, as their tab order is different
+        if (userRole == ROLE_TEACHER) {
+            startFragmentIndex = when (startFragmentIndex) {
+                FRAGMENT_TAKE_ATTENDANCE -> 0 // Teacher's first tab
+                FRAGMENT_MANAGE_CLASS -> 1 // Teacher's second tab
+                else -> 0 // Default to first tab for teacher
+            }
+        }
 
         fetchTeacherDetailsFromFirestore(currentTeacherId!!, startFragmentIndex)
     }
-
 
     private fun fetchTeacherDetailsFromFirestore(teacherIdToFetch: String, startFragmentIndex: Int) {
         if (currentOrganizationId == null) {
@@ -148,17 +145,16 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
             finish()
             return
         }
-        supportActionBar?.title = currentTeacherName // Toolbar title
+        supportActionBar?.title = currentTeacherName
         setupViewPagerAndTabs(startFragmentIndex)
     }
 
-
-
     private fun setupViewPagerAndTabs(startIndex: Int) {
-        pagerAdapter = TeacherOptionsPagerAdapter(this, currentTeacherId!!, currentTeacherName!!)
+        pagerAdapter = TeacherOptionsPagerAdapter(this, currentTeacherId!!, currentTeacherName!!, userRole)
         viewPager.adapter = pagerAdapter
+
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = pagerAdapter.tabTitles[position]
+            tab.text = pagerAdapter.getTabTitle(position)
         }.attach()
 
         if (startIndex < pagerAdapter.itemCount) {
@@ -167,36 +163,55 @@ class TeacherOptionsActivity : AppCompatActivity() { // REMOVED NavigationView.O
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        // Handle the Up/Home button click
         if (item.itemId == android.R.id.home) {
-            onBackPressedDispatcher.onBackPressed() // Use modern onBackPressedDispatcher
+            onBackPressedDispatcher.onBackPressed()
             return true
         }
         return super.onOptionsItemSelected(item)
     }
 
-    // REMOVED onNavigationItemSelected as there is no drawer
-    // REMOVED onBackPressed() method if it only handled drawer open/close,
-    // if it had other logic, it should be preserved. Assuming it was only for drawer.
-
-
-    // Adapter for ViewPager2
     private inner class TeacherOptionsPagerAdapter(
         activity: AppCompatActivity,
         private val teacherId: String,
-        private val teacherName: String
+        private val teacherName: String,
+        private val role: String
     ) : FragmentStateAdapter(activity) {
 
-        val tabTitles = arrayOf("Manage Class", "Take Attendance", "Fee Summary")
+        private val adminTabTitles = arrayOf("Manage Class", "Take Attendance", "Fee Summary")
+        private val teacherTabTitles = arrayOf("Take Attendance", "Manage Class")
 
-        override fun getItemCount(): Int = tabTitles.size
+        fun getTabTitle(position: Int): String {
+            return if (role == ROLE_ADMIN) {
+                adminTabTitles[position]
+            } else {
+                teacherTabTitles[position]
+            }
+        }
+
+        override fun getItemCount(): Int {
+            return if (role == ROLE_ADMIN) {
+                adminTabTitles.size
+            } else {
+                teacherTabTitles.size
+            }
+        }
 
         override fun createFragment(position: Int): Fragment {
-            return when (position) {
-                FRAGMENT_MANAGE_CLASS -> ManageClassFragment.newInstance(teacherId, teacherName)
-                FRAGMENT_TAKE_ATTENDANCE -> TakeAttendanceFragment.newInstance(teacherId, teacherName)
-                FRAGMENT_FEE_SUMMARY -> PaymentSummaryFragment.newInstance(teacherId, teacherName)
-                else -> throw IllegalStateException("Invalid position $position")
+            return if (role == ROLE_ADMIN) {
+                // Admin logic: 3 tabs
+                when (position) {
+                    FRAGMENT_MANAGE_CLASS -> ManageClassFragment.newInstance(teacherId, teacherName)
+                    FRAGMENT_TAKE_ATTENDANCE -> TakeAttendanceFragment.newInstance(teacherId, teacherName)
+                    FRAGMENT_FEE_SUMMARY -> PaymentSummaryFragment.newInstance(teacherId, teacherName)
+                    else -> throw IllegalStateException("Invalid position $position for Admin")
+                }
+            } else {
+                // Teacher logic: 2 tabs
+                when (position) {
+                    0 -> TakeAttendanceFragment.newInstance(teacherId, teacherName)
+                    1 -> ManageClassFragment.newInstance(teacherId, teacherName)
+                    else -> throw IllegalStateException("Invalid position $position for Teacher")
+                }
             }
         }
     }

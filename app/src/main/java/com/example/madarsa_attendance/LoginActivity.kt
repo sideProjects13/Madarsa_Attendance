@@ -2,6 +2,7 @@ package com.example.madarsa_attendance
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -43,13 +44,18 @@ class LoginActivity : AppCompatActivity() {
 
         if (auth.currentUser != null) {
             val role = FirebaseAuthManager.getUserRole(this)
-            if (role == "admin" && FirebaseAuthManager.getOrganizationId(this) != null) {
+            // --- ADDED SUPERADMIN CHECK ---
+            if (role == "superadmin") {
+                startActivity(Intent(this, SuperAdminDashboardActivity::class.java))
+                finish()
+                return
+            }
+            // --- END OF ADDITION ---
+            else if (role == "admin" && FirebaseAuthManager.getOrganizationId(this) != null) {
                 startActivity(Intent(this, MainActivity::class.java))
                 finish()
                 return
             } else if (role == "teacher" && FirebaseAuthManager.getOrganizationId(this) != null) {
-                // Assuming you have a TeacherDashboardActivity
-                // If not, you will need to create it.
                 startActivity(Intent(this, TeacherDashboardActivity::class.java))
                 finish()
                 return
@@ -102,11 +108,26 @@ class LoginActivity : AppCompatActivity() {
                     return@addOnSuccessListener
                 }
 
-                if (isLoginAsAdmin) {
-                    handleAdminLogin(userId)
-                } else {
-                    handleTeacherLogin(userId)
-                }
+                db.collection("users").document(userId).get()
+                    .addOnSuccessListener { userDoc ->
+                        if (userDoc != null && userDoc.exists()) {
+                            val role = userDoc.getString("role")
+                            if (role == "superadmin") {
+                                handleSuperAdminLogin(userId)
+                            } else if (role == "admin" && isLoginAsAdmin) {
+                                handleAdminLogin(userId)
+                            } else if (role == "teacher" && !isLoginAsAdmin) {
+                                handleTeacherLogin(userId)
+                            } else {
+                                logoutAndShowError("Login role mismatch. Please select the correct role (Admin/Teacher).")
+                            }
+                        } else {
+                            logoutAndShowError("User details not found in database.")
+                        }
+                    }
+                    .addOnFailureListener {
+                        logoutAndShowError("Failed to verify user role.")
+                    }
             }
             .addOnFailureListener { e ->
                 setLoading(false)
@@ -114,35 +135,43 @@ class LoginActivity : AppCompatActivity() {
             }
     }
 
+    private fun handleSuperAdminLogin(userId: String) {
+        FirebaseAuthManager.saveLoginSession(
+            context = this,
+            role = "superadmin",
+            orgId = "", // Superadmin has no specific org
+            orgName = "Super Admin", // Add a default name
+            activeLogoUrl = null,
+            address = null
+        )
+        navigateToActivity(SuperAdminDashboardActivity::class.java)
+    }
+
     private fun handleAdminLogin(userId: String) {
         db.collection("users").document(userId).get()
             .addOnSuccessListener { userDoc ->
-                if (userDoc != null && userDoc.exists() && userDoc.getString("role") == "admin") {
-                    val orgId = userDoc.getString("organizationId")
-                    if (orgId != null) {
-                        db.collection("organizations").document(orgId).get()
-                            .addOnSuccessListener { orgDoc ->
-                                if (orgDoc.exists()) {
-                                    val org = orgDoc.toObject(Organization::class.java)
-                                    FirebaseAuthManager.saveLoginSession(
-                                        this,
-                                        "admin",
-                                        orgId,
-                                        org?.organizationName ?: "My Madarsa",
-                                        org?.logoUrl,
-                                        org?.address
-                                    )
-                                    navigateToActivity(MainActivity::class.java)
-                                } else {
-                                    logoutAndShowError("Organization data not found.")
-                                }
+                val orgId = userDoc.getString("organizationId")
+                if (orgId != null) {
+                    db.collection("organizations").document(orgId).get()
+                        .addOnSuccessListener { orgDoc ->
+                            if (orgDoc.exists()) {
+                                val org = orgDoc.toObject(Organization::class.java)
+                                FirebaseAuthManager.saveLoginSession(
+                                    this,
+                                    "admin",
+                                    orgId,
+                                    org?.organizationName ?: "My Madarsa",
+                                    org?.logoUrl,
+                                    org?.address
+                                )
+                                navigateToActivity(MainActivity::class.java)
+                            } else {
+                                logoutAndShowError("Organization data not found.")
                             }
-                            .addOnFailureListener { logoutAndShowError("Failed to fetch organization details.") }
-                    } else {
-                        logoutAndShowError("Admin data is incomplete.")
-                    }
+                        }
+                        .addOnFailureListener { logoutAndShowError("Failed to fetch organization details.") }
                 } else {
-                    logoutAndShowError("This account is not registered as an Admin.")
+                    logoutAndShowError("Admin data is incomplete.")
                 }
             }
             .addOnFailureListener { logoutAndShowError("Failed to verify admin status.") }
@@ -151,37 +180,28 @@ class LoginActivity : AppCompatActivity() {
     private fun handleTeacherLogin(userId: String) {
         db.collection("users").document(userId).get()
             .addOnSuccessListener { userDoc ->
-                if (userDoc != null && userDoc.exists() && userDoc.getString("role") == "teacher") {
-                    val orgId = userDoc.getString("organizationId")
-                    if (orgId != null) {
-                        db.collection("organizations").document(orgId).get()
-                            .addOnSuccessListener { orgDoc ->
-                                if (orgDoc.exists()) {
-                                    val org = orgDoc.toObject(Organization::class.java)
-                                    FirebaseAuthManager.saveLoginSession(
-                                        this,
-                                        "teacher",
-                                        orgId,
-                                        org?.organizationName ?: "My Madarsa",
-                                        org?.logoUrl,
-                                        org?.address
-                                    )
-
-                                    // --- THIS IS THE FIX ---
-                                    // This line was commented out, causing the process to hang.
-                                    navigateToActivity(TeacherDashboardActivity::class.java)
-                                    // --- END OF FIX ---
-
-                                } else {
-                                    logoutAndShowError("Organization data for teacher not found.")
-                                }
+                val orgId = userDoc.getString("organizationId")
+                if (orgId != null) {
+                    db.collection("organizations").document(orgId).get()
+                        .addOnSuccessListener { orgDoc ->
+                            if (orgDoc.exists()) {
+                                val org = orgDoc.toObject(Organization::class.java)
+                                FirebaseAuthManager.saveLoginSession(
+                                    this,
+                                    "teacher",
+                                    orgId,
+                                    org?.organizationName ?: "My Madarsa",
+                                    org?.logoUrl,
+                                    org?.address
+                                )
+                                navigateToActivity(TeacherDashboardActivity::class.java)
+                            } else {
+                                logoutAndShowError("Organization data for teacher not found.")
                             }
-                            .addOnFailureListener { logoutAndShowError("Failed to fetch organization details for teacher.") }
-                    } else {
-                        logoutAndShowError("Teacher data is incomplete (missing organization).")
-                    }
+                        }
+                        .addOnFailureListener { logoutAndShowError("Failed to fetch organization details for teacher.") }
                 } else {
-                    logoutAndShowError("This account is not registered as a Teacher.")
+                    logoutAndShowError("Teacher data is incomplete (missing organization).")
                 }
             }
             .addOnFailureListener {

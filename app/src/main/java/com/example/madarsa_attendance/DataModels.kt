@@ -175,3 +175,16 @@
         val status: String = "", // "Present", "Absent"
         val organizationId: String = ""
     )
+
+    data class OrganizationStat(
+        val orgName: String = "Unknown Organization",
+        val studentCount: Int = 0,
+        val teacherCount: Int = 0
+    )
+
+    // Add this class to hold the latest announcement from Firestore
+    data class Announcement(
+        @DocumentId val id: String = "",
+        val message: String = "",
+        val timestamp: Timestamp? = null
+    )

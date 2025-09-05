@@ -1,5 +1,6 @@
 package com.example.madarsa_attendance
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -64,6 +65,37 @@ class TeacherDashboardActivity : AppCompatActivity() {
 
         setupRecyclerView()
         loadTeacherClasses()
+
+        // ADDED: Listen for announcements
+        listenForAnnouncements()
+    }
+
+    // NEW FUNCTION
+    private fun listenForAnnouncements() {
+        val prefs = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+        val lastShownAnnouncementId = prefs.getString("last_announcement_id", null)
+
+        db.collection("announcements")
+            .orderBy("timestamp", Query.Direction.DESCENDING).limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (isDestroyed || isFinishing) return@addSnapshotListener
+                if (error != null) {
+                    Log.w("TeacherDashboard", "Listen for announcements failed.", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val latestAnnouncement = snapshot.documents[0].toObject(Announcement::class.java)
+                    if (latestAnnouncement != null && latestAnnouncement.id != lastShownAnnouncementId) {
+                        AlertDialog.Builder(this)
+                            .setTitle("Announcement")
+                            .setMessage(latestAnnouncement.message)
+                            .setPositiveButton("OK", null)
+                            .show()
+
+                        prefs.edit().putString("last_announcement_id", latestAnnouncement.id).apply()
+                    }
+                }
+            }
     }
 
     private fun setupRecyclerView() {
@@ -74,6 +106,7 @@ class TeacherDashboardActivity : AppCompatActivity() {
                     putExtra(TeacherOptionsActivity.EXTRA_TEACHER_ID, teacher.id)
                     putExtra(TeacherOptionsActivity.EXTRA_TEACHER_NAME, teacher.name)
                     putExtra(TeacherOptionsActivity.EXTRA_TEACHER_IMAGE_URL, teacher.profileImageUrl)
+                    putExtra(TeacherOptionsActivity.EXTRA_USER_ROLE, TeacherOptionsActivity.ROLE_TEACHER)
                 }
                 startActivity(intent)
             },

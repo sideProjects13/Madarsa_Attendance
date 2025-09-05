@@ -105,6 +105,8 @@ class ManageTeachersFragment : Fragment() {
                     putExtra("TEACHER_ID", selectedTeacher.id)
                     putExtra("TEACHER_NAME", selectedTeacher.name)
                     putExtra("TEACHER_IMAGE_URL", selectedTeacher.profileImageUrl)
+
+                    putExtra(TeacherOptionsActivity.EXTRA_USER_ROLE, TeacherOptionsActivity.ROLE_ADMIN)
                 }
                 startActivity(intent)
             },

@@ -209,10 +209,35 @@ class MainActivity : AppCompatActivity(),
         }
 
         val role = FirebaseAuthManager.getUserRole(this)
-        if (role == "teacher") {
-            startActivity(Intent(this, TeacherDashboardActivity::class.java))
-            finish()
-            return
+        when (role) {
+            "superadmin" -> {
+                // If the user is a super admin, send them to their dashboard
+                startActivity(Intent(this, SuperAdminDashboardActivity::class.java))
+                finish() // Finish MainActivity so they can't go back to it
+                return   // Stop executing the rest of onCreate
+            }
+            "teacher" -> {
+                // If the user is a teacher, send them to their dashboard
+                startActivity(Intent(this, TeacherDashboardActivity::class.java))
+                finish()
+                return
+            }
+            "admin" -> {
+                // This is a regular admin. Check if they have an organization selected.
+                if (!FirebaseAuthManager.isLoggedInAndOrgSelected(this)) {
+                    // If not, send to login/org selection
+                    startActivity(Intent(this, LoginActivity::class.java))
+                    finish()
+                    return
+                }
+                // If they do, they can proceed to load MainActivity's content.
+            }
+            else -> {
+                // If role is unknown or missing, send back to login
+                startActivity(Intent(this, LoginActivity::class.java))
+                finish()
+                return
+            }
         }
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
