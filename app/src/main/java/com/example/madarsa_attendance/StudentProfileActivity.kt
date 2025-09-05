@@ -11,11 +11,14 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.card.MaterialCardView
 
-class StudentProfileActivity : AppCompatActivity() {
+// --- IMPLEMENT THE NEW ADAPTER INTERFACE ---
+class StudentProfileActivity : AppCompatActivity(), ExamHistoryAdapter.OnExamHistoryInteractionListener {
 
     companion object {
         const val EXTRA_STUDENT_ID = "extra_student_id"
@@ -24,7 +27,7 @@ class StudentProfileActivity : AppCompatActivity() {
     private lateinit var viewModel: StudentProfileViewModel
     private var studentId: String? = null
 
-    // Views
+    // --- Existing Views (Unchanged) ---
     private lateinit var ivProfile: ImageView
     private lateinit var tvStudentName: TextView
     private lateinit var tvTeacherName: TextView
@@ -38,12 +41,20 @@ class StudentProfileActivity : AppCompatActivity() {
     private lateinit var tvAttendancePercentage: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var contentLayout: MaterialCardView
-
-    // New copy icon views
     private lateinit var ivCopyName: ImageView
     private lateinit var ivCopyRegNo: ImageView
     private lateinit var ivCopyParentInfo: ImageView
     private lateinit var ivCopyContactInfo: ImageView
+
+    // --- NEW VIEWS AND ADAPTERS FOR HISTORY ---
+    private lateinit var rvClassHistory: RecyclerView
+    private lateinit var tvNoClassHistory: TextView
+    private lateinit var classHistoryAdapter: ClassHistoryAdapter
+
+    private lateinit var rvExamHistory: RecyclerView
+    private lateinit var tvNoExamHistory: TextView
+    private lateinit var examHistoryAdapter: ExamHistoryAdapter
+    // --- END OF NEW VIEWS ---
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +70,7 @@ class StudentProfileActivity : AppCompatActivity() {
         viewModel = ViewModelProvider(this)[StudentProfileViewModel::class.java]
 
         initializeViews()
+        setupRecyclerViews() // New setup function
         setupObservers()
 
         viewModel.loadStudentData(studentId!!)
@@ -70,6 +82,7 @@ class StudentProfileActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         toolbar.setNavigationOnClickListener { finish() }
 
+        // Initialization of all existing views is unchanged
         ivProfile = findViewById(R.id.iv_student_profile_pic)
         tvStudentName = findViewById(R.id.tv_student_profile_name)
         tvTeacherName = findViewById(R.id.tv_student_profile_teacher)
@@ -83,15 +96,33 @@ class StudentProfileActivity : AppCompatActivity() {
         tvAttendancePercentage = findViewById(R.id.tv_attendance_percentage)
         progressBar = findViewById(R.id.progressBar_student_profile)
         contentLayout = findViewById(R.id.card_student_profile_content)
-
-        // Initialize the new copy icon views
         ivCopyName = findViewById(R.id.iv_copy_name)
         ivCopyRegNo = findViewById(R.id.iv_copy_reg_no)
         ivCopyParentInfo = findViewById(R.id.iv_copy_parent_info)
         ivCopyContactInfo = findViewById(R.id.iv_copy_contact_info)
+
+        // --- NEW: Initialize history views ---
+        rvClassHistory = findViewById(R.id.rv_class_history)
+        tvNoClassHistory = findViewById(R.id.tv_no_class_history)
+        rvExamHistory = findViewById(R.id.rv_exam_history)
+        tvNoExamHistory = findViewById(R.id.tv_no_exam_history)
+        // --- END OF NEW INITIALIZATION ---
     }
 
+    // --- NEW: Function to setup both RecyclerViews ---
+    private fun setupRecyclerViews() {
+        classHistoryAdapter = ClassHistoryAdapter(emptyList())
+        rvClassHistory.layoutManager = LinearLayoutManager(this)
+        rvClassHistory.adapter = classHistoryAdapter
+
+        examHistoryAdapter = ExamHistoryAdapter(emptyList(), this)
+        rvExamHistory.layoutManager = LinearLayoutManager(this)
+        rvExamHistory.adapter = examHistoryAdapter
+    }
+    // --- END OF NEW FUNCTION ---
+
     private fun setupObservers() {
+        // Existing observers (unchanged)
         viewModel.student.observe(this) { student ->
             if (student != null) {
                 populateStudentDetails(student)
@@ -108,10 +139,47 @@ class StudentProfileActivity : AppCompatActivity() {
 
         viewModel.isLoading.observe(this) { isLoading ->
             progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
-            contentLayout.visibility = if (isLoading) View.INVISIBLE else View.VISIBLE
+            // This logic is updated to hide all cards during load
+            val contentVisibility = if (isLoading) View.INVISIBLE else View.VISIBLE
+            findViewById<View>(R.id.card_student_profile_content).visibility = contentVisibility
+            findViewById<View>(R.id.card_attendance_summary).visibility = contentVisibility
+            findViewById<View>(R.id.card_class_history).visibility = contentVisibility
+            findViewById<View>(R.id.card_exam_history).visibility = contentVisibility
         }
+
+        // --- NEW: Observers for history data ---
+        viewModel.classHistory.observe(this) { history ->
+            if (history.isEmpty()) {
+                tvNoClassHistory.visibility = View.VISIBLE
+                rvClassHistory.visibility = View.GONE
+            } else {
+                tvNoClassHistory.visibility = View.GONE
+                rvClassHistory.visibility = View.VISIBLE
+                classHistoryAdapter.updateData(history)
+            }
+        }
+
+        viewModel.examHistory.observe(this) { history ->
+            if (history.isEmpty()) {
+                tvNoExamHistory.visibility = View.VISIBLE
+                rvExamHistory.visibility = View.GONE
+            } else {
+                tvNoExamHistory.visibility = View.GONE
+                rvExamHistory.visibility = View.VISIBLE
+                examHistoryAdapter.updateData(history)
+            }
+        }
+        // --- END OF NEW OBSERVERS ---
     }
 
+    // --- NEW: Implement the listener from ExamHistoryAdapter ---
+    override fun onGenerateReportClick(item: ExamHistoryItem) {
+        Toast.makeText(this, "Generating report for ${item.examName}...", Toast.LENGTH_SHORT).show()
+        viewModel.generateHistoricalReport(item)
+    }
+    // --- END OF NEW IMPLEMENTATION ---
+
+    // --- Existing functions (Unchanged) ---
     private fun populateStudentDetails(student: StudentDetailsItem) {
         supportActionBar?.title = student.studentName
 
@@ -130,7 +198,6 @@ class StudentProfileActivity : AppCompatActivity() {
         tvPersonalInfo.text = "Gender: ${student.gender ?: "N/A"}\nDOB: ${student.birthDate ?: "N/A"}"
         tvAcademicInfo.text = "Admission: ${student.admissionDate ?: "N/A"}\nFee: ₹${student.monthlyFee ?: "0.0"}"
 
-        // --- NEW: Setup click listeners for copy icons ---
         setupCopyAction(ivCopyName, "Student Name", student.studentName)
         setupCopyAction(ivCopyRegNo, "Registration No.", student.regNo ?: "")
         setupCopyAction(ivCopyParentInfo, "Parent Name", student.parentName ?: "")
@@ -143,7 +210,6 @@ class StudentProfileActivity : AppCompatActivity() {
         tvAttendancePercentage.text = String.format("%.1f%%", summary.percentage)
     }
 
-    // --- NEW: Helper function to handle copying text ---
     private fun setupCopyAction(imageView: ImageView, label: String, textToCopy: String) {
         if (textToCopy.isNotBlank()) {
             imageView.visibility = View.VISIBLE

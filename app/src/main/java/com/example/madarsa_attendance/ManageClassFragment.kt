@@ -29,9 +29,11 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.Calendar
+import java.util.Date
 
 class ManageClassFragment : Fragment() {
 
@@ -502,22 +504,28 @@ class ManageClassFragment : Fragment() {
                 val batch = db.batch()
                 val originalTeacherId = student.teacherId
 
+                // --- START: YOUR ORIGINAL, CORRECT LOGIC (RESTORED) ---
+
+                // 1. Update the student document itself
                 val studentRef = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("students").document(student.id)
                 batch.update(studentRef, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
 
+                // 2. Find and update all fee payments
                 val feesSnapshot = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("feePayments").whereEqualTo("studentId", student.id).get().await()
                 feesSnapshot.documents.forEach { doc ->
                     batch.update(doc.reference, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
                 }
 
+                // 3. Find and update all exam results
                 val examsSnapshot = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("examResults").whereEqualTo("studentId", student.id).get().await()
                 examsSnapshot.documents.forEach { doc ->
                     batch.update(doc.reference, mapOf("teacherId" to newTeacher.id, "teacherName" to newTeacher.name))
                 }
 
+                // 4. Find and update all relevant attendance records
                 val attendanceSnapshot = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("attendanceRecords")
                     .whereEqualTo("teacherId", originalTeacherId)
@@ -542,7 +550,43 @@ class ManageClassFragment : Fragment() {
                         ))
                     }
                 }
+                // --- END: YOUR ORIGINAL, CORRECT LOGIC (RESTORED) ---
 
+
+                // --- START: NEW CLASS HISTORY LOGIC (ADDED) ---
+
+                val studentHistoryRef = db.collection("organizations").document(currentOrganizationId!!)
+                    .collection("students").document(student.id)
+                    .collection("studentClassHistory")
+
+                // Find the last class record to set its end date
+                val lastClassQuery = studentHistoryRef
+                    .whereEqualTo("endDate", null)
+                    .orderBy("startDate", Query.Direction.DESCENDING)
+                    .limit(1)
+                    .get()
+                    .await()
+
+                if (!lastClassQuery.isEmpty) {
+                    val lastClassDoc = lastClassQuery.documents.first()
+                    batch.update(lastClassDoc.reference, "endDate", Date())
+                }
+
+                // Create the new history record for the new class
+                val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+                val academicYear = "${currentYear}-${currentYear + 1}"
+                val newHistoryRecord = StudentClassHistory(
+                    teacherId = newTeacher.id,
+                    teacherName = newTeacher.name,
+                    academicYear = academicYear,
+                    startDate = Date(),
+                    endDate = null
+                )
+                val newHistoryDocRef = studentHistoryRef.document()
+                batch.set(newHistoryDocRef, newHistoryRecord)
+                // --- END: NEW CLASS HISTORY LOGIC (ADDED) ---
+
+                // 5. Commit all the changes at once
                 batch.commit().await()
 
                 if (isAdded) {

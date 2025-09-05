@@ -15,6 +15,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.util.Date
 
 class ManageMarks : AppCompatActivity() {
 
@@ -159,26 +161,46 @@ class ManageMarks : AppCompatActivity() {
         }
         progressBar.visibility = View.VISIBLE
 
+        // The document ID remains the same, which is good for overwriting/updating.
         val docId = "${examId}_${studentMark.student.id}"
         val docRef = db.collection("organizations").document(currentOrganizationId!!).collection("examResults").document(docId)
 
-        val data = hashMapOf(
-            "examId" to examId,
-            "teacherId" to teacherId,
-            "studentId" to studentMark.student.id,
-            "studentName" to studentMark.student.studentName,
-            "marks" to studentMark.marks
-        )
+        // --- NEW LOGIC: Create the complete ExamResult object ---
 
-        docRef.set(data).addOnSuccessListener {
+        // 1. Create a snapshot of the subjects for this exam result
+        val subjectSnapshots = allSubjects.map {
+            SubjectSnapshot(subjectId = it.id, subjectName = it.subjectName)
+        }
+
+        // 2. Determine the academic year (you can make this more sophisticated later)
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val academicYear = "${currentYear}-${currentYear + 1}"
+
+        // 3. Build the complete ExamResult object with all historical context
+        val examResultData = ExamResult(
+            id = docId,
+            examId = examId,
+            examName = toolbar.title.toString(), // Get exam name from the toolbar title
+            studentId = studentMark.student.id,
+            studentName = studentMark.student.studentName,
+            teacherId = teacherId,
+            teacherName = studentMark.student.teacherName ?: "N/A", // Use the student's teacher at the time
+            academicYear = academicYear,
+            subjects = subjectSnapshots,
+            marks = studentMark.marks,
+            resultDate = Date()
+        )
+        // --- END OF NEW LOGIC ---
+
+        // Save the entire object to Firestore.
+        // Using .set() will create the document if it doesn't exist, or overwrite it if it does.
+        docRef.set(examResultData).addOnSuccessListener {
             progressBar.visibility = View.GONE
-            // --- CHANGE ---
             StatusDialogFragment.newInstance(true, "Marks Saved!")
                 .show(supportFragmentManager, "successDialog")
 
         }.addOnFailureListener { e ->
             progressBar.visibility = View.GONE
-            // --- CHANGE ---
             StatusDialogFragment.newInstance(false, "Save Failed")
                 .show(supportFragmentManager, "failureDialog")
             Log.e(TAG, "Error saving marks for student ${studentMark.student.id}", e)

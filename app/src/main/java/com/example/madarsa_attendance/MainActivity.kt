@@ -42,6 +42,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.navigation.NavigationView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.toObjects
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.launch
@@ -1218,6 +1219,8 @@ class MainActivity : AppCompatActivity(),
                 val batch = db.batch()
                 val originalTeacherId = student.teacherId
 
+                // --- START: YOUR ORIGINAL, CORRECT LOGIC (RESTORED) ---
+
                 // 1. Update the student document itself
                 val studentRef = db.collection("organizations").document(organizationId)
                     .collection("students").document(student.id)
@@ -1247,32 +1250,62 @@ class MainActivity : AppCompatActivity(),
                 for (doc in attendanceSnapshot.documents) {
                     val studentAttendances = doc.get("studentAttendances") as? List<Map<String, Any>>
                     if (studentAttendances?.any { it["studentId"] == student.id } == true) {
-                        // --- THIS IS THE NEW, CRITICAL LOGIC ---
-                        // We need to rebuild the array with the updated student info
                         val updatedStudentAttendances = studentAttendances.map {
                             if (it["studentId"] == student.id) {
-                                // This is the student we're moving, update their details
                                 it.toMutableMap().apply {
                                     this["teacherName"] = newTeacher.name
-                                    // You can also update studentName here if it might change
-                                    // this["studentName"] = student.studentName
                                 }
                             } else {
-                                // This is a different student, leave them as is
                                 it
                             }
                         }
-                        // Update the top-level fields AND the modified array
+                        // This part of your logic was very clever and is restored.
+                        // It correctly updates the teacher for the whole attendance record
+                        // and the specific student's entry within the array.
                         batch.update(doc.reference, mapOf(
                             "teacherId" to newTeacher.id,
                             "teacherName" to newTeacher.name,
                             "studentAttendances" to updatedStudentAttendances
                         ))
-                        // --- END OF NEW LOGIC ---
                     }
                 }
+                // --- END: YOUR ORIGINAL, CORRECT LOGIC (RESTORED) ---
 
-                // 5. Commit all the changes at once
+
+                // --- START: NEW CLASS HISTORY LOGIC (ADDED) ---
+
+                val studentHistoryRef = db.collection("organizations").document(organizationId)
+                    .collection("students").document(student.id)
+                    .collection("studentClassHistory")
+
+                // Find the last class record to set its end date
+                val lastClassQuery = studentHistoryRef
+                    .whereEqualTo("endDate", null)
+                    .orderBy("startDate", Query.Direction.DESCENDING)
+                    .limit(1)
+                    .get()
+                    .await()
+
+                if (!lastClassQuery.isEmpty) {
+                    val lastClassDoc = lastClassQuery.documents.first()
+                    batch.update(lastClassDoc.reference, "endDate", Date())
+                }
+
+                // Create the new history record for the new class
+                val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+                val academicYear = "${currentYear}-${currentYear + 1}"
+                val newHistoryRecord = StudentClassHistory(
+                    teacherId = newTeacher.id,
+                    teacherName = newTeacher.name,
+                    academicYear = academicYear,
+                    startDate = Date(),
+                    endDate = null
+                )
+                val newHistoryDocRef = studentHistoryRef.document()
+                batch.set(newHistoryDocRef, newHistoryRecord)
+                // --- END: NEW CLASS HISTORY LOGIC (ADDED) ---
+
+                // 5. Commit all the changes at once (both old and new logic)
                 batch.commit().await()
 
                 // Success
@@ -1292,7 +1325,6 @@ class MainActivity : AppCompatActivity(),
             }
         }
     }
-
 
     private fun requestStoragePermission(onGrantedAction: () -> Unit) {
         this.onPermissionGranted = onGrantedAction

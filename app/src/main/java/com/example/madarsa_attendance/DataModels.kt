@@ -188,3 +188,45 @@
         val message: String = "",
         val timestamp: Timestamp? = null
     )
+
+    data class ExamResult(
+        @DocumentId val id: String = "", // examId_studentId
+        val examId: String = "",
+        val examName: String = "",
+        val studentId: String = "",
+        val studentName: String = "",
+        val teacherId: String = "",
+        val teacherName: String = "",
+        val academicYear: String = "", // e.g., "2023-2024"
+        val subjects: List<SubjectSnapshot> = emptyList(), // Snapshot of subjects
+        val marks: Map<String, String> = emptyMap(), // subjectId -> mark
+        val resultDate: Date? = null
+    )
+
+    data class SubjectSnapshot(
+        val subjectId: String = "",
+        val subjectName: String = ""
+    )
+
+    data class StudentClassHistory(
+        @DocumentId val id: String = "",
+        val teacherId: String = "",
+        val teacherName: String = "",
+        val academicYear: String = "",
+        val startDate: Date? = null,
+        var endDate: Date? = null // 'var' because we will update it
+    )
+
+    data class ClassHistoryItem(
+        val teacherName: String,
+        val academicYear: String,
+        val duration: String // e.g., "Sep 2023 - Present"
+    )
+
+    data class ExamHistoryItem(
+        val examName: String,
+        val academicYear: String,
+        val teacherName: String,
+        val fullResult: ExamResult // The complete document, needed for report generation
+    )
+
