@@ -185,25 +185,28 @@ class RegisterActivity : AppCompatActivity() {
                 )
                 val orgDocRef = db.collection("organizations").add(organization).await()
 
-                // Step 4: Create User Document in top-level 'users' collection
+                // --- THIS IS THE CRITICAL CHANGE ---
+                // Step 4: Create User Document in top-level 'users' collection with "pending" status
                 val appUser = AppUser(
+                    uid = user.uid, // Use the auth UID as the document ID
                     organizationId = orgDocRef.id,
                     role = "admin",
                     email = adminEmail,
                     name = adminName,
                     mobile = adminMobile,
-                    organizationName = orgName
+                    organizationName = orgName,
+                    accountStatus = "pending" // Set the initial status
                 )
                 db.collection("users").document(user.uid).set(appUser).await()
+                // --- END OF CHANGE ---
 
-                // Success
-                saveLoginSession("admin", orgDocRef.id, orgName)
-                StatusDialogFragment.newInstance(true, "Registration Successful!", true)
+                // --- NEW SUCCESS FLOW ---
+                // Do NOT log the user in. Show a success message and send them to the login screen.
+                auth.signOut() // Immediately sign out the newly created user
+                setLoading(false)
+                StatusDialogFragment.newInstance(true, "Registration successful! Your account is pending approval by the Super Admin.", true)
                     .show(supportFragmentManager, "successDialog")
-                android.os.Handler(mainLooper).postDelayed({
-                    startActivity(Intent(this@RegisterActivity, MainActivity::class.java))
-                    finish()
-                }, 1800)
+                // The dialog's finishActivityOnDismiss will handle closing this activity.
 
             } catch (e: Exception) {
                 setLoading(false)
@@ -236,7 +239,6 @@ class RegisterActivity : AppCompatActivity() {
     private fun setLoading(isLoading: Boolean) {
         progressBarRegister.visibility = if (isLoading) View.VISIBLE else View.GONE
         btnRegisterOrganization.isEnabled = !isLoading
-        // Disable all fields while loading
         etOrganizationNameRegister.isEnabled = !isLoading
         etOrganizationAddress.isEnabled = !isLoading
         etAdminNameRegister.isEnabled = !isLoading
@@ -249,14 +251,8 @@ class RegisterActivity : AppCompatActivity() {
         ivOrgLogo.isEnabled = !isLoading
     }
 
-    private fun saveLoginSession(role: String, orgId: String, orgName: String) {
-        getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit().apply {
-            putString("user_role", role)
-            putString("organization_id", orgId)
-            putString("organization_name", orgName)
-            apply()
-        }
-    }
+    // This function is no longer needed here as we don't auto-login
+    // private fun saveLoginSession(...) { ... }
 
     private fun checkAndRequestPermissions() {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

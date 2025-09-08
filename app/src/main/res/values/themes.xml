@@ -13,7 +13,7 @@
             <item name="android:navigationBarColor">@android:color/transparent</item>
             <!-- Ensures status bar icons (time, battery) are dark and visible -->
             <item name="android:windowLightStatusBar">true</item>
-
+<!--            <item name="android:windowIsTranslucent">true</item>-->
             <!-- Monochrome color mapping -->
             <item name="colorPrimary">@color/bw_theme_primary</item>
             <item name="colorOnPrimary">@color/bw_theme_onPrimary</item>

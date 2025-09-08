@@ -23,7 +23,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val TAG = "DashboardViewModel"
     private val DEFAULT_ABSENCE_THRESHOLD = 3
 
-    // LiveData declarations (unchanged)
+    // LiveData declarations (Unchanged)
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
     private val _isStudentListLoading = MutableLiveData<Boolean>()
@@ -112,12 +112,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 classDistDeferred.await()
                 attendanceDeferred.await()
 
-                // --- THIS IS THE FIX FOR THE LINT ERROR ---
-                // The `?: emptyList()` guarantees that we never post a null value,
-                // even if the await() call were to theoretically fail and produce one.
-                // This satisfies the strict `lintVitalRelease` check.
                 _highAbsenceStudents.postValue(highAbsenceDeferred.await() ?: emptyList())
-                // --- END OF FIX ---
 
                 isDashboardDataLoaded = true
             } catch (e: Exception) {
@@ -152,7 +147,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private suspend fun fetchTodaysAttendanceStats(orgId: String, allActiveStudents: List<StudentDetailsItem>, allTeachers: List<Teacher>) {
         try {
+            // Create a Set of active student IDs and a Map of their details for very fast lookups.
             val activeStudentIds = allActiveStudents.map { it.id }.toSet()
+            val activeStudentsMap = allActiveStudents.associateBy { it.id }
             val totalActiveStudentsCount = activeStudentIds.size
 
             val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -169,19 +166,26 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 val studentAttendances = doc.get("studentAttendances") as? List<Map<String, Any>>
                 studentAttendances?.forEach { studentMap ->
                     val studentId = studentMap["studentId"] as? String
+
+                    // Only count attendance if the student is in our active list.
                     if (studentId != null && activeStudentIds.contains(studentId)) {
                         when (studentMap["status"] as? String) {
                             "Present" -> present++
                             "Absent" -> {
                                 absent++
+                                // --- THIS IS THE FIX ---
+                                // Look up the student in our fresh map to get the LATEST name and details.
+                                val freshStudentDetails = activeStudentsMap[studentId]
                                 absentStudentItems.add(
                                     DashboardStudentItem(
                                         id = studentId,
-                                        name = studentMap["studentName"] as? String ?: "Unknown",
-                                        imageUrl = null,
+                                        // Use the fresh name, fallback to the old name if lookup fails.
+                                        name = freshStudentDetails?.studentName ?: studentMap["studentName"] as? String ?: "Unknown",
+                                        imageUrl = freshStudentDetails?.profileImageUrl, // Get the latest image URL
                                         subtitle = doc.getString("teacherName")
                                     )
                                 )
+                                // --- END OF FIX ---
                             }
                         }
                     }

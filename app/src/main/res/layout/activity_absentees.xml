@@ -40,38 +40,46 @@
             android:inputType="none" />
     </com.google.android.material.textfield.TextInputLayout>
 
-    <FrameLayout
+    <!-- === NEW: SwipeRefreshLayout wraps the content === -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_refresh_layout_absentees"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv_absentees"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:padding="8dp"
-            tools:listitem="@layout/item_dashboard_student" />
+            android:layout_height="match_parent">
 
-        <TextView
-            android:id="@+id/tv_no_absentees"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:text="No absent students found."
-            android:textAppearance="?attr/textAppearanceBodyLarge"
-            android:visibility="gone"
-            tools:visibility="visible"/>
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_absentees"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:padding="8dp"
+                tools:listitem="@layout/item_dashboard_student" />
 
-        <ProgressBar
-            android:id="@+id/progress_bar_absentees"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:visibility="gone"/>
-    </FrameLayout>
+            <TextView
+                android:id="@+id/tv_no_absentees"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="No absent students found."
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:visibility="gone"
+                tools:visibility="visible"/>
 
-    <!-- ADD THIS BUTTON -->
+            <ProgressBar
+                android:id="@+id/progress_bar_absentees"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone"/>
+        </FrameLayout>
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+    <!-- === END OF NEW WRAPPER === -->
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_send_whatsapp"
         style="@style/Widget.Material3.Button.Icon"

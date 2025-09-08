@@ -2,19 +2,20 @@ package com.example.madarsa_attendance
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.view.View
-import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.example.madarsa_attendance.models.AppUser
 import com.example.madarsa_attendance.models.Organization
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
+import android.widget.ProgressBar
+import android.widget.TextView
 
 class LoginActivity : AppCompatActivity() {
 
@@ -25,7 +26,8 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
 
-    private lateinit var toggleLoginAs: MaterialButtonToggleGroup
+    // --- REMOVED: The toggle button is no longer needed ---
+    // private lateinit var toggleLoginAs: MaterialButtonToggleGroup
     private lateinit var etLoginEmail: TextInputEditText
     private lateinit var etLoginPassword: TextInputEditText
     private lateinit var btnLogin: MaterialButton
@@ -33,7 +35,8 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var tvGoToRegisterOrg: TextView
     private lateinit var tvForgotPassword: TextView
 
-    private var isLoginAsAdmin = true
+    // --- REMOVED: This state variable is no longer needed ---
+    // private var isLoginAsAdmin = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,14 +47,11 @@ class LoginActivity : AppCompatActivity() {
 
         if (auth.currentUser != null) {
             val role = FirebaseAuthManager.getUserRole(this)
-            // --- ADDED SUPERADMIN CHECK ---
             if (role == "superadmin") {
                 startActivity(Intent(this, SuperAdminDashboardActivity::class.java))
                 finish()
                 return
-            }
-            // --- END OF ADDITION ---
-            else if (role == "admin" && FirebaseAuthManager.getOrganizationId(this) != null) {
+            } else if (role == "admin" && FirebaseAuthManager.getOrganizationId(this) != null) {
                 startActivity(Intent(this, MainActivity::class.java))
                 finish()
                 return
@@ -67,7 +67,8 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun initializeViews() {
-        toggleLoginAs = findViewById(R.id.toggleLoginAs)
+        // --- REMOVED: Initialization for the toggle button ---
+        // toggleLoginAs = findViewById(R.id.toggleLoginAs)
         etLoginEmail = findViewById(R.id.etLoginEmail)
         etLoginPassword = findViewById(R.id.etLoginPassword)
         btnLogin = findViewById(R.id.btnLogin)
@@ -77,13 +78,10 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        toggleLoginAs.visibility = View.VISIBLE
-        toggleLoginAs.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) {
-                isLoginAsAdmin = checkedId == R.id.btnLoginAsAdmin
-                tvGoToRegisterOrg.visibility = if (isLoginAsAdmin) View.VISIBLE else View.GONE
-            }
-        }
+        // --- REMOVED: Listener for the toggle button ---
+        // toggleLoginAs.visibility = View.VISIBLE
+        // toggleLoginAs.addOnButtonCheckedListener { _, checkedId, isChecked -> ... }
+
         btnLogin.setOnClickListener { loginUser() }
         tvGoToRegisterOrg.setOnClickListener { startActivity(Intent(this, RegisterActivity::class.java)) }
         tvForgotPassword.setOnClickListener { showForgotPasswordDialog() }
@@ -102,32 +100,12 @@ class LoginActivity : AppCompatActivity() {
 
         auth.signInWithEmailAndPassword(email, password)
             .addOnSuccessListener { authResult ->
-                val userId = authResult.user?.uid
-                if (userId == null) {
+                val user = authResult.user
+                if (user == null) {
                     logoutAndShowError("Failed to get user ID.")
                     return@addOnSuccessListener
                 }
-
-                db.collection("users").document(userId).get()
-                    .addOnSuccessListener { userDoc ->
-                        if (userDoc != null && userDoc.exists()) {
-                            val role = userDoc.getString("role")
-                            if (role == "superadmin") {
-                                handleSuperAdminLogin(userId)
-                            } else if (role == "admin" && isLoginAsAdmin) {
-                                handleAdminLogin(userId)
-                            } else if (role == "teacher" && !isLoginAsAdmin) {
-                                handleTeacherLogin(userId)
-                            } else {
-                                logoutAndShowError("Login role mismatch. Please select the correct role (Admin/Teacher).")
-                            }
-                        } else {
-                            logoutAndShowError("User details not found in database.")
-                        }
-                    }
-                    .addOnFailureListener {
-                        logoutAndShowError("Failed to verify user role.")
-                    }
+                checkUserStatusAndProceed(user)
             }
             .addOnFailureListener { e ->
                 setLoading(false)
@@ -135,12 +113,49 @@ class LoginActivity : AppCompatActivity() {
             }
     }
 
+    // --- THIS FUNCTION IS UPDATED TO REMOVE DEPENDENCY ON THE TOGGLE BUTTON ---
+    private fun checkUserStatusAndProceed(user: FirebaseUser) {
+        db.collection("users").document(user.uid).get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.exists()) {
+                    val appUser = document.toObject(AppUser::class.java)
+
+                    // First, check if the account is active
+                    when (appUser?.accountStatus) {
+                        "active" -> {
+                            // Account is active, now determine the role and navigate
+                            when (appUser.role) {
+                                "superadmin" -> handleSuperAdminLogin(user.uid)
+                                "admin" -> handleAdminLogin(user.uid)
+                                "teacher" -> handleTeacherLogin(user.uid)
+                                else -> logoutAndShowError("Unknown user role. Please contact support.")
+                            }
+                        }
+                        "pending" -> {
+                            logoutAndShowError("Your account is pending approval by the Super Admin.")
+                        }
+                        "inactive" -> {
+                            logoutAndShowError("Your account has been deactivated. Please contact support.")
+                        }
+                        else -> {
+                            logoutAndShowError("Account status is unknown. Please contact support.")
+                        }
+                    }
+                } else {
+                    logoutAndShowError("User details not found in database.")
+                }
+            }
+            .addOnFailureListener {
+                logoutAndShowError("Failed to verify user role.")
+            }
+    }
+
     private fun handleSuperAdminLogin(userId: String) {
         FirebaseAuthManager.saveLoginSession(
             context = this,
             role = "superadmin",
-            orgId = "", // Superadmin has no specific org
-            orgName = "Super Admin", // Add a default name
+            orgId = "",
+            orgName = "Super Admin",
             activeLogoUrl = null,
             address = null
         )
@@ -211,12 +226,9 @@ class LoginActivity : AppCompatActivity() {
 
     private fun navigateToActivity(activityClass: Class<*>) {
         if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-            StatusDialogFragment.newInstance(true, "Login Successful!", true)
-                .show(supportFragmentManager, "successDialog")
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                startActivity(Intent(this, activityClass))
-                finish()
-            }, 1800)
+            setLoading(false)
+            startActivity(Intent(this, activityClass))
+            finish()
         }
     }
 
@@ -231,7 +243,8 @@ class LoginActivity : AppCompatActivity() {
     private fun setLoading(isLoading: Boolean) {
         progressBarLogin.visibility = if (isLoading) View.VISIBLE else View.GONE
         btnLogin.isEnabled = !isLoading
-        toggleLoginAs.isEnabled = !isLoading
+        // --- REMOVED: Reference to the toggle button ---
+        // toggleLoginAs.isEnabled = !isLoading
         etLoginEmail.isEnabled = !isLoading
         etLoginPassword.isEnabled = !isLoading
         tvGoToRegisterOrg.isEnabled = !isLoading

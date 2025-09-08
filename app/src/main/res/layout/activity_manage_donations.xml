@@ -51,30 +51,39 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <FrameLayout
+        <!-- === NEW: SwipeRefreshLayout wraps the content === -->
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh_layout_donations"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rv_donations"
+
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:padding="8dp"
-                tools:listitem="@layout/item_donation" />
-            <ProgressBar
-                android:id="@+id/progressBarDonations"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center" />
-            <TextView
-                android:id="@+id/tv_no_donations"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="No donations recorded yet. Tap '+' to add one."
-                android:visibility="gone" />
-        </FrameLayout>
+                android:layout_height="match_parent">
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv_donations"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:padding="8dp"
+                    tools:listitem="@layout/item_donation" />
+                <ProgressBar
+                    android:id="@+id/progressBarDonations"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center" />
+                <TextView
+                    android:id="@+id/tv_no_donations"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="No donations recorded yet. Tap '+' to add one."
+                    android:visibility="gone" />
+            </FrameLayout>
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        <!-- === END OF NEW WRAPPER === -->
+
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton

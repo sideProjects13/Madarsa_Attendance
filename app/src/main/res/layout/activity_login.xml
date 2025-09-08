@@ -24,6 +24,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="24dp"
+            android:layout_marginTop="52dp"
             android:gravity="center_horizontal">
 
             <ImageView
@@ -34,7 +35,8 @@
                 android:layout_marginBottom="24dp"
                 android:contentDescription="App Logo" />
 
-            <!-- NEW: Admin/Teacher Toggle -->
+            <!-- === THIS TOGGLE BUTTON GROUP IS NOW REMOVED === -->
+            <!--
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/toggleLoginAs"
                 android:layout_width="wrap_content"
@@ -57,6 +59,8 @@
                     android:layout_height="wrap_content"
                     android:text="Teacher" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
+            -->
+            <!-- === END OF REMOVED SECTION === -->
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/tilLoginEmail"

@@ -1,33 +1,33 @@
 package com.example.madarsa_attendance
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
-import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.madarsa_attendance.models.Organization
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.NumberFormat
-import java.util.Date
 import java.util.Locale
 
 class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationInteractionListener {
@@ -39,10 +39,22 @@ class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationI
     private lateinit var tvTotalDonations: TextView
     private lateinit var fabAddDonation: FloatingActionButton
 
+    // --- NEW: SwipeRefreshLayout ---
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+    // --- END OF NEW ---
+
     private lateinit var db: FirebaseFirestore
     private var organizationId: String? = null
     private var orgDetails: Organization? = null
     private val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
+
+    // --- NEW: ActivityResultLauncher to handle refresh after add/edit ---
+    private val addEditDonationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            loadDonations() // Refresh the list
+        }
+    }
+    // --- END OF NEW ---
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,25 +63,36 @@ class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationI
         db = FirebaseFirestore.getInstance()
         organizationId = FirebaseAuthManager.getOrganizationId(this)
 
-        val toolbar: MaterialToolbar = findViewById(R.id.toolbar_manage_donations)
-        setSupportActionBar(toolbar)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        initializeViews() // Call initializeViews before using them
 
-        rvDonations = findViewById(R.id.rv_donations)
-        progressBar = findViewById(R.id.progressBarDonations)
-        tvNoDonations = findViewById(R.id.tv_no_donations)
-        tvTotalDonations = findViewById(R.id.tv_total_donations)
-        fabAddDonation = findViewById(R.id.fab_add_donation)
+        setSupportActionBar(findViewById(R.id.toolbar_manage_donations))
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         setupRecyclerView()
         loadOrganizationDetails()
         loadDonations()
 
         fabAddDonation.setOnClickListener {
-            // This would launch your AddEditDonationActivity
             val intent = Intent(this, AddEditDonationActivity::class.java)
-            startActivity(intent)
+            addEditDonationLauncher.launch(intent) // Use the launcher
         }
+
+        // --- NEW: Setup SwipeRefreshLayout ---
+        swipeRefreshLayout.setOnRefreshListener {
+            loadDonations()
+        }
+        // --- END OF NEW ---
+    }
+
+    private fun initializeViews() {
+        rvDonations = findViewById(R.id.rv_donations)
+        progressBar = findViewById(R.id.progressBarDonations)
+        tvNoDonations = findViewById(R.id.tv_no_donations)
+        tvTotalDonations = findViewById(R.id.tv_total_donations)
+        fabAddDonation = findViewById(R.id.fab_add_donation)
+        // --- NEW: Initialize SwipeRefreshLayout ---
+        swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout_donations)
+        // --- END OF NEW ---
     }
 
     private fun setupRecyclerView() {
@@ -87,14 +110,20 @@ class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationI
     }
 
     private fun loadDonations() {
-        if (organizationId == null) return
-        progressBar.visibility = View.VISIBLE
+        if (organizationId == null) {
+            swipeRefreshLayout.isRefreshing = false
+            return
+        }
+        if (!swipeRefreshLayout.isRefreshing) {
+            progressBar.visibility = View.VISIBLE
+        }
         db.collection("organizations").document(organizationId!!)
             .collection("donations")
             .orderBy("donationDate", Query.Direction.DESCENDING)
             .get()
             .addOnSuccessListener { documents ->
                 progressBar.visibility = View.GONE
+                swipeRefreshLayout.isRefreshing = false
                 val donations = documents.toObjects<DonationRecord>()
                 adapter.updateDonations(donations)
                 tvNoDonations.visibility = if (donations.isEmpty()) View.VISIBLE else View.GONE
@@ -103,17 +132,47 @@ class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationI
             }
             .addOnFailureListener { e ->
                 progressBar.visibility = View.GONE
+                swipeRefreshLayout.isRefreshing = false
                 Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 
+    // --- RESTORED: onEditClick logic ---
     override fun onEditClick(donation: DonationRecord) {
-        // Launch AddEditDonationActivity with donation.id
+        val intent = Intent(this, AddEditDonationActivity::class.java).apply {
+            putExtra(AddEditDonationActivity.EXTRA_DONATION, donation)
+        }
+        addEditDonationLauncher.launch(intent)
+    }
+    // --- END OF RESTORED LOGIC ---
+
+    // --- RESTORED: onDeleteClick logic ---
+    override fun onDeleteClick(donation: DonationRecord) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Donation")
+            .setMessage("Are you sure you want to delete the donation from ${donation.donorName}?")
+            .setPositiveButton("Delete") { _, _ ->
+                deleteDonationFromFirestore(donation)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
-    override fun onDeleteClick(donation: DonationRecord) {
-        // Your existing delete logic
+    private fun deleteDonationFromFirestore(donation: DonationRecord) {
+        if (organizationId.isNullOrBlank()) return
+
+        db.collection("organizations").document(organizationId!!)
+            .collection("donations").document(donation.id)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(this, "Donation deleted.", Toast.LENGTH_SHORT).show()
+                loadDonations() // Refresh the list after deleting
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Failed to delete: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
     }
+    // --- END OF RESTORED LOGIC ---
 
     override fun onShareClick(donation: DonationRecord) {
         if (orgDetails == null) {
@@ -129,7 +188,6 @@ class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationI
         loadingDialog.show(supportFragmentManager, "receiptGen")
 
         lifecycleScope.launch {
-            // Use the LogoProvider to get the correct, cached logo
             val logoBitmap = LogoProvider.getActiveLogo(applicationContext)
             val receiptUri = withContext(Dispatchers.IO) {
                 DonationReceiptGenerator.createReceiptImage(
@@ -149,10 +207,8 @@ class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationI
         }
     }
 
-    // --- THIS IS THE NEW WHATSAPP SHARING FUNCTION ---
     private fun shareReceiptViaWhatsApp(uri: Uri, donation: DonationRecord) {
         try {
-            // Create a generic share intent first
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
@@ -160,19 +216,16 @@ class ManageDonationsActivity : AppCompatActivity(), DonationAdapter.OnDonationI
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
-            // Create a specific intent for WhatsApp if the number is available
             val phoneNumber = donation.donorMobile!!.replace(Regex("[^0-9]"), "")
             val whatsappIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_TEXT, "Thank you for your generous donation, ${donation.donorName}!")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                // Add the phone number to target the specific chat
                 putExtra("jid", "91$phoneNumber@s.whatsapp.net")
                 setPackage("com.whatsapp")
             }
 
-            // Use a chooser that prioritizes the direct WhatsApp chat
             val chooserIntent = Intent.createChooser(shareIntent, "Share Receipt Via")
             chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(whatsappIntent))
             startActivity(chooserIntent)

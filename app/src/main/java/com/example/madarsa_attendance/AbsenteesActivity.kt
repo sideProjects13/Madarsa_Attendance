@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -22,13 +23,14 @@ import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.button.MaterialButton
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import androidx.core.net.toUri
 
 class AbsenteesActivity : AppCompatActivity() {
 
@@ -40,21 +42,20 @@ class AbsenteesActivity : AppCompatActivity() {
     private lateinit var absenteesAdapter: DashboardStudentAdapter
     private lateinit var btnSendWhatsApp: MaterialButton
 
+    // --- NEW: SwipeRefreshLayout ---
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+    // --- END OF NEW ---
+
     private var teacherList = mutableListOf<Teacher>()
     private var allAbsentStudents = listOf<DashboardStudentItem>()
     private lateinit var db: FirebaseFirestore
 
-    // --- NEW PROPERTIES FOR SEQUENTIAL MESSAGING ---
     private var pendingMessages: MutableList<String> = mutableListOf()
     private var totalMessagesToSend = 0
 
     private val whatsAppMessageLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        // This code block runs when the user returns from WhatsApp.
-        // We simply call the next function in the sequence.
         sendNextWhatsAppMessage()
     }
-    // --- END OF NEW PROPERTIES ---
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +70,14 @@ class AbsenteesActivity : AppCompatActivity() {
         setupObservers()
         loadTeachersIntoFilter()
 
+        // --- NEW: Setup SwipeRefreshLayout ---
+        swipeRefreshLayout.setOnRefreshListener {
+            // Tell the dashboard view model to re-fetch all its data,
+            // which will automatically update the absentStudents LiveData we are observing.
+            viewModel.refreshData()
+        }
+        // --- END OF NEW ---
+
         btnSendWhatsApp.setOnClickListener {
             confirmAndSendWhatsAppMessage()
         }
@@ -80,6 +89,9 @@ class AbsenteesActivity : AppCompatActivity() {
         tvNoAbsentees = findViewById(R.id.tv_no_absentees)
         progressBar = findViewById(R.id.progress_bar_absentees)
         btnSendWhatsApp = findViewById(R.id.btn_send_whatsapp)
+        // --- NEW: Initialize SwipeRefreshLayout ---
+        swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout_absentees)
+        // --- END OF NEW ---
     }
 
     private fun setupToolbar() {
@@ -101,7 +113,14 @@ class AbsenteesActivity : AppCompatActivity() {
 
     private fun setupObservers() {
         viewModel.isLoading.observe(this) { isLoading ->
-            progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+            // Only show the initial progress bar if not already refreshing
+            if (!swipeRefreshLayout.isRefreshing) {
+                progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+            }
+            // Stop the swipe-to-refresh animation when loading is complete
+            if (!isLoading) {
+                swipeRefreshLayout.isRefreshing = false
+            }
         }
         viewModel.absentStudents.observe(this) { absentees ->
             allAbsentStudents = absentees
@@ -156,8 +175,6 @@ class AbsenteesActivity : AppCompatActivity() {
         }
     }
 
-    // --- NEW/UPDATED FUNCTIONS FOR WHATSAPP ---
-
     private fun confirmAndSendWhatsAppMessage() {
         val currentAbsentees = absenteesAdapter.currentList
         if (currentAbsentees.isEmpty()) {
@@ -186,7 +203,7 @@ class AbsenteesActivity : AppCompatActivity() {
             try {
                 val parentNumbers = mutableListOf<String>()
                 val studentDocs = db.collection("organizations").document(organizationId)
-                    .collection("students").whereIn(com.google.firebase.firestore.FieldPath.documentId(), studentIds).get().await()
+                    .collection("students").whereIn(FieldPath.documentId(), studentIds).get().await()
 
                 for (doc in studentDocs) {
                     val mobile = doc.getString("parentMobileNumber")
@@ -199,7 +216,6 @@ class AbsenteesActivity : AppCompatActivity() {
                 if (parentNumbers.isEmpty()) {
                     Toast.makeText(this@AbsenteesActivity, "No valid parent mobile numbers found for the absentees.", Toast.LENGTH_LONG).show()
                 } else {
-                    // Start the sequential messaging process
                     pendingMessages = parentNumbers.distinct().toMutableList()
                     totalMessagesToSend = pendingMessages.size
                     sendNextWhatsAppMessage()
@@ -233,10 +249,10 @@ class AbsenteesActivity : AppCompatActivity() {
             whatsAppMessageLauncher.launch(intent)
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(this, "WhatsApp is not installed. Skipping number.", Toast.LENGTH_SHORT).show()
-            sendNextWhatsAppMessage() // Immediately try the next one
+            sendNextWhatsAppMessage()
         } catch (e: Exception) {
             Toast.makeText(this, "Could not open WhatsApp for $number. Skipping.", Toast.LENGTH_LONG).show()
-            sendNextWhatsAppMessage() // Immediately try the next one
+            sendNextWhatsAppMessage()
         }
     }
 

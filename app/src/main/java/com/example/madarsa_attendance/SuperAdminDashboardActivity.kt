@@ -94,18 +94,25 @@ class SuperAdminDashboardActivity : AppCompatActivity() {
         }
     }
 
+    // --- REPLACED with the new menu logic ---
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        menuInflater.inflate(R.menu.teacher_dashboard_menu, menu)
+        menuInflater.inflate(R.menu.super_admin_dashboard_menu, menu)
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == R.id.action_logout) {
-            FirebaseAuthManager.logout(this)
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
-            return true
+        return when (item.itemId) {
+            R.id.action_manage_users -> {
+                startActivity(Intent(this, ManageUsersActivity::class.java))
+                true
+            }
+            R.id.action_logout -> {
+                FirebaseAuthManager.logout(this)
+                finish()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
-        return super.onOptionsItemSelected(item)
     }
+    // --- END OF REPLACEMENT ---
 }

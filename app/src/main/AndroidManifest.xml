@@ -28,6 +28,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
+        <activity
+            android:name=".ManageUsersActivity"
+            android:exported="false" />
 
         <service
             android:name=".MyFirebaseMessagingService"
@@ -37,7 +40,6 @@
             </intent-filter>
         </service>
 
-        
         <activity
             android:name=".SuperAdminDashboardActivity"
             android:exported="false" />
