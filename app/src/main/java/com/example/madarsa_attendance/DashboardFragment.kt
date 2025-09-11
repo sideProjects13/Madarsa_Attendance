@@ -15,11 +15,12 @@ import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.facebook.shimmer.ShimmerFrameLayout
-import com.github.mikephil.charting.charts.PieChart
-import com.github.mikephil.charting.data.PieData
-import com.github.mikephil.charting.data.PieDataSet
-import com.github.mikephil.charting.data.PieEntry
-import com.github.mikephil.charting.formatter.PercentFormatter
+import com.github.mikephil.charting.charts.BarChart
+import com.github.mikephil.charting.components.XAxis
+import com.github.mikephil.charting.data.BarData
+import com.github.mikephil.charting.data.BarDataSet
+import com.github.mikephil.charting.data.BarEntry
+import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
 import com.github.mikephil.charting.utils.ColorTemplate
 import com.google.android.material.card.MaterialCardView
 import java.text.NumberFormat
@@ -35,26 +36,28 @@ class DashboardFragment : Fragment() {
     private lateinit var mainContentLayout: LinearLayout
     private lateinit var tvTotalStudents: TextView
     private lateinit var tvTotalTeachers: TextView
-
-    // --- 1. COMMENTED OUT: Fee-related TextViews are no longer in the layout ---
-    // private lateinit var tvFeesCollectedMonth: TextView
-    // private lateinit var tvFeesCollectedYear: TextView
-    // --- END OF COMMENTED OUT CODE ---
-
-    // --- 2. NEW: Views for the new dashboard cards ---
     private lateinit var tvTotalInactiveStudents: TextView
     private lateinit var tvHighAbsenceStudents: TextView
+
+    // Clickable Cards
+    private lateinit var totalStudentsCard: MaterialCardView
+    private lateinit var totalTeachersCard: MaterialCardView
     private lateinit var inactiveStudentsCard: MaterialCardView
     private lateinit var highAbsenceCard: MaterialCardView
-    // --- END OF NEW CODE ---
 
-    private lateinit var pieChart: PieChart
+    // --- CORRECTED: These are the clickable attendance summary cards ---
+    private lateinit var presentCardSection: MaterialCardView
+    private lateinit var absentCardSection: MaterialCardView
+    private lateinit var notMarkedCardSection: MaterialCardView
+    // --- END OF CORRECTION ---
+
+    // Chart
+    private lateinit var barChart: BarChart
+
+    // Attendance Summary Views
     private lateinit var tvPresentCount: TextView
     private lateinit var tvAbsentCount: TextView
     private lateinit var tvNotMarkedCount: TextView
-    private lateinit var absentCardSection: LinearLayout
-    private lateinit var totalTeachersCard: MaterialCardView
-    private lateinit var notMarkedCardSection: LinearLayout
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_dashboard, container, false)
@@ -63,12 +66,43 @@ class DashboardFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupViews(view)
+        setupClickListeners() // Separated click listeners for clarity
         setupObservers()
+    }
 
+    private fun setupViews(view: View) {
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout)
+        shimmerLayout = view.findViewById(R.id.shimmer_view_container)
+        mainContentLayout = view.findViewById(R.id.main_content_layout)
+
+        // Main Cards
+        totalStudentsCard = view.findViewById(R.id.totalStudentsCard) // Corrected initialization
+        tvTotalStudents = view.findViewById(R.id.tvTotalStudentsCount)
+        totalTeachersCard = view.findViewById(R.id.totalTeachersCard)
+        tvTotalTeachers = view.findViewById(R.id.tvTotalTeachersCount)
+        inactiveStudentsCard = view.findViewById(R.id.inactiveStudentsCard)
+        tvTotalInactiveStudents = view.findViewById(R.id.tvTotalInactiveStudentsCount)
+        highAbsenceCard = view.findViewById(R.id.highAbsenceCard)
+        tvHighAbsenceStudents = view.findViewById(R.id.tvHighAbsenceStudentsCount)
+
+        // Attendance Summary
+        presentCardSection = view.findViewById(R.id.present_card_section) // Corrected initialization
+        tvPresentCount = view.findViewById(R.id.tv_present_count)
+        absentCardSection = view.findViewById(R.id.absent_card_section)
+        tvAbsentCount = view.findViewById(R.id.tv_absent_count)
+        notMarkedCardSection = view.findViewById(R.id.not_marked_card_section)
+        tvNotMarkedCount = view.findViewById(R.id.tv_not_marked_count)
+
+        // Chart
+        barChart = view.findViewById(R.id.bar_chart_class_distribution)
+    }
+
+    private fun setupClickListeners() {
         swipeRefreshLayout.setOnRefreshListener {
             viewModel.refreshData()
         }
 
+        // --- ALL CLICK LISTENERS ARE NOW CORRECTLY SET ---
         absentCardSection.setOnClickListener {
             startActivity(Intent(activity, AbsenteesActivity::class.java))
         }
@@ -82,14 +116,12 @@ class DashboardFragment : Fragment() {
                 if (teachers.isNotEmpty()) {
                     showUnmarkedClassesDialog(teachers)
                 } else {
-                    Toast.makeText(context, "All classes have been marked for today!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "All classes have marked attendance today!", Toast.LENGTH_SHORT).show()
                 }
             }
         }
 
-        // --- 3. NEW: Click listeners for the new cards ---
         inactiveStudentsCard.setOnClickListener {
-            // Navigate to the activity showing the list of all inactive students
             startActivity(Intent(activity, InactiveStudentsActivity::class.java))
         }
 
@@ -102,35 +134,7 @@ class DashboardFragment : Fragment() {
                 }
             }
         }
-        // --- END OF NEW CODE ---
-    }
-
-    private fun setupViews(view: View) {
-        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout)
-        shimmerLayout = view.findViewById(R.id.shimmer_view_container)
-        mainContentLayout = view.findViewById(R.id.main_content_layout)
-        tvTotalStudents = view.findViewById(R.id.tvTotalStudentsCount)
-        tvTotalTeachers = view.findViewById(R.id.tvTotalTeachersCount)
-
-        // --- 4. COMMENTED OUT: Finding fee-related views ---
-        // tvFeesCollectedMonth = view.findViewById(R.id.tvFeesCollectedMonth)
-        // tvFeesCollectedYear = view.findViewById(R.id.tvFeesCollectedYear)
-        // --- END OF COMMENTED OUT CODE ---
-
-        // --- 5. NEW: Finding the new views by their IDs from the XML ---
-        tvTotalInactiveStudents = view.findViewById(R.id.tvTotalInactiveStudentsCount)
-        tvHighAbsenceStudents = view.findViewById(R.id.tvHighAbsenceStudentsCount)
-        inactiveStudentsCard = view.findViewById(R.id.inactiveStudentsCard)
-        highAbsenceCard = view.findViewById(R.id.highAbsenceCard)
-        // --- END OF NEW CODE ---
-
-        pieChart = view.findViewById(R.id.pie_chart_class_distribution)
-        tvPresentCount = view.findViewById(R.id.tv_present_count)
-        tvAbsentCount = view.findViewById(R.id.tv_absent_count)
-        tvNotMarkedCount = view.findViewById(R.id.tv_not_marked_count)
-        absentCardSection = view.findViewById(R.id.absent_card_section)
-        totalTeachersCard = view.findViewById(R.id.totalTeachersCard)
-        notMarkedCardSection = view.findViewById(R.id.not_marked_card_section)
+        // --- END OF CLICK LISTENERS ---
     }
 
     private fun setupObservers() {
@@ -147,34 +151,23 @@ class DashboardFragment : Fragment() {
             }
         }
 
+        // Observers for the card data (unchanged)
         viewModel.totalStudents.observe(viewLifecycleOwner) { count -> tvTotalStudents.text = count.toString() }
         viewModel.totalTeachers.observe(viewLifecycleOwner) { count -> tvTotalTeachers.text = count.toString() }
+        viewModel.totalInactiveStudents.observe(viewLifecycleOwner) { count -> tvTotalInactiveStudents.text = count.toString() }
+        viewModel.highAbsenceStudents.observe(viewLifecycleOwner) { students -> tvHighAbsenceStudents.text = students.size.toString() }
 
-        // --- 6. COMMENTED OUT: Observers for fee-related LiveData ---
-        /*
-            val currencyFormatter: NumberFormat = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
-            viewModel.feesThisMonth.observe(viewLifecycleOwner) { amount -> tvFeesCollectedMonth.text = currencyFormatter.format(amount) }
-            viewModel.feesThisYear.observe(viewLifecycleOwner) { amount -> tvFeesCollectedYear.text = currencyFormatter.format(amount) }
-            */
-            // --- END OF COMMENTED OUT CODE ---
-
-        // --- 7. NEW: Observers for the new LiveData ---
-        viewModel.totalInactiveStudents.observe(viewLifecycleOwner) { count ->
-            tvTotalInactiveStudents.text = count.toString()
-        }
-        viewModel.highAbsenceStudents.observe(viewLifecycleOwner) { students ->
-            tvHighAbsenceStudents.text = students.size.toString()
-        }
-        // --- END OF NEW CODE ---
-
+        // Observer for the chart data
         viewModel.classDistribution.observe(viewLifecycleOwner) { distribution ->
             if (distribution.isNotEmpty()) {
-                setupPieChart(distribution)
+                setupBarChart(distribution)
             } else {
-                pieChart.clear()
+                barChart.clear()
+                barChart.visibility = View.GONE
             }
         }
 
+        // Observers for attendance summary (unchanged)
         viewModel.presentCount.observe(viewLifecycleOwner) { count -> tvPresentCount.text = count.toString() }
         viewModel.absentCount.observe(viewLifecycleOwner) { count -> tvAbsentCount.text = count.toString() }
         viewModel.notMarkedCount.observe(viewLifecycleOwner) { count -> tvNotMarkedCount.text = count.toString() }
@@ -202,69 +195,72 @@ class DashboardFragment : Fragment() {
         dialog.show()
     }
 
-    // --- 8. NEW: Dialog to display the list of students with high absenteeism ---
     private fun showHighAbsenceStudentsDialog(students: List<DashboardStudentItem>) {
-        // We can re-use the 'dialog_not_marked.xml' layout as it likely contains a RecyclerView.
-        // We'll just change the dialog's title programmatically.
         val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_not_marked, null)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_not_marked_classes)
-        // Assuming your dialog layout has a title TextView, e.g., with id 'dialog_title'
         val dialogTitle = dialogView.findViewById<TextView>(R.id.dialog_title)
-        dialogTitle?.text = "High Absenteeism Students" // Set a more appropriate title
+        dialogTitle?.text = "High Absenteeism Students"
 
         val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
             .setView(dialogView)
             .setNegativeButton("Close", null)
             .create()
 
-        // The DashboardStudentAdapter is perfect for displaying this list.
         val adapter = DashboardStudentAdapter().apply {
             submitList(students)
         }
         recyclerView.adapter = adapter
         dialog.show()
     }
-    // --- END OF NEW CODE ---
 
-
-    private fun setupPieChart(data: Map<String, Int>) {
-        val entries = ArrayList<PieEntry>()
-        data.forEach { (className, count) ->
-            if (count > 0) {
-                entries.add(PieEntry(count.toFloat(), className))
-            }
-        }
-
-        if (entries.isEmpty()) {
-            pieChart.visibility = View.GONE
+    private fun setupBarChart(data: Map<String, Int>) {
+        val filteredData = data.filter { it.value > 0 }
+        if (filteredData.isEmpty()) {
+            barChart.visibility = View.GONE
             return
         } else {
-            pieChart.visibility = View.VISIBLE
+            barChart.visibility = View.VISIBLE
         }
 
-        val dataSet = PieDataSet(entries, "").apply {
-            colors = ColorTemplate.MATERIAL_COLORS.toList() + ColorTemplate.VORDIPLOM_COLORS.toList()
+        val entries = ArrayList<BarEntry>()
+        val labels = ArrayList<String>()
+        var index = 0f
+
+        for ((className, count) in filteredData) {
+            entries.add(BarEntry(index, count.toFloat()))
+            labels.add(if (className.length > 8) className.substring(0, 8) + ".." else className)
+            index++
+        }
+
+        val dataSet = BarDataSet(entries, "Students per Class").apply {
+            colors = ColorTemplate.MATERIAL_COLORS.toList()
             valueTextColor = Color.BLACK
-            valueTextSize = 12f
-            sliceSpace = 2f
+            valueTextSize = 10f
         }
 
-        val pieData = PieData(dataSet).apply {
-            setValueFormatter(PercentFormatter(pieChart))
-        }
+        val barData = BarData(dataSet)
+        barChart.data = barData
 
-        pieChart.apply {
-            this.data = pieData
-            description.isEnabled = false
-            legend.isWordWrapEnabled = true
-            isDrawHoleEnabled = true
-            holeRadius = 45f
-            transparentCircleRadius = 50f
-            setUsePercentValues(true)
-            setEntryLabelColor(Color.BLACK)
-            setEntryLabelTextSize(10f)
-            animateY(1000)
-            invalidate()
-        }
+        barChart.description.isEnabled = false
+        barChart.legend.isEnabled = false
+        barChart.setDrawValueAboveBar(true)
+        barChart.setFitBars(true)
+
+        val xAxis = barChart.xAxis
+        xAxis.valueFormatter = IndexAxisValueFormatter(labels)
+        xAxis.position = XAxis.XAxisPosition.BOTTOM
+        xAxis.granularity = 1f
+        xAxis.setDrawGridLines(false)
+        xAxis.setDrawAxisLine(false)
+
+        val leftAxis = barChart.axisLeft
+        leftAxis.axisMinimum = 0f
+        leftAxis.setDrawGridLines(true)
+        leftAxis.gridColor = Color.LTGRAY
+
+        barChart.axisRight.isEnabled = false
+
+        barChart.animateY(1000)
+        barChart.invalidate()
     }
 }

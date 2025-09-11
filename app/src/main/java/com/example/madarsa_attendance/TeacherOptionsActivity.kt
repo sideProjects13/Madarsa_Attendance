@@ -127,7 +127,7 @@ class TeacherOptionsActivity : AppCompatActivity() {
             .addOnSuccessListener { document ->
                 if (isDestroyed || isFinishing) return@addOnSuccessListener
                 if (document != null && document.exists()) {
-                    currentTeacherName = document.getString("teacherName") ?: currentTeacherName
+                    currentTeacherName = document.getString("teacherName")?: currentTeacherName
                     currentTeacherEmail = document.getString("email")
                     currentTeacherProfileUrl = document.getString("profileImageUrl") ?: currentTeacherProfileUrl
                 }
