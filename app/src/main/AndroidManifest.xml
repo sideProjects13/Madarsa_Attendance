@@ -29,6 +29,12 @@
         android:theme="@style/Theme.Madarsa_Attendance.PureMonochrome"
         tools:targetApi="35">
         <activity
+            android:name=".TeacherMonthlyAttendanceActivity"
+            android:exported="false" />
+        <activity
+            android:name=".TeacherAttendanceActivity"
+            android:exported="false" />
+        <activity
             android:name=".ManageUsersActivity"
             android:exported="false" />
 

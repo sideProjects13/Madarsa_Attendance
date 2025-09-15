@@ -352,6 +352,21 @@ class MainActivity : AppCompatActivity(),
                     .show(supportFragmentManager, "TeacherSelectionDialog")
             }
 
+            R.id.nav_teacher_monthly_attendance -> {
+                pendingTeacherAction = TeacherAction.VIEW_MONTHLY_ATTENDANCE // We'll need to add this action
+                TeacherSelectionDialogFragment.newInstance("Select Teacher to View Report")
+                    .show(supportFragmentManager, "TeacherMonthlyAttendanceDialog")
+            }
+
+            R.id.nav_teacher_attendance_report -> {
+                startActivity(Intent(this, TeacherAttendanceReportActivity::class.java))
+            }
+
+            R.id.nav_teacher_attendance -> {
+                startActivity(Intent(this, TeacherAttendanceActivity::class.java))
+            }
+
+
             R.id.nav_student_profile -> {
             // This is the FIX. It now uses the QuickFeesDialogFragment to select a student.
             pendingStudentAction = StudentAction.VIEW_PROFILE
@@ -604,8 +619,10 @@ class MainActivity : AppCompatActivity(),
                 children = listOf(
                     NavigationItem.Child(R.id.nav_quick_add_teacher, "Add Teacher"),
                     NavigationItem.Child(R.id.nav_edit_teacher, "Edit Teacher"),
+                    NavigationItem.Child(R.id.nav_teacher_attendance, "Mark Teacher Attendance"),
                     NavigationItem.Child(R.id.nav_delete_teacher, "Delete Teacher"),
                     NavigationItem.Child(R.id.nav_manage_teachers, "Manage Teachers"),
+                    NavigationItem.Child(R.id.nav_teacher_monthly_attendance, "View Monthly Attendance"),
                     NavigationItem.Child(R.id.nav_teacher_attendance_report, "Teacher Attendance Report"),
 
 //                    NavigationItem.Child(R.id.nav_bulk_add_teachers, "Bulk Add Teachers"),
@@ -725,6 +742,17 @@ class MainActivity : AppCompatActivity(),
                 val teacherSpinnerItem = TeacherSpinnerItem(id = teacher.teacherId, name = teacher.teacherName, profileImageUrl = teacher.profileImageUrl)
                 confirmDeleteTeacher(teacherSpinnerItem)
             }
+            TeacherAction.VIEW_MONTHLY_ATTENDANCE -> {
+                val calendar = Calendar.getInstance()
+                val intent = Intent(this, TeacherMonthlyAttendanceActivity::class.java).apply {
+                    putExtra("TEACHER_ID", teacher.teacherId)
+                    putExtra("TEACHER_NAME", teacher.teacherName)
+                    putExtra("TARGET_YEAR", calendar.get(Calendar.YEAR))
+                    putExtra("TARGET_MONTH", calendar.get(Calendar.MONTH))
+                }
+                startActivity(intent)
+            }
+
             TeacherAction.VIEW_ATTENDANCE -> {
                 val intent = Intent(this, TeacherOptionsActivity::class.java).apply {
                     putExtra(TeacherOptionsActivity.EXTRA_TEACHER_ID, teacher.teacherId)

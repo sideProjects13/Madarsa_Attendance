@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- State when the button is CHECKED (selected) -->
+    <!-- The text color should be what looks good on your primary color background -->
+    <item android:color="?attr/colorOnPrimary" android:state_checked="true" />
+
+    <!-- Default state when the button is NOT CHECKED -->
+    <!-- The text color should be your primary theme color -->
+    <item android:color="?attr/colorPrimary" />
+</selector>

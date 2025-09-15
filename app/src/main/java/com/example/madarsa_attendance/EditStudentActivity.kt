@@ -2,7 +2,6 @@ package com.example.madarsa_attendance
 
 import android.Manifest
 import android.app.Activity
-import android.app.DatePickerDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,6 +12,7 @@ import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.ImageView
+import android.widget.NumberPicker
 import android.widget.ProgressBar
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -20,8 +20,10 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
@@ -34,8 +36,14 @@ import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import id.zelory.compressor.Compressor
+import id.zelory.compressor.constraint.quality
+import kotlinx.coroutines.launch
+import java.io.File
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 class EditStudentActivity : AppCompatActivity() {
@@ -63,7 +71,9 @@ class EditStudentActivity : AppCompatActivity() {
     private lateinit var etRegNo: TextInputEditText
     private lateinit var rgGender: RadioGroup
     private lateinit var etBirthDate: TextInputEditText
+    private lateinit var tilBirthDate: TextInputLayout
     private lateinit var etAdmissionDate: TextInputEditText
+    private lateinit var tilAdmissionDate: TextInputLayout
     private lateinit var etAlternateMobile: TextInputEditText
     private lateinit var tilAlternateMobile: TextInputLayout
     private lateinit var etAddress: TextInputEditText
@@ -113,7 +123,9 @@ class EditStudentActivity : AppCompatActivity() {
         etRegNo = findViewById(R.id.etRegNoEdit)
         rgGender = findViewById(R.id.rgGenderEdit)
         etBirthDate = findViewById(R.id.etBirthDateEdit)
+        tilBirthDate = findViewById(R.id.tilBirthDateEdit)
         etAdmissionDate = findViewById(R.id.etAdmissionDateEdit)
+        tilAdmissionDate = findViewById(R.id.tilAdmissionDateEdit)
         etAlternateMobile = findViewById(R.id.etAlternateMobileEdit)
         tilAlternateMobile = findViewById(R.id.tilAlternateMobileEdit)
         etAddress = findViewById(R.id.etAddressEdit)
@@ -137,18 +149,110 @@ class EditStudentActivity : AppCompatActivity() {
         btnSelectImage.setOnClickListener(imageSelectionClickListener)
         cardViewProfileImage.setOnClickListener(imageSelectionClickListener)
 
-        etBirthDate.setOnClickListener { showDatePickerDialog(etBirthDate) }
-        etAdmissionDate.setOnClickListener { showDatePickerDialog(etAdmissionDate) }
+        etBirthDate.addTextChangedListener(DateTextWatcher(etBirthDate))
+        etAdmissionDate.addTextChangedListener(DateTextWatcher(etAdmissionDate))
+
+        tilBirthDate.setEndIconOnClickListener {
+            showCustomDatePickerDialog(etBirthDate)
+        }
+        tilAdmissionDate.setEndIconOnClickListener {
+            showCustomDatePickerDialog(etAdmissionDate)
+        }
 
         btnSaveChanges.setOnClickListener { validateAndUpdateStudentDetails() }
     }
 
-    private fun showDatePickerDialog(editText: TextInputEditText) {
+    private fun isValidDateFormat(dateStr: String): Boolean {
+        if (dateStr.isEmpty()) return true
+        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+        sdf.isLenient = false
+        return try {
+            sdf.parse(dateStr)
+            dateStr.length == 10
+        } catch (e: ParseException) {
+            false
+        }
+    }
+
+    private fun isDateInFuture(dateStr: String): Boolean {
+        if (!isValidDateFormat(dateStr)) return false
+        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+        return try {
+            val enteredDate = sdf.parse(dateStr) ?: return false
+            val today = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.time
+            enteredDate.after(today)
+        } catch (e: ParseException) {
+            false
+        }
+    }
+
+    private fun showCustomDatePickerDialog(editText: TextInputEditText) {
+        val dialogView = View.inflate(this, R.layout.dialog_custom_date_picker, null)
+        val dayPicker = dialogView.findViewById<NumberPicker>(R.id.dayPicker)
+        val monthPicker = dialogView.findViewById<NumberPicker>(R.id.monthPicker)
+        val yearPicker = dialogView.findViewById<NumberPicker>(R.id.yearPicker)
+
         val calendar = Calendar.getInstance()
-        DatePickerDialog(this, { _, year, month, dayOfMonth ->
-            val selectedDate = Calendar.getInstance().apply { set(year, month, dayOfMonth) }
-            editText.setText(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(selectedDate.time))
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+        val currentYear = calendar.get(Calendar.YEAR)
+
+        val existingDateStr = editText.text.toString()
+        if (isValidDateFormat(existingDateStr)) {
+            try {
+                val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+                val date = sdf.parse(existingDateStr)
+                if (date != null) {
+                    calendar.time = date
+                }
+            } catch (e: Exception) {
+                // If parsing fails, use current date
+            }
+        }
+
+        yearPicker.minValue = 1950
+        yearPicker.maxValue = currentYear
+        yearPicker.value = calendar.get(Calendar.YEAR)
+
+        val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        monthPicker.minValue = 1
+        monthPicker.maxValue = 12
+        monthPicker.displayedValues = months
+        monthPicker.value = calendar.get(Calendar.MONTH) + 1
+
+        dayPicker.minValue = 1
+        dayPicker.maxValue = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+        dayPicker.value = calendar.get(Calendar.DAY_OF_MONTH)
+
+        val onValueChangeListener = NumberPicker.OnValueChangeListener { _, _, _ ->
+            val tempCalendar = Calendar.getInstance()
+            tempCalendar.set(Calendar.YEAR, yearPicker.value)
+            tempCalendar.set(Calendar.MONTH, monthPicker.value - 1)
+            val maxDay = tempCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+            if (dayPicker.value > maxDay) {
+                dayPicker.value = maxDay
+            }
+            dayPicker.maxValue = maxDay
+        }
+        yearPicker.setOnValueChangedListener(onValueChangeListener)
+        monthPicker.setOnValueChangedListener(onValueChangeListener)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Select Date")
+            .setView(dialogView)
+            .setPositiveButton("OK") { _, _ ->
+                val selectedYear = yearPicker.value
+                val selectedMonth = monthPicker.value
+                val selectedDay = dayPicker.value
+                val formattedDate = String.format(Locale.getDefault(), "%02d-%02d-%04d", selectedDay, selectedMonth, selectedYear)
+                editText.setText(formattedDate)
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+        dialog.show()
     }
 
     private fun loadStudentDetails() {
@@ -195,16 +299,39 @@ class EditStudentActivity : AppCompatActivity() {
     private fun validateAndUpdateStudentDetails() {
         tilStudentName.error = null
         tilAlternateMobile.error = null
+        tilBirthDate.error = null
+        tilAdmissionDate.error = null
+
+        var isValid = true
 
         if (etStudentName.text.toString().trim().isEmpty()) {
             tilStudentName.error = "Student name cannot be empty"
-            return
+            isValid = false
         }
         val alternateMobile = etAlternateMobile.text.toString().trim()
         if (alternateMobile.isNotEmpty() && (alternateMobile.length != 10 || !alternateMobile.all { it.isDigit() })) {
             tilAlternateMobile.error = "Enter a valid 10-digit number"
-            return
+            isValid = false
         }
+
+        val birthDateStr = etBirthDate.text.toString().trim()
+        if (birthDateStr.isNotEmpty()) {
+            if (!isValidDateFormat(birthDateStr)) {
+                tilBirthDate.error = "Invalid format or date"; isValid = false
+            } else if (isDateInFuture(birthDateStr)) {
+                tilBirthDate.error = "Date cannot be in the future"; isValid = false
+            }
+        }
+        val admissionDateStr = etAdmissionDate.text.toString().trim()
+        if (admissionDateStr.isNotEmpty()) {
+            if (!isValidDateFormat(admissionDateStr)) {
+                tilAdmissionDate.error = "Invalid format or date"; isValid = false
+            } else if (isDateInFuture(admissionDateStr)) {
+                tilAdmissionDate.error = "Date cannot be in the future"; isValid = false
+            }
+        }
+
+        if (!isValid) return
 
         if (currentOrganizationId == null) {
             handleFailure("Cannot save: Organization ID is missing.")
@@ -219,21 +346,48 @@ class EditStudentActivity : AppCompatActivity() {
         }
     }
 
+    private fun uriToFile(uri: Uri): File {
+        val inputStream = contentResolver.openInputStream(uri)!!
+        val tempFile = File.createTempFile("prefix", ".extension", cacheDir)
+        tempFile.deleteOnExit()
+        tempFile.outputStream().use { fileOut ->
+            inputStream.copyTo(fileOut)
+        }
+        inputStream.close()
+        return tempFile
+    }
+
     private fun uploadImageAndUpdateStudent() {
-        MediaManager.get().upload(imageUri).unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT)
-            .option("folder", "student_profiles").callback(object : UploadCallback {
-                override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
-                    val newImageUrl = resultData?.get("secure_url") as? String
-                    updateStudentInFirestore(newImageUrl)
+        if (imageUri == null) return
+
+        lifecycleScope.launch {
+            try {
+                val imageFile = uriToFile(imageUri!!)
+                val compressedImageFile = Compressor.compress(this@EditStudentActivity, imageFile) {
+                    quality(60)
                 }
-                override fun onError(requestId: String?, error: ErrorInfo?) {
-                    Log.e(TAG, "Image upload failed, updating details without image change. Error: ${error?.description}")
-                    updateStudentInFirestore(existingProfileImageUrl) // Try to save other details anyway
-                }
-                override fun onStart(requestId: String?) {}
-                override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
-                override fun onReschedule(requestId: String?, error: ErrorInfo?) {}
-            }).dispatch()
+                MediaManager.get().upload(compressedImageFile.path)
+                    .unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT)
+                    .option("folder", "student_profiles").callback(object : UploadCallback {
+                        override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
+                            val newImageUrl = resultData?.get("secure_url") as? String
+                            updateStudentInFirestore(newImageUrl)
+                        }
+
+                        override fun onError(requestId: String?, error: ErrorInfo?) {
+                            Log.e(TAG, "Image upload failed, updating details without image change. Error: ${error?.description}")
+                            updateStudentInFirestore(existingProfileImageUrl)
+                        }
+                        override fun onStart(requestId: String?) {}
+                        override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
+                        override fun onReschedule(requestId: String?, error: ErrorInfo?) {}
+                    }).dispatch()
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Image compression or file handling failed", e)
+                handleFailure("Failed to process image.")
+            }
+        }
     }
 
     private fun updateStudentInFirestore(imageUrl: String?) {
@@ -255,7 +409,6 @@ class EditStudentActivity : AppCompatActivity() {
             "address" to etAddress.text.toString().trim().ifEmpty { null }
         )
 
-        // Only add the profile image URL if it's not null to avoid overwriting with null
         imageUrl?.let { studentUpdates["profileImageUrl"] = it }
 
         db.collection("organizations").document(currentOrganizationId!!)
@@ -282,6 +435,7 @@ class EditStudentActivity : AppCompatActivity() {
         ).show(supportFragmentManager, "failureDialog")
     }
 
+
     private fun setInputsEnabled(enabled: Boolean, isInitialLoad: Boolean = false) {
         if (isInitialLoad) {
             progressBar.visibility = View.VISIBLE
@@ -299,6 +453,7 @@ class EditStudentActivity : AppCompatActivity() {
         etAdmissionDate.isEnabled = enabled
         etAlternateMobile.isEnabled = enabled
         etAddress.isEnabled = enabled
+        cardViewProfileImage.isClickable = enabled
     }
 
     private fun checkAndRequestPermissions() {

@@ -38,6 +38,8 @@
             <item android:id="@+id/nav_quick_add_teacher" android:title="Add Teacher" />
             <item android:id="@+id/nav_edit_teacher" android:title="Edit Teacher" />
             <item android:id="@+id/nav_delete_teacher" android:title="Delete Teacher" />
+            <item android:id="@+id/nav_teacher_monthly_attendance" android:title="Teachers Monthly Attendance"/>
+            <item android:id="@+id/nav_teacher_attendance" android:title="Mark Teacher Attendance"/>
             <item android:id="@+id/nav_manage_teachers" android:title="Manage Teachers" />
             <item android:id="@+id/nav_teacher_attendance_report" android:title="Teacher Atterndance Report"/>
             <!-- NEW ITEMS FOR TEACHER MANAGEMENT -->

@@ -49,7 +49,7 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
     private var currentStudentName: String? = null
     private var currentTeacherId: String? = null
     private var currentTeacherName: String? = null
-    private var organizationId: String? = null // Correctly defined as a class property
+    private var organizationId: String? = null
     private var fullStudentDetails: StudentDetailsItem? = null
     private var paymentModifiedInThisSession = false
 
@@ -325,13 +325,30 @@ class StudentPaymentHistoryActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val logoBitmap = LogoProvider.getActiveLogo(applicationContext)
 
+            // --- THIS IS THE FIX ---
+            // 1. Create a parser for the "yyyy-MM" format.
+            val feeMonthParser = SimpleDateFormat("yyyy-MM", Locale.getDefault())
+
+            // 2. Parse the correct fee month string from the payment object.
+            val feeMonthDate = try {
+                feeMonthParser.parse(payment.paymentMonth)
+            } catch (e: Exception) {
+                payment.paymentDate // Fallback to paymentDate on error
+            }
+
+            // 3. Format the parsed date into "MMMM, yyyy" for display.
+            val feeMonthForDisplay = SimpleDateFormat("MMMM, yyyy", Locale.getDefault()).format(feeMonthDate!!)
+            // --- END OF FIX ---
+
+
             val receiptUri = withContext(Dispatchers.IO) {
                 ReceiptImageGenerator.createFeeReceiptImage(
                     context = applicationContext,
                     studentName = student.studentName,
                     teacherName = student.teacherName ?: "N/A",
                     registrationId = student.regNo ?: "N/A",
-                    feeMonth = SimpleDateFormat("MMMM, yyyy", Locale.getDefault()).format(payment.paymentDate!!),
+                    // --- Use the correctly formatted fee month ---
+                    feeMonth = feeMonthForDisplay,
                     paymentDate = SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).format(payment.paymentDate!!),
                     totalAmount = student.monthlyFee ?: payment.paymentAmount,
                     depositAmount = payment.paymentAmount,
