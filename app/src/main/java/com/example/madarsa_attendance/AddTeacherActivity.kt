@@ -1,50 +1,58 @@
 package com.example.madarsa_attendance
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
+import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.work.Data // <-- CORRECT IMPORT (ADD THIS)
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.bumptech.glide.Glide
 import com.cloudinary.android.MediaManager
 import com.cloudinary.android.callback.ErrorInfo
 import com.cloudinary.android.callback.UploadCallback
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
+import com.example.madarsa_attendance.worker.NotificationWorker
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.ktx.app
 import com.google.firebase.ktx.initialize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import android.widget.ImageView
-import android.widget.ProgressBar
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import com.bumptech.glide.Glide
-import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.timepicker.MaterialTimePicker
-import com.google.android.material.timepicker.TimeFormat
-import com.google.firebase.ktx.app
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+// import android.provider.ContactsContract.Contacts.Data // <-- INCORRECT IMPORT (REMOVE THIS)
 
 class AddTeacherActivity : AppCompatActivity() {
 
@@ -238,8 +246,10 @@ class AddTeacherActivity : AppCompatActivity() {
                     "endTime" to endTime
                     // --- END of NEW ---
                 )
-                db.collection("organizations").document(currentOrganizationId!!)
+                val teacherDocument = db.collection("organizations").document(currentOrganizationId!!)
                     .collection("teachers").add(teacherData).await()
+
+                scheduleDailyAttendanceCheck(teacherDocument.id, teacherName)
 
                 StatusDialogFragment.newInstance(true, "Class Added Successfully!", true)
                     .show(supportFragmentManager, "successDialog")
@@ -248,6 +258,10 @@ class AddTeacherActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error during teacher/class creation", e)
                 handleSaveFailure(e, e.message ?: "An unknown error occurred.")
+            } finally {
+                if (isActive) { // Ensure coroutine is still active before UI updates
+                    setInputsEnabled(true)
+                }
             }
         }
     }
@@ -386,5 +400,33 @@ class AddTeacherActivity : AppCompatActivity() {
     private fun openGallery() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         imagePickerLauncher.launch(intent)
+    }
+
+    private fun scheduleDailyAttendanceCheck(teacherDocumentId: String, teacherName: String) {
+        // Create input data to pass to the worker
+        val workerData = Data.Builder()
+            .putString(NotificationWorker.KEY_TEACHER_ID, teacherDocumentId)
+            .putString(NotificationWorker.KEY_TEACHER_NAME, teacherName)
+            .build()
+
+        // Create a periodic request that runs roughly every 24 hours.
+        // WorkManager will try to run this under optimal conditions.
+        val attendanceCheckRequest = PeriodicWorkRequestBuilder<NotificationWorker>(24, TimeUnit.HOURS)
+            .setInputData(workerData)
+            .build()
+
+        // Use a unique name for the work to prevent duplicates for the same teacher.
+        // If you ever need to update or cancel this work, you'll use this unique name.
+        val uniqueWorkName = "attendance_check_${teacherDocumentId}"
+
+        // Enqueue the work. REPLACE ensures that if work for this teacher already exists,
+        // it will be updated with the new request (e.g., if you edit the teacher's name).
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            uniqueWorkName,
+            ExistingPeriodicWorkPolicy.REPLACE,
+            attendanceCheckRequest
+        )
+
+        Log.d(TAG, "Scheduled daily attendance check for $teacherName with ID $teacherDocumentId")
     }
 }

@@ -3,7 +3,7 @@ package com.example.madarsa_attendance.models // Note the 'models' subpackage
 import com.google.firebase.firestore.DocumentId
 
 data class AppUser(
-    @DocumentId val uid: String = "",
+    @DocumentId var uid: String = "",
     val organizationId: String? = null,
     val role: String? = null,
     val email: String? = null,

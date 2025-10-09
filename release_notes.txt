@@ -1,2 +1,2 @@
-Implemented Notification 
-Student History classes/Exams
+The Teacher Login Problem Solved
+The Attendance page now has only P and A to let the name seen

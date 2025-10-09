@@ -9,10 +9,10 @@
     <string name="no_students_in_class">No students found in this class.</string>
     <string name="save_attendance">Save Attendance</string>
     <string name="student_icon_desc">Student Icon</string>
-    <string name="status_present">Present</string>
-    <string name="status_absent">Absent</string>
-    <string name="status_present_short">Present</string> <!-- Or just "P" if space is very tight -->
-    <string name="status_absent_short">Absent</string>  <!-- Or just "A" -->
+    <string name="status_present">P</string>
+    <string name="status_absent">A</string>
+    <string name="status_present_short">P</string> <!-- Or just "P" if space is very tight -->
+    <string name="status_absent_short">A</string>  <!-- Or just "A" -->
     <string name="default_roll_number_label">Roll No: %1$s</string>
     <string name="add_teacher">Add Teacher</string>
     <string name="add_student">Add Student</string>

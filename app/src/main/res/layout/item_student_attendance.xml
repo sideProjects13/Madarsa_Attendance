@@ -80,7 +80,7 @@
                 android:layout_width="wrap_content"
                 app:cornerRadius="10dp"
                 android:layout_height="wrap_content"
-                android:minWidth="80dp"
+                android:minWidth="50dp"
                 android:text="@string/status_present_short" />
 
             <com.google.android.material.button.MaterialButton
@@ -89,7 +89,7 @@
                 style="@style/Widget.App.Button.Toggle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="80dp"
+                android:minWidth="50dp"
                 android:text="@string/status_absent_short" />
 
         </com.google.android.material.button.MaterialButtonToggleGroup>
