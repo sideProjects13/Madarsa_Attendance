@@ -117,7 +117,7 @@ class TeacherDashboardViewModel(application: Application) : AndroidViewModel(app
 
                 // Await and post results
                 attendanceDeferred.await()
-                _highAbsenceStudents.postValue(highAbsenceDeferred.await())
+                _highAbsenceStudents.postValue(highAbsenceDeferred.await() ?: emptyList())
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing teacher dashboard data", e)
