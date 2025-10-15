@@ -1,39 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:padding="12dp"
-    android:gravity="center_vertical"
-    android:background="?attr/selectableItemBackground"
+    android:layout_marginStart="8dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="4dp"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true"
+    app:cardElevation="2dp"
+    app:cardCornerRadius="12dp">
 
-
-
-    <LinearLayout
-        android:layout_width="0dp"
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:padding="12dp">
+
+        <ImageView
+            android:id="@+id/iv_student_icon_selection"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="Student Profile Image"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            tools:src="@drawable/student" />
 
         <TextView
-            android:id="@+id/tv_student_name_selection_item"
-            android:layout_width="wrap_content"
+            android:id="@+id/tv_student_name_selection"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            tools:text="Student Name"
-            android:textAppearance="?attr/textAppearanceBodyLarge"
+            android:layout_marginStart="16dp"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
             android:textColor="?attr/colorOnSurface"
-            android:textStyle="bold"/>
+            android:maxLines="1"
+            android:ellipsize="end"
+            app:layout_constraintStart_toEndOf="@id/iv_student_icon_selection"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/tv_student_subtitle_selection"
+            app:layout_constraintVertical_chainStyle="packed"
+            tools:text="Student Name" />
 
         <TextView
-            android:id="@+id/tv_teacher_name_selection_item"
-            android:layout_width="wrap_content"
+            android:id="@+id/tv_student_subtitle_selection"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            tools:text="Class: Teacher Name"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?attr/colorOnSurfaceVariant"/>
-    </LinearLayout>
-</LinearLayout>
+            android:layout_marginStart="16dp"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:maxLines="1"
+            android:ellipsize="end"
+            app:layout_constraintStart_toEndOf="@id/iv_student_icon_selection"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tv_student_name_selection"
+            app:layout_constraintBottom_toBottomOf="parent"
+            tools:text="Class: Teacher Name" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>

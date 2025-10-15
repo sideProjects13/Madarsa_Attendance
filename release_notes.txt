@@ -1,2 +1,3 @@
-The Teacher Login Problem Solved
-The Attendance page now has only P and A to let the name seen
+Image Preview On attendance Page
+UI Improved on teahcer Side
+Some Bug Fixes

@@ -26,10 +26,8 @@ import com.google.android.material.card.MaterialCardView
 
 class TeacherDashboardFragment : Fragment() {
 
-    // Use the new ViewModel
     private val viewModel: TeacherDashboardViewModel by viewModels()
 
-    // UI Views
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var shimmerLayout: ShimmerFrameLayout
     private lateinit var mainContentLayout: LinearLayout
@@ -42,6 +40,8 @@ class TeacherDashboardFragment : Fragment() {
     private lateinit var tvPresentCount: TextView
     private lateinit var tvAbsentCount: TextView
     private lateinit var tvNotMarkedCount: TextView
+    private lateinit var cardMyClasses: MaterialCardView
+    private lateinit var cardAbsent: MaterialCardView
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_teacher_dashboard, container, false)
@@ -59,19 +59,19 @@ class TeacherDashboardFragment : Fragment() {
         shimmerLayout = view.findViewById(R.id.shimmer_view_container)
         mainContentLayout = view.findViewById(R.id.main_content_layout)
 
-        // Main Cards
         tvTotalStudents = view.findViewById(R.id.tvTotalStudentsCount)
         tvTotalClasses = view.findViewById(R.id.tvTotalClassesCount)
         tvTotalInactiveStudents = view.findViewById(R.id.tvTotalInactiveStudentsCount)
         tvHighAbsenceStudents = view.findViewById(R.id.tvHighAbsenceStudentsCount)
 
-        // Attendance Summary
+        cardMyClasses = view.findViewById(R.id.totalClassesCard)
+        cardAbsent = view.findViewById(R.id.absent_card_section)
+
         tvPresentCount = view.findViewById(R.id.tv_present_count)
         tvAbsentCount = view.findViewById(R.id.tv_absent_count)
         tvNotMarkedCount = view.findViewById(R.id.tv_not_marked_count)
         notMarkedCardSection = view.findViewById(R.id.not_marked_card_section)
 
-        // Chart
         barChart = view.findViewById(R.id.bar_chart_class_distribution)
     }
 
@@ -85,9 +85,21 @@ class TeacherDashboardFragment : Fragment() {
                 if (classes.isNotEmpty()) {
                     showUnmarkedClassesDialog(classes)
                 } else {
-                    Toast.makeText(context, "All your classes have marked attendance today!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "All classes have marked attendance today!", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+
+        cardMyClasses.setOnClickListener {
+            val intent = Intent(activity, TeacherDashboardActivity::class.java)
+            startActivity(intent)
+        }
+
+        cardAbsent.setOnClickListener {
+            val intent = Intent(activity, AbsenteesActivity::class.java).apply {
+                putExtra(AbsenteesActivity.EXTRA_USER_ROLE, "teacher")
+            }
+            startActivity(intent)
         }
     }
 
@@ -105,7 +117,6 @@ class TeacherDashboardFragment : Fragment() {
             }
         }
 
-        // Hook up UI to the new ViewModel's LiveData
         viewModel.totalStudents.observe(viewLifecycleOwner) { tvTotalStudents.text = it.toString() }
         viewModel.totalClasses.observe(viewLifecycleOwner) { tvTotalClasses.text = it.toString() }
         viewModel.totalInactiveStudents.observe(viewLifecycleOwner) { tvTotalInactiveStudents.text = it.toString() }
@@ -124,6 +135,7 @@ class TeacherDashboardFragment : Fragment() {
         }
     }
 
+    // --- MODIFIED: THIS FUNCTION NOW PASSES THE TEACHER ROLE ---
     private fun showUnmarkedClassesDialog(classes: List<Teacher>) {
         val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_not_marked, null)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_not_marked_classes)
@@ -140,6 +152,10 @@ class TeacherDashboardFragment : Fragment() {
                 putExtra(TeacherOptionsActivity.EXTRA_TEACHER_ID, selectedClass.teacherId)
                 putExtra(TeacherOptionsActivity.EXTRA_TEACHER_NAME, selectedClass.teacherName)
                 putExtra(TeacherOptionsActivity.EXTRA_START_FRAGMENT, TeacherOptionsActivity.FRAGMENT_TAKE_ATTENDANCE)
+                // --- THIS IS THE FIX ---
+                // We explicitly tell the next screen to open in "Teacher" mode.
+                putExtra(TeacherOptionsActivity.EXTRA_USER_ROLE, TeacherOptionsActivity.ROLE_TEACHER)
+                // --- END OF FIX ---
             }
             startActivity(intent)
             dialog.dismiss()
@@ -147,6 +163,7 @@ class TeacherDashboardFragment : Fragment() {
         recyclerView.adapter = adapter
         dialog.show()
     }
+    // --- END OF MODIFICATION ---
 
     private fun setupBarChart(data: Map<String, Int>) {
         val filteredData = data.filter { it.value > 0 }

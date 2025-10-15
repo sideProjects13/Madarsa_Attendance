@@ -110,8 +110,6 @@ class TakeAttendanceFragment : Fragment() {
         setupRecyclerView()
         setupSwipeToRefresh()
         btnChangeDate.setOnClickListener { showDatePicker() }
-
-        // The save button now calls our new intelligent save function
         btnSaveAttendance.setOnClickListener { saveAttendance() }
 
         teacherDataViewModel.studentsDataMightHaveChanged.observe(viewLifecycleOwner) { event ->
@@ -123,7 +121,9 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        studentAdapter = StudentAttendanceAdapter(mutableListOf())
+        // --- FIX 1: The adapter is now initialized without any parameters ---
+        studentAdapter = StudentAttendanceAdapter()
+        // --- END OF FIX 1 ---
         recyclerViewStudents.layoutManager = LinearLayoutManager(context)
         recyclerViewStudents.adapter = studentAdapter
     }
@@ -197,6 +197,7 @@ class TakeAttendanceFragment : Fragment() {
             StudentAttendanceItem(
                 id = doc.id,
                 name = doc.getString("studentName") ?: "N/A",
+                regNo = doc.getString("regNo") ?: "N/A",
                 status = "Present",
                 profileImageUrl = doc.getString("profileImageUrl")
             )
@@ -221,7 +222,9 @@ class TakeAttendanceFragment : Fragment() {
             StudentAttendanceItem(
                 id = map["studentId"] as? String ?: "",
                 name = map["studentName"] as? String ?: "N/A",
-                status = map["status"] as? String ?: "Present"
+                regNo = "",
+                status = map["status"] as? String ?: "Present",
+                profileImageUrl = null
             )
         }
     }
@@ -241,9 +244,11 @@ class TakeAttendanceFragment : Fragment() {
         }
     }
 
-    // --- NEW MASTER SAVE FUNCTION ---
     private fun saveAttendance() {
-        val attendanceData = studentAdapter.getAttendanceData()
+        // --- FIX 2: Get the list of students from the adapter using 'currentList' ---
+        val attendanceData = studentAdapter.currentList
+        // --- END OF FIX 2 ---
+
         if (attendanceData.isEmpty()) {
             Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show()
             return
@@ -296,7 +301,7 @@ class TakeAttendanceFragment : Fragment() {
                 teacherName = currentTeacherName ?: "?",
                 organizationId = currentOrganizationId!!,
                 studentAttendancesJson = Gson().toJson(attendanceData),
-                isSynced = true // Mark as synced
+                isSynced = true
             )
             localDb.attendanceDao().upsertAttendance(localRecord)
 

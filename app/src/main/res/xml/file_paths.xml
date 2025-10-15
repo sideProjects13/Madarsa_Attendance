@@ -6,4 +6,5 @@
     <cache-path name="cache" path="." /> <!-- For getCacheDir() -->
     <!-- To access public directories like Documents -->
     <external-path name="external_documents" path="Documents/MadarsaReports/" />
+    <external-files-path name="my_images" path="Pictures" />
 </paths>

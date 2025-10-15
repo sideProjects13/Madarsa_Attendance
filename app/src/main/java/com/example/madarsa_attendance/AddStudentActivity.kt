@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
@@ -25,6 +26,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.cloudinary.android.MediaManager
@@ -40,8 +42,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import id.zelory.compressor.Compressor
 import id.zelory.compressor.constraint.quality
+import id.zelory.compressor.constraint.size
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -52,7 +56,9 @@ class AddStudentActivity : AppCompatActivity() {
 
     private companion object {
         private const val TAG = "AddStudentActivity"
-        private const val PERMISSION_REQUEST_CODE_STUDENT = 103
+        // MODIFIED: Changed constant names for clarity
+        private const val PERMISSION_REQUEST_CODE_STORAGE = 103
+        private const val PERMISSION_REQUEST_CODE_CAMERA = 104
     }
 
     // UI Components
@@ -91,6 +97,9 @@ class AddStudentActivity : AppCompatActivity() {
     private var preselectedTeacherName: String? = null
     private var imageUri: Uri? = null
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
+    // ADDED: Launcher for taking a picture
+    private lateinit var takePictureLauncher: ActivityResultLauncher<Intent>
+    private var cameraImageUri: Uri? = null
     private val UNSIGNED_UPLOAD_PRESET_STUDENT = "BIBI_AYESHA_MASJID"
     private var currentOrganizationId: String? = null
 
@@ -156,7 +165,19 @@ class AddStudentActivity : AppCompatActivity() {
                 }
             }
         }
-        val imageSelectionClickListener = View.OnClickListener { checkAndRequestPermissions() }
+
+        // ADDED: Initialize the take picture launcher
+        takePictureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                cameraImageUri?.let { uri ->
+                    imageUri = uri
+                    Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student).into(ivStudentProfileImage)
+                }
+            }
+        }
+
+        // MODIFIED: The click listener now shows a dialog to choose between camera and gallery
+        val imageSelectionClickListener = View.OnClickListener { showImageSourceDialog() }
         btnSelectImageStudent.setOnClickListener(imageSelectionClickListener)
         cardViewProfileImage.setOnClickListener(imageSelectionClickListener)
 
@@ -402,26 +423,61 @@ class AddStudentActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    // ADDED: This function shows the dialog to choose between camera and gallery
+    private fun showImageSourceDialog() {
+        val options = arrayOf("Take Photo", "Choose from Gallery")
+        AlertDialog.Builder(this)
+            .setTitle("Select Image Source")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> checkCameraPermissions()
+                    1 -> checkStoragePermissions()
+                }
+            }
+            .show()
+    }
 
-    private fun checkAndRequestPermissions() {
+    // MODIFIED: Renamed to checkStoragePermissions
+    private fun checkStoragePermissions() {
         val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_IMAGES
         } else {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
         if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(permission), PERMISSION_REQUEST_CODE_STUDENT)
+            ActivityCompat.requestPermissions(this, arrayOf(permission), PERMISSION_REQUEST_CODE_STORAGE)
         } else {
             openGallery()
         }
     }
 
+    // ADDED: New function to check for camera permissions
+    private fun checkCameraPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), PERMISSION_REQUEST_CODE_CAMERA)
+        } else {
+            openCamera()
+        }
+    }
+
+    // MODIFIED: onRequestPermissionsResult now handles both storage and camera permissions
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE_STUDENT && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            openGallery()
-        } else {
-            Toast.makeText(this, "Permission denied.", Toast.LENGTH_SHORT).show()
+        when (requestCode) {
+            PERMISSION_REQUEST_CODE_STORAGE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    openGallery()
+                } else {
+                    Toast.makeText(this, "Storage permission denied.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            PERMISSION_REQUEST_CODE_CAMERA -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    openCamera()
+                } else {
+                    Toast.makeText(this, "Camera permission denied.", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -429,6 +485,42 @@ class AddStudentActivity : AppCompatActivity() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         imagePickerLauncher.launch(intent)
     }
+
+    // ADDED: This function opens the camera to take a picture
+    private fun openCamera() {
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        var photoFile: File? = null
+        try {
+            photoFile = createImageFile()
+        } catch (ex: IOException) {
+            Log.e(TAG, "IOException while creating image file", ex)
+            Toast.makeText(this, "Error creating image file.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        photoFile?.also {
+            val photoURI: Uri = FileProvider.getUriForFile(
+                this,
+                "${applicationContext.packageName}.provider",
+                it
+            )
+            cameraImageUri = photoURI
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
+            takePictureLauncher.launch(intent)
+        }
+    }
+
+    // ADDED: This function creates a temporary file to store the captured image
+    @Throws(IOException::class)
+    private fun createImageFile(): File {
+        val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val storageDir: File? = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        return File.createTempFile(
+            "JPEG_${timeStamp}_",
+            ".jpg",
+            storageDir
+        )
+    }
+
 
     private fun loadTeachersIntoSpinner() {
         if (currentOrganizationId == null) {
@@ -542,8 +634,10 @@ class AddStudentActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val imageFile = uriToFile(imageUri!!)
+                    // MODIFIED: Added a size constraint to ensure the image is under 100 KB
                     val compressedImageFile = Compressor.compress(this@AddStudentActivity, imageFile) {
-                        quality(60)
+                        quality(80)
+                        size(100 * 1024) // 100 KB
                     }
                     MediaManager.get().upload(compressedImageFile.path)
                         .unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT)

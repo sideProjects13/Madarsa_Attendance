@@ -73,8 +73,11 @@
     data class StudentAttendanceItem(
         val id: String,
         val name: String,
+        val regNo: String,
         var status: String = "Present",
-        val profileImageUrl: String? = null
+        val profileImageUrl: String? = null,
+        var isExpanded: Boolean = false // To track the expanded state of the name
+
     )
 
     data class LeaderboardItem(

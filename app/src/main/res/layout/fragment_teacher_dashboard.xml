@@ -51,8 +51,7 @@
                             <ImageView
                                 android:layout_width="32dp"
                                 android:layout_height="32dp"
-                                android:src="@drawable/student"
-                                app:tint="@android:color/white"/>
+                                android:src="@drawable/person" />
                             <TextView
                                 android:id="@+id/tvTotalStudentsCount"
                                 android:layout_width="wrap_content"

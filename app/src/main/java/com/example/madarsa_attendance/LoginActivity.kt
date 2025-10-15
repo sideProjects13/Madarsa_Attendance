@@ -1,21 +1,26 @@
 package com.example.madarsa_attendance
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.example.madarsa_attendance.models.AppUser
 import com.example.madarsa_attendance.models.Organization
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
-import android.widget.ProgressBar
-import android.widget.TextView
 
 class LoginActivity : AppCompatActivity() {
 
@@ -26,8 +31,6 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
 
-    // --- REMOVED: The toggle button is no longer needed ---
-    // private lateinit var toggleLoginAs: MaterialButtonToggleGroup
     private lateinit var etLoginEmail: TextInputEditText
     private lateinit var etLoginPassword: TextInputEditText
     private lateinit var btnLogin: MaterialButton
@@ -35,30 +38,57 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var tvGoToRegisterOrg: TextView
     private lateinit var tvForgotPassword: TextView
 
-    // --- REMOVED: This state variable is no longer needed ---
-    // private var isLoginAsAdmin = true
+    private val multiplePermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        var allGranted = true
+        permissions.entries.forEach {
+            if (!it.value) {
+                allGranted = false
+            }
+        }
+
+        if (allGranted) {
+            Toast.makeText(this, "All permissions granted. Thank you!", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Some permissions were denied. Certain features may not work correctly.", Toast.LENGTH_LONG).show()
+        }
+        markPermissionsAsRequested()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
+
+        if (isFirstTimeLaunch()) {
+            requestAppPermissions()
+        }
 
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
 
         if (auth.currentUser != null) {
             val role = FirebaseAuthManager.getUserRole(this)
-            if (role == "superadmin") {
-                startActivity(Intent(this, SuperAdminDashboardActivity::class.java))
-                finish()
-                return
-            } else if (role == "admin" && FirebaseAuthManager.getOrganizationId(this) != null) {
-                startActivity(Intent(this, MainActivity::class.java))
-                finish()
-                return
-            } else if (role == "teacher" && FirebaseAuthManager.getOrganizationId(this) != null) {
-                startActivity(Intent(this, TeacherDashboardActivity::class.java))
-                finish()
-                return
+            when {
+                role == "superadmin" -> {
+                    startActivity(Intent(this, SuperAdminDashboardActivity::class.java))
+                    finish()
+                    return
+                }
+                role == "admin" && FirebaseAuthManager.getOrganizationId(this) != null -> {
+                    startActivity(Intent(this, MainActivity::class.java))
+                    finish()
+                    return
+                }
+                role == "teacher" && FirebaseAuthManager.getOrganizationId(this) != null -> {
+                    // --- THIS IS THE FIX ---
+                    // This line now correctly sends logged-in teachers to the new dashboard
+                    // every time they open the app.
+                    startActivity(Intent(this, TeacherHomeActivity::class.java))
+                    // --- END OF FIX ---
+                    finish()
+                    return
+                }
             }
         }
 
@@ -67,8 +97,6 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun initializeViews() {
-        // --- REMOVED: Initialization for the toggle button ---
-        // toggleLoginAs = findViewById(R.id.toggleLoginAs)
         etLoginEmail = findViewById(R.id.etLoginEmail)
         etLoginPassword = findViewById(R.id.etLoginPassword)
         btnLogin = findViewById(R.id.btnLogin)
@@ -78,10 +106,6 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // --- REMOVED: Listener for the toggle button ---
-        // toggleLoginAs.visibility = View.VISIBLE
-        // toggleLoginAs.addOnButtonCheckedListener { _, checkedId, isChecked -> ... }
-
         btnLogin.setOnClickListener { loginUser() }
         tvGoToRegisterOrg.setOnClickListener { startActivity(Intent(this, RegisterActivity::class.java)) }
         tvForgotPassword.setOnClickListener { showForgotPasswordDialog() }
@@ -113,17 +137,13 @@ class LoginActivity : AppCompatActivity() {
             }
     }
 
-    // --- THIS FUNCTION IS UPDATED TO REMOVE DEPENDENCY ON THE TOGGLE BUTTON ---
     private fun checkUserStatusAndProceed(user: FirebaseUser) {
         db.collection("users").document(user.uid).get()
             .addOnSuccessListener { document ->
                 if (document != null && document.exists()) {
                     val appUser = document.toObject(AppUser::class.java)
-
-                    // First, check if the account is active
                     when (appUser?.accountStatus) {
                         "active" -> {
-                            // Account is active, now determine the role and navigate
                             when (appUser.role) {
                                 "superadmin" -> handleSuperAdminLogin(user.uid)
                                 "admin" -> handleAdminLogin(user.uid)
@@ -131,15 +151,9 @@ class LoginActivity : AppCompatActivity() {
                                 else -> logoutAndShowError("Unknown user role. Please contact support.")
                             }
                         }
-                        "pending" -> {
-                            logoutAndShowError("Your account is pending approval by the Super Admin.")
-                        }
-                        "inactive" -> {
-                            logoutAndShowError("Your account has been deactivated. Please contact support.")
-                        }
-                        else -> {
-                            logoutAndShowError("Account status is unknown. Please contact support.")
-                        }
+                        "pending" -> logoutAndShowError("Your account is pending approval by the Super Admin.")
+                        "inactive" -> logoutAndShowError("Your account has been deactivated. Please contact support.")
+                        else -> logoutAndShowError("Account status is unknown. Please contact support.")
                     }
                 } else {
                     logoutAndShowError("User details not found in database.")
@@ -171,14 +185,7 @@ class LoginActivity : AppCompatActivity() {
                         .addOnSuccessListener { orgDoc ->
                             if (orgDoc.exists()) {
                                 val org = orgDoc.toObject(Organization::class.java)
-                                FirebaseAuthManager.saveLoginSession(
-                                    this,
-                                    "admin",
-                                    orgId,
-                                    org?.organizationName ?: "My Madarsa",
-                                    org?.logoUrl,
-                                    org?.address
-                                )
+                                FirebaseAuthManager.saveLoginSession(this, "admin", orgId, org?.organizationName ?: "My Madarsa", org?.logoUrl, org?.address)
                                 navigateToActivity(MainActivity::class.java)
                             } else {
                                 logoutAndShowError("Organization data not found.")
@@ -201,15 +208,8 @@ class LoginActivity : AppCompatActivity() {
                         .addOnSuccessListener { orgDoc ->
                             if (orgDoc.exists()) {
                                 val org = orgDoc.toObject(Organization::class.java)
-                                FirebaseAuthManager.saveLoginSession(
-                                    this,
-                                    "teacher",
-                                    orgId,
-                                    org?.organizationName ?: "My Madarsa",
-                                    org?.logoUrl,
-                                    org?.address
-                                )
-                                navigateToActivity(TeacherDashboardActivity::class.java)
+                                FirebaseAuthManager.saveLoginSession(this, "teacher", orgId, org?.organizationName ?: "My Madarsa", org?.logoUrl, org?.address)
+                                navigateToActivity(TeacherHomeActivity::class.java)
                             } else {
                                 logoutAndShowError("Organization data for teacher not found.")
                             }
@@ -243,8 +243,6 @@ class LoginActivity : AppCompatActivity() {
     private fun setLoading(isLoading: Boolean) {
         progressBarLogin.visibility = if (isLoading) View.VISIBLE else View.GONE
         btnLogin.isEnabled = !isLoading
-        // --- REMOVED: Reference to the toggle button ---
-        // toggleLoginAs.isEnabled = !isLoading
         etLoginEmail.isEnabled = !isLoading
         etLoginPassword.isEnabled = !isLoading
         tvGoToRegisterOrg.isEnabled = !isLoading
@@ -276,5 +274,41 @@ class LoginActivity : AppCompatActivity() {
         }
         builder.setNegativeButton("Cancel") { dialog, _ -> dialog.cancel() }
         builder.show()
+    }
+
+    private fun requestAppPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+        permissionsToRequest.add(Manifest.permission.CAMERA)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+        val permissionsNotGranted = permissionsToRequest.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }.toTypedArray()
+
+        if (permissionsNotGranted.isNotEmpty()) {
+            multiplePermissionsLauncher.launch(permissionsNotGranted)
+        } else {
+            markPermissionsAsRequested()
+        }
+    }
+
+    private fun isFirstTimeLaunch(): Boolean {
+        val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+        return sharedPreferences.getBoolean("isFirstTime", true)
+    }
+
+    private fun markPermissionsAsRequested() {
+        val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+        with(sharedPreferences.edit()) {
+            putBoolean("isFirstTime", false)
+            apply()
+        }
     }
 }

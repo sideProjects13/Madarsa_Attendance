@@ -219,7 +219,7 @@ class MainActivity : AppCompatActivity(),
             }
             "teacher" -> {
                 // If the user is a teacher, send them to their dashboard
-                startActivity(Intent(this, TeacherDashboardActivity::class.java))
+                startActivity(Intent(this, TeacherHomeActivity   ::class.java))
                 finish()
                 return
             }
