@@ -12,13 +12,14 @@ import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.example.madarsa_attendance.TeacherWithStudentCount
 
 class ManageTeachersAdapter(
-    private var teachers: List<TeacherSpinnerItem>,
-    private val onTeacherCardClick: (TeacherSpinnerItem) -> Unit,
-    private val onTeacherCardLongClick: (TeacherSpinnerItem) -> Unit, // New long click listener
-    private val onEditTeacherClick: (TeacherSpinnerItem) -> Unit,
-    private val onDeleteTeacherClick: (TeacherSpinnerItem) -> Unit
+    private var teachers: List<TeacherWithStudentCount>,
+    private val onTeacherCardClick: (TeacherWithStudentCount) -> Unit,
+    private val onTeacherCardLongClick: (TeacherWithStudentCount) -> Unit,
+    private val onEditTeacherClick: (TeacherWithStudentCount) -> Unit,
+    private val onDeleteTeacherClick: (TeacherWithStudentCount) -> Unit
 ) : RecyclerView.Adapter<ManageTeachersAdapter.TeacherViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TeacherViewHolder {
@@ -34,7 +35,7 @@ class ManageTeachersAdapter(
 
     override fun getItemCount(): Int = teachers.size
 
-    fun updateData(newTeachers: List<TeacherSpinnerItem>) {
+    fun updateData(newTeachers: List<TeacherWithStudentCount>) {
         teachers = newTeachers
         notifyDataSetChanged()
     }
@@ -44,16 +45,19 @@ class ManageTeachersAdapter(
         private val teacherSubtitleTextView: TextView = itemView.findViewById(R.id.tvTeacherSubtitleManageItem)
         private val teacherIconImageView: ImageView = itemView.findViewById(R.id.ivTeacherIconManageItem)
         private val menuIconImageView: ImageView = itemView.findViewById(R.id.ivTeacherItemMenu)
+        private val studentCountTextView: TextView = itemView.findViewById(R.id.tvStudentCount)
 
         fun bind(
-            teacher: TeacherSpinnerItem,
-            onCardClick: (TeacherSpinnerItem) -> Unit,
-            onCardLongClick: (TeacherSpinnerItem) -> Unit, // New parameter
-            onEditClick: (TeacherSpinnerItem) -> Unit,
-            onDeleteClick: (TeacherSpinnerItem) -> Unit
+            teacher: TeacherWithStudentCount,
+            onCardClick: (TeacherWithStudentCount) -> Unit,
+            onCardLongClick: (TeacherWithStudentCount) -> Unit,
+            onEditClick: (TeacherWithStudentCount) -> Unit,
+            onDeleteClick: (TeacherWithStudentCount) -> Unit
         ) {
             teacherNameTextView.text = teacher.name
-            teacherSubtitleTextView.text = "Tap for options, long press for attendance" // Updated subtitle
+            teacherSubtitleTextView.text = "Tap for options, long press for menu"
+
+            studentCountTextView.text = teacher.studentCount.toString()
 
             if (!teacher.profileImageUrl.isNullOrEmpty()) {
                 Glide.with(itemView.context)
@@ -67,10 +71,16 @@ class ManageTeachersAdapter(
             }
 
             val cardContainer = itemView.findViewById<View>(R.id.cardTeacherItemContainer)
-            cardContainer.setOnClickListener { onCardClick(teacher) }
+
+            // Set the Click Listener
+            cardContainer.setOnClickListener {
+                onCardClick(teacher)
+            }
+
+            // Set the Long Click Listener
             cardContainer.setOnLongClickListener {
                 onCardLongClick(teacher)
-                true // Consume the long click event
+                true // Return true to indicate the long click was consumed
             }
 
             menuIconImageView.setOnClickListener { view ->
@@ -80,9 +90,9 @@ class ManageTeachersAdapter(
 
         private fun showPopupMenu(
             anchorView: View,
-            teacher: TeacherSpinnerItem,
-            onEdit: (TeacherSpinnerItem) -> Unit,
-            onDelete: (TeacherSpinnerItem) -> Unit
+            teacher: TeacherWithStudentCount,
+            onEdit: (TeacherWithStudentCount) -> Unit,
+            onDelete: (TeacherWithStudentCount) -> Unit
         ) {
             val popup = PopupMenu(anchorView.context, anchorView)
             popup.menuInflater.inflate(R.menu.teacher_item_options_menu, popup.menu)

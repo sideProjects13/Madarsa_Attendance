@@ -7,9 +7,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -52,6 +55,12 @@ class TakeAttendanceFragment : Fragment() {
         }
     }
 
+    private enum class AttendanceStatus {
+        NOT_TAKEN,
+        SAVED,
+        MODIFIED
+    }
+
     private lateinit var tvClassName: TextView
     private lateinit var tvAttendanceDate: TextView
     private lateinit var btnChangeDate: ImageButton
@@ -61,6 +70,10 @@ class TakeAttendanceFragment : Fragment() {
     private lateinit var progressBar: ProgressBar
     private lateinit var tvNoStudents: TextView
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+    private lateinit var searchView: SearchView
+    private lateinit var layoutAttendanceStatus: LinearLayout
+    private lateinit var ivAttendanceStatusIcon: ImageView
+    private lateinit var tvAttendanceStatusText: TextView
 
     private lateinit var onlineDb: FirebaseFirestore
     private lateinit var localDb: AppDatabase
@@ -69,6 +82,9 @@ class TakeAttendanceFragment : Fragment() {
     private var currentOrganizationId: String? = null
     private lateinit var dateForAttendance: String
     private lateinit var teacherDataViewModel: TeacherDataViewModel
+
+    private var allStudentsList: MutableList<StudentAttendanceItem> = mutableListOf()
+    private var currentAttendanceStatus = AttendanceStatus.NOT_TAKEN
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +112,10 @@ class TakeAttendanceFragment : Fragment() {
         progressBar = view.findViewById(R.id.progressBarTakeAttendance)
         tvNoStudents = view.findViewById(R.id.tvNoStudentsForAttendance)
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout_attendance)
+        searchView = view.findViewById(R.id.searchViewStudents)
+        layoutAttendanceStatus = view.findViewById(R.id.layoutAttendanceStatus)
+        ivAttendanceStatusIcon = view.findViewById(R.id.ivAttendanceStatusIcon)
+        tvAttendanceStatusText = view.findViewById(R.id.tvAttendanceStatusText)
         return view
     }
 
@@ -109,6 +129,7 @@ class TakeAttendanceFragment : Fragment() {
         updateDateDisplay()
         setupRecyclerView()
         setupSwipeToRefresh()
+        setupSearchView()
         btnChangeDate.setOnClickListener { showDatePicker() }
         btnSaveAttendance.setOnClickListener { saveAttendance() }
 
@@ -121,11 +142,64 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        // --- FIX 1: The adapter is now initialized without any parameters ---
-        studentAdapter = StudentAttendanceAdapter()
-        // --- END OF FIX 1 ---
+        studentAdapter = StudentAttendanceAdapter { studentId, newStatus ->
+            // --- START: THIS IS THE CRITICAL FIX ---
+            // Instead of modifying the existing list directly, we create a new list with the updated student.
+            // This ensures that ListAdapter works correctly and state is not shared between dates.
+
+            // 1. Create a new list by mapping over the current one
+            val updatedList = allStudentsList.map { student ->
+                if (student.id == studentId) {
+                    // If this is the student that was changed, create a new 'StudentAttendanceItem'
+                    // object with the updated status.
+                    student.copy(status = newStatus)
+                } else {
+                    // Otherwise, keep the student object as is.
+                    student
+                }
+            }
+
+            // 2. Replace the old master list with the new, updated list.
+            allStudentsList = updatedList.toMutableList()
+
+            // 3. Re-apply the search filter and submit the fresh list to the adapter.
+            filterStudentList(searchView.query.toString())
+
+            // 4. Update the UI state to "Modified" if it was previously "Saved".
+            if (currentAttendanceStatus == AttendanceStatus.SAVED) {
+                currentAttendanceStatus = AttendanceStatus.MODIFIED
+                updateUiForAttendanceStatus()
+            }
+            // --- END OF THE CRITICAL FIX ---
+        }
         recyclerViewStudents.layoutManager = LinearLayoutManager(context)
         recyclerViewStudents.adapter = studentAdapter
+    }
+
+
+    private fun setupSearchView() {
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                return false
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                filterStudentList(newText)
+                return true
+            }
+        })
+    }
+
+    private fun filterStudentList(query: String?) {
+        val filteredList = if (query.isNullOrEmpty()) {
+            allStudentsList
+        } else {
+            allStudentsList.filter {
+                it.name.contains(query, ignoreCase = true)
+            }
+        }
+        // Always submit a new list to the adapter
+        studentAdapter.submitList(filteredList.toList())
     }
 
     private fun loadData() {
@@ -141,6 +215,10 @@ class TakeAttendanceFragment : Fragment() {
 
                 if (studentRoster.isEmpty()) {
                     updateUiWithStudentList(emptyList())
+                    allStudentsList.clear()
+                    studentAdapter.submitList(emptyList())
+                    currentAttendanceStatus = AttendanceStatus.NOT_TAKEN
+                    updateUiForAttendanceStatus()
                     return@launch
                 }
 
@@ -149,8 +227,10 @@ class TakeAttendanceFragment : Fragment() {
                 }
 
                 val finalStudentList: List<StudentAttendanceItem>
+                var recordFound = false
+
                 if (localRecord != null) {
-                    Log.d(TAG, "Found local record. Merging with Firestore roster.")
+                    recordFound = true
                     val localAttendanceMap = Gson().fromJson(localRecord.studentAttendancesJson, Array<StudentAttendanceItem>::class.java)
                         .associateBy { it.id }
 
@@ -158,22 +238,26 @@ class TakeAttendanceFragment : Fragment() {
                         rosterStudent.copy(status = localAttendanceMap[rosterStudent.id]?.status ?: "Present")
                     }
                 } else {
-                    Log.d(TAG, "No local record. Checking Firestore for synced record.")
                     val firestoreRecord = fetchSyncedAttendanceFromFirestore()
                     if (firestoreRecord != null) {
-                        Log.d(TAG, "Found synced Firestore record. Merging.")
+                        recordFound = true
                         val firestoreAttendanceMap = firestoreRecord.associateBy { it.id }
                         finalStudentList = studentRoster.map { rosterStudent ->
                             rosterStudent.copy(status = firestoreAttendanceMap[rosterStudent.id]?.status ?: "Present")
                         }
                     } else {
-                        Log.d(TAG, "No records found anywhere. Using fresh roster.")
-                        finalStudentList = studentRoster
+                        // For a new date, reset all students to "Present"
+                        finalStudentList = studentRoster.map { it.copy(status = "Present") }
                     }
                 }
 
-                studentAdapter.submitList(finalStudentList)
-                updateUiWithStudentList(finalStudentList)
+                allStudentsList.clear()
+                allStudentsList.addAll(finalStudentList)
+                filterStudentList(searchView.query.toString())
+                updateUiWithStudentList(allStudentsList)
+
+                currentAttendanceStatus = if (recordFound) AttendanceStatus.SAVED else AttendanceStatus.NOT_TAKEN
+                updateUiForAttendanceStatus()
 
             } catch (e: Exception) {
                 if (!isAdded) return@launch
@@ -245,9 +329,7 @@ class TakeAttendanceFragment : Fragment() {
     }
 
     private fun saveAttendance() {
-        // --- FIX 2: Get the list of students from the adapter using 'currentList' ---
-        val attendanceData = studentAdapter.currentList
-        // --- END OF FIX 2 ---
+        val attendanceData = allStudentsList
 
         if (attendanceData.isEmpty()) {
             Toast.makeText(context, "No students to save.", Toast.LENGTH_SHORT).show()
@@ -306,7 +388,10 @@ class TakeAttendanceFragment : Fragment() {
             localDb.attendanceDao().upsertAttendance(localRecord)
 
             if (isAdded) {
-                StatusDialogFragment.newInstance(true, "Attendance Saved Successfully!").show(parentFragmentManager, "successDialog")
+                val message = if (currentAttendanceStatus == AttendanceStatus.MODIFIED) "Attendance Updated!" else "Attendance Saved!"
+                StatusDialogFragment.newInstance(true, message).show(parentFragmentManager, "successDialog")
+                currentAttendanceStatus = AttendanceStatus.SAVED
+                updateUiForAttendanceStatus()
             }
 
         } catch (e: Exception) {
@@ -335,8 +420,29 @@ class TakeAttendanceFragment : Fragment() {
         if (isAdded) {
             progressBar.visibility = View.GONE
             btnSaveAttendance.isEnabled = true
-            StatusDialogFragment.newInstance(true, "Attendance Saved Locally (Offline)").show(parentFragmentManager, "successDialog")
+            val message = if (currentAttendanceStatus == AttendanceStatus.MODIFIED) "Updated Locally (Offline)" else "Saved Locally (Offline)"
+            StatusDialogFragment.newInstance(true, message).show(parentFragmentManager, "successDialog")
+            currentAttendanceStatus = AttendanceStatus.SAVED
+            updateUiForAttendanceStatus()
             scheduleSync()
+        }
+    }
+
+    private fun updateUiForAttendanceStatus() {
+        when (currentAttendanceStatus) {
+            AttendanceStatus.NOT_TAKEN -> {
+                layoutAttendanceStatus.visibility = View.GONE
+                btnSaveAttendance.text = getString(R.string.save_attendance)
+            }
+            AttendanceStatus.SAVED -> {
+                layoutAttendanceStatus.visibility = View.VISIBLE
+                tvAttendanceStatusText.text = "Attendance Saved"
+                btnSaveAttendance.text = "Update"
+            }
+            AttendanceStatus.MODIFIED -> {
+                layoutAttendanceStatus.visibility = View.GONE
+                btnSaveAttendance.text = "Save Changes"
+            }
         }
     }
 
@@ -371,6 +477,8 @@ class TakeAttendanceFragment : Fragment() {
             { _, year, month, dayOfMonth ->
                 dateForAttendance = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month + 1, dayOfMonth)
                 updateDateDisplay()
+                // Clear the search query when changing dates to avoid confusion
+                searchView.setQuery("", false)
                 loadData()
             },
             calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)

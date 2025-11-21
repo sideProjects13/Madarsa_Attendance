@@ -19,7 +19,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.TextInputEditText
-import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.firestore.ktx.toObjects
@@ -36,6 +35,7 @@ class SellItemActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_STUDENT = "EXTRA_STUDENT"
+        const val EXTRA_IS_EXTERNAL = "EXTRA_IS_EXTERNAL"
     }
 
     // UI Views
@@ -50,6 +50,9 @@ class SellItemActivity : AppCompatActivity() {
     private var organizationId: String? = null
     private var student: StudentDetailsItem? = null
 
+    // New Flag
+    private var isExternalBuyer: Boolean = false
+
     // Helpers
     private val currencyFormatter: NumberFormat = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
     private val dateFormatter = SimpleDateFormat("dd MMM, yyyy", Locale.getDefault())
@@ -59,14 +62,22 @@ class SellItemActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sell_item)
 
-        // Retrieve passed data
-        student = intent.getSerializableExtra(EXTRA_STUDENT) as? StudentDetailsItem
         db = FirebaseFirestore.getInstance()
         organizationId = FirebaseAuthManager.getOrganizationId(this)
 
-        // Validate necessary data
-        if (organizationId == null || student == null) {
-            Toast.makeText(this, "Error: Missing required student or organization data.", Toast.LENGTH_LONG).show()
+        // --- MODIFIED LOGIC TO CHECK BUYER TYPE ---
+        student = intent.getSerializableExtra(EXTRA_STUDENT) as? StudentDetailsItem
+        isExternalBuyer = intent.getBooleanExtra(EXTRA_IS_EXTERNAL, false)
+
+        if (organizationId == null) {
+            Toast.makeText(this, "Error: Organization data missing.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        // If not external and no student provided, show error (Safety check for old flow)
+        if (!isExternalBuyer && student == null) {
+            Toast.makeText(this, "Error: Missing student data.", Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -81,7 +92,13 @@ class SellItemActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
-        toolbar.title = "Selling to: ${student?.studentName}"
+
+        // Set title based on buyer type
+        if (isExternalBuyer) {
+            toolbar.title = "Selling to: Outside Buyer"
+        } else {
+            toolbar.title = "Selling to: ${student?.studentName}"
+        }
 
         rvItems = findViewById(R.id.rv_sellable_items)
         progressBar = findViewById(R.id.progressBarSell)
@@ -90,8 +107,12 @@ class SellItemActivity : AppCompatActivity() {
 
     private fun setupRecyclerView() {
         adapter = SellableItemAdapter(emptyList()) { item ->
-            // When an item is clicked, show the confirmation dialog
-            showConfirmSaleDialog(item)
+            // --- MODIFIED LOGIC TO CHOOSE DIALOG ---
+            if (isExternalBuyer) {
+                showConfirmSaleDialogForExternal(item)
+            } else {
+                showConfirmSaleDialogForStudent(item)
+            }
         }
         rvItems.layoutManager = LinearLayoutManager(this)
         rvItems.adapter = adapter
@@ -104,7 +125,7 @@ class SellItemActivity : AppCompatActivity() {
 
         db.collection("organizations").document(organizationId!!)
             .collection("inventoryItems")
-            .whereGreaterThan("stockQuantity", 0) // Only fetch items that are in stock
+            .whereGreaterThan("stockQuantity", 0)
             .get()
             .addOnSuccessListener { documents ->
                 progressBar.visibility = View.GONE
@@ -122,7 +143,8 @@ class SellItemActivity : AppCompatActivity() {
             }
     }
 
-    private fun showConfirmSaleDialog(item: InventoryItem) {
+    // --- ORIGINAL DIALOG (UNCHANGED LOGIC) ---
+    private fun showConfirmSaleDialogForStudent(item: InventoryItem) {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirm_sale, null)
         val tvItemName: TextView = dialogView.findViewById(R.id.tv_dialog_item_name)
         val tvItemPrice: TextView = dialogView.findViewById(R.id.tv_dialog_item_price)
@@ -130,7 +152,7 @@ class SellItemActivity : AppCompatActivity() {
 
         tvItemName.text = "Item: ${item.itemName}"
         tvItemPrice.text = "Price: ${currencyFormatter.format(item.sellingPrice)}"
-        etAmountPaid.setText(item.sellingPrice.toString()) // Pre-fill with the full price
+        etAmountPaid.setText(item.sellingPrice.toString())
 
         AlertDialog.Builder(this)
             .setTitle("Confirm Sale")
@@ -142,41 +164,101 @@ class SellItemActivity : AppCompatActivity() {
                     Toast.makeText(this, "Please enter a valid amount.", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                processSaleTransaction(item, amountPaid)
+                // Use student details
+                processSaleTransaction(
+                    item,
+                    amountPaid,
+                    studentName = student!!.studentName,
+                    studentRegNo = student!!.regNo,
+                    parentName = student!!.parentName,
+                    studentId = student!!.id,
+                    parentMobile = student!!.parentMobileNumber
+                )
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
-    private fun processSaleTransaction(item: InventoryItem, amountPaid: Double) {
+    // --- NEW DIALOG FOR EXTERNAL BUYERS ---
+    private fun showConfirmSaleDialogForExternal(item: InventoryItem) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirm_sale_external, null)
+        val tvItemName: TextView = dialogView.findViewById(R.id.tv_dialog_item_name_ext)
+        val tvItemPrice: TextView = dialogView.findViewById(R.id.tv_dialog_item_price_ext)
+        val etBuyerName: TextInputEditText = dialogView.findViewById(R.id.et_buyer_name)
+        val etBuyerMobile: TextInputEditText = dialogView.findViewById(R.id.et_buyer_mobile)
+        val etAmountPaid: TextInputEditText = dialogView.findViewById(R.id.et_amount_paid_ext)
+
+        tvItemName.text = "Item: ${item.itemName}"
+        tvItemPrice.text = "Price: ${currencyFormatter.format(item.sellingPrice)}"
+        etAmountPaid.setText(item.sellingPrice.toString())
+
+        AlertDialog.Builder(this)
+            .setTitle("Confirm Outside Sale")
+            .setView(dialogView)
+            .setPositiveButton("Confirm") { _, _ ->
+                val buyerName = etBuyerName.text.toString().trim()
+                val buyerMobile = etBuyerMobile.text.toString().trim()
+                val amountPaidStr = etAmountPaid.text.toString()
+                val amountPaid = amountPaidStr.toDoubleOrNull()
+
+                if (buyerName.isEmpty()) {
+                    Toast.makeText(this, "Buyer Name is required.", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                if (amountPaid == null || amountPaid < 0) {
+                    Toast.makeText(this, "Please enter a valid amount.", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                // Use custom details, mark ID as GUEST
+                processSaleTransaction(
+                    item,
+                    amountPaid,
+                    studentName = buyerName,
+                    studentRegNo = "Guest",
+                    parentName = "N/A",
+                    studentId = "EXTERNAL_GUEST",
+                    parentMobile = buyerMobile
+                )
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // --- MODIFIED TRANSACTION FUNCTION TO ACCEPT DETAILS ---
+    private fun processSaleTransaction(
+        item: InventoryItem,
+        amountPaid: Double,
+        studentName: String,
+        studentRegNo: String?,
+        parentName: String?,
+        studentId: String,
+        parentMobile: String?
+    ) {
         val loadingDialog = StatusDialogFragment.newInstance(true, "Processing Sale...").apply { isCancelable = false }
         loadingDialog.show(supportFragmentManager, "processingSale")
 
         val itemRef = db.collection("organizations").document(organizationId!!)
             .collection("inventoryItems").document(item.id)
         val salesRef = db.collection("organizations").document(organizationId!!)
-            .collection("sales").document() // Create a new document reference for the sale
+            .collection("sales").document()
 
-        // Use a Firestore transaction to ensure atomic operations (stock decrement and sale creation)
         Firebase.firestore.runTransaction { transaction ->
             val itemSnapshot = transaction.get(itemRef)
             val currentStock = itemSnapshot.getLong("stockQuantity")?.toInt() ?: 0
 
-            // Fail the transaction if the item just went out of stock
             if (currentStock <= 0) {
                 throw Exception("Item is out of stock.")
             }
 
-            // 1. Decrement the stock quantity
             transaction.update(itemRef, "stockQuantity", currentStock - 1)
 
-            // 2. Create the sale record object
             val saleRecord = SaleRecord(
                 id = salesRef.id,
-                studentId = student!!.id,
-                studentName = student!!.studentName,
-                studentRegNo = student!!.regNo,
-                parentName = student!!.parentName,
+                studentId = studentId, // Will be actual ID or "EXTERNAL_GUEST"
+                studentName = studentName,
+                studentRegNo = studentRegNo,
+                parentName = parentName,
                 itemId = item.id,
                 itemName = item.itemName,
                 itemImageUrl = item.imageUrl,
@@ -188,38 +270,34 @@ class SellItemActivity : AppCompatActivity() {
                 saleDate = Date()
             )
 
-            // 3. Set the new sale record in the 'sales' collection
             transaction.set(salesRef, saleRecord)
 
-            // Return the created sale record to the success listener
-            saleRecord
-        }.addOnSuccessListener { saleRecord ->
+            // Return pair of record and mobile number for receipt sharing
+            Pair(saleRecord, parentMobile)
+
+        }.addOnSuccessListener { (saleRecord, mobileNumber) ->
             loadingDialog.dismiss()
-            // If the transaction is successful, generate and share the receipt
-            generateAndShareReceipt(saleRecord)
+            generateAndShareReceipt(saleRecord, mobileNumber)
         }.addOnFailureListener { e ->
             loadingDialog.dismiss()
             Toast.makeText(this, "Sale failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun generateAndShareReceipt(saleRecord: SaleRecord) {
+    private fun generateAndShareReceipt(saleRecord: SaleRecord, mobileNumber: String?) {
         val loadingDialog = StatusDialogFragment.newInstance(true, "Generating Receipt...").apply { isCancelable = false }
         loadingDialog.show(supportFragmentManager, "generatingReceipt")
 
         lifecycleScope.launch {
-            // 1. Fetch required images in the background
             val orgLogoBitmap = LogoProvider.getActiveLogo(this@SellItemActivity)
             val itemBitmap = fetchBitmapFromUrl(saleRecord.itemImageUrl)
 
-            // 2. Prepare the data payload for our reusable generator
             val receiptData = ReceiptGenerator.ReceiptData(
                 title = "Sales Receipt",
-                iconResId = R.drawable.ic_shopping_bag, // Make sure you have this icon
+                iconResId = R.drawable.ic_shopping_bag,
                 details = listOf(
-                    "Student Name" to saleRecord.studentName,
-                    "Registration ID" to (saleRecord.studentRegNo ?: "N/A"),
-                    "Parent Name" to (saleRecord.parentName ?: "N/A"),
+                    "Buyer/Student" to saleRecord.studentName,
+                    "Ref/Reg ID" to (saleRecord.studentRegNo ?: "N/A"),
                     "Item Sold" to saleRecord.itemName,
                     "Date of Sale" to dateFormatter.format(saleRecord.saleDate!!)
                 ),
@@ -233,22 +311,20 @@ class SellItemActivity : AppCompatActivity() {
                 studentNameForFilename = saleRecord.studentName
             )
 
-            // 3. Generate the receipt image using the data
             val receiptUri = ReceiptGenerator.generate(this@SellItemActivity, receiptData)
             loadingDialog.dismiss()
 
             if (receiptUri != null) {
-                shareReceiptToWhatsApp(receiptUri)
+                shareReceiptToWhatsApp(receiptUri, mobileNumber)
             } else {
                 Toast.makeText(this@SellItemActivity, "Failed to generate receipt.", Toast.LENGTH_LONG).show()
-                finish() // Finish activity even if receipt fails
+                finish()
             }
         }
     }
 
     private suspend fun fetchBitmapFromUrl(url: String?): Bitmap? {
         if (url.isNullOrEmpty()) return null
-        // Run on IO dispatcher for network operations
         return withContext(Dispatchers.IO) {
             try {
                 Glide.with(this@SellItemActivity)
@@ -263,21 +339,29 @@ class SellItemActivity : AppCompatActivity() {
         }
     }
 
-    private fun shareReceiptToWhatsApp(uri: Uri) {
+    // --- UPDATED SHARE FUNCTION TO USE SPECIFIC NUMBER IF AVAILABLE ---
+    private fun shareReceiptToWhatsApp(uri: Uri, mobileNumber: String?) {
         try {
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                // This targets WhatsApp specifically
+
+                // If we have a mobile number, try to open chat directly
+                if (!mobileNumber.isNullOrEmpty()) {
+                    val cleanNumber = mobileNumber.replace(Regex("[^0-9]"), "")
+                    // Assuming generic country code 91 if missing, or use as is if length > 10
+                    val whatsappNumber = if (cleanNumber.length > 10) cleanNumber else "91$cleanNumber"
+                    putExtra("jid", "$whatsappNumber@s.whatsapp.net")
+                }
+
                 setPackage("com.whatsapp")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
-            // Finish this activity after successfully launching WhatsApp
             finish()
         } catch (e: ActivityNotFoundException) {
-            // This block runs if WhatsApp is not installed
-            Toast.makeText(this, "WhatsApp not installed. Opening share options.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "WhatsApp not installed.", Toast.LENGTH_LONG).show()
+            // Fallback share
             val genericIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)

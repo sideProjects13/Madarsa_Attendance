@@ -386,10 +386,26 @@ class MainActivity : AppCompatActivity(),
             }
 
             R.id.nav_sell_item -> {
-                // Set the pending action and launch the student search dialog
-                pendingStudentAction = StudentAction.SELL_ITEM
-                QuickFeesDialogFragment.newInstance("Sell Item To", StudentAction.SELL_ITEM)
-                    .show(supportFragmentManager, "SellItemDialog")
+                // Show option dialog
+                val options = arrayOf("Sell to Student", "Sell to Outside Buyer")
+                AlertDialog.Builder(this, R.style.AlertDialog_App_Monochrome)
+                    .setTitle("Select Buyer Type")
+                    .setItems(options) { _, which ->
+                        if (which == 0) {
+                            // Existing Student Flow
+                            pendingStudentAction = StudentAction.SELL_ITEM
+                            QuickFeesDialogFragment.newInstance("Sell Item To", StudentAction.SELL_ITEM)
+                                .show(supportFragmentManager, "SellItemDialog")
+                        } else {
+                            // New External Flow
+                            val intent = Intent(this, SellItemActivity::class.java).apply {
+                                putExtra(SellItemActivity.EXTRA_IS_EXTERNAL, true)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
 
             R.id.nav_sales_history -> {

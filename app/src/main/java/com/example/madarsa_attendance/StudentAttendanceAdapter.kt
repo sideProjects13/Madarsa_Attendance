@@ -20,7 +20,15 @@ import com.bumptech.glide.Glide
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 
-class StudentAttendanceAdapter : ListAdapter<StudentAttendanceItem, StudentAttendanceAdapter.StudentViewHolder>(StudentDiffCallback()) {
+// =============================================
+// START: MODIFIED CONSTRUCTOR
+// =============================================
+class StudentAttendanceAdapter(
+    private val onStatusChanged: (studentId: String, newStatus: String) -> Unit
+) : ListAdapter<StudentAttendanceItem, StudentAttendanceAdapter.StudentViewHolder>(StudentDiffCallback()) {
+// =============================================
+// END: MODIFIED CONSTRUCTOR
+// =============================================
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StudentViewHolder {
         val view = LayoutInflater.from(parent.context)
@@ -73,8 +81,17 @@ class StudentAttendanceAdapter : ListAdapter<StudentAttendanceItem, StudentAtten
             toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
                 if (isChecked && adapterPosition != RecyclerView.NO_POSITION) {
                     val clickedStudent = getItem(adapterPosition)
-                    clickedStudent.status = if (checkedId == R.id.btnTogglePresent) "Present" else "Absent"
+                    val newStatus = if (checkedId == R.id.btnTogglePresent) "Present" else "Absent"
+                    clickedStudent.status = newStatus
                     applyCustomVisuals(checkedId)
+
+                    // =============================================
+                    // START: NOTIFY FRAGMENT OF CHANGE
+                    // =============================================
+                    onStatusChanged(clickedStudent.id, newStatus)
+                    // =============================================
+                    // END: NOTIFY FRAGMENT OF CHANGE
+                    // =============================================
                 }
             }
 
@@ -96,30 +113,23 @@ class StudentAttendanceAdapter : ListAdapter<StudentAttendanceItem, StudentAtten
                 }
             }
 
-            // --- THIS IS THE FIX ---
-            // The image preview now uses the new, centered dialog layout.
             ivStudentIcon.setOnClickListener {
-                // Inflate the new custom layout
                 val dialogView = LayoutInflater.from(itemView.context).inflate(R.layout.dialog_image_preview, null)
                 val imageView = dialogView.findViewById<ImageView>(R.id.preview_image_view)
 
-                // Load the image into the dialog's ImageView
                 Glide.with(itemView.context)
                     .load(student.profileImageUrl)
                     .placeholder(R.drawable.student)
                     .error(R.drawable.student)
                     .into(imageView)
 
-                // Create and show the dialog
                 val dialog = AlertDialog.Builder(itemView.context)
                     .setView(dialogView)
                     .create()
 
-                // Make the dialog background transparent to see the card's rounded corners
                 dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
                 dialog.show()
             }
-            // --- END OF FIX ---
         }
 
         private fun applyCustomVisuals(checkedButtonId: Int) {
@@ -150,7 +160,7 @@ class StudentAttendanceAdapter : ListAdapter<StudentAttendanceItem, StudentAtten
         }
     }
 }
-
+// The DiffCallback class remains unchanged.
 class StudentDiffCallback : DiffUtil.ItemCallback<StudentAttendanceItem>() {
     override fun areItemsTheSame(oldItem: StudentAttendanceItem, newItem: StudentAttendanceItem): Boolean {
         return oldItem.id == newItem.id

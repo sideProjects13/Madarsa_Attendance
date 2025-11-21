@@ -131,15 +131,33 @@ class TeacherAttendanceActivity : AppCompatActivity() {
 
                 val teacherAttendanceMap = attendanceRecords.associateBy { it.teacherId }
 
-                // --- FIX #4: DEFAULT TO "PRESENT" ---
-                // This is the key change. If a teacher has no record in the database for this day,
-                // we now explicitly default their status to "Present", matching the non-nullable data class.
                 val mergedList = allTeachers.map { teacher ->
+                    // --- KEY CHANGE HERE ---
+                    // Determine status from record.
+                    // 1. If 'status' field exists (legacy), use it.
+                    // 2. If 'classesTaken' > 0, consider "Present".
+                    // 3. If 'classesMissed' > 0 and 'classesTaken' == 0, consider "Absent".
+                    // 4. Default (no record) is "Present".
+
+                    val record = teacherAttendanceMap[teacher.id]
+                    val derivedStatus = if (record != null) {
+                        when {
+                            // Prioritize explicit status if available
+                            record.status.isNotEmpty() -> record.status
+                            // Fallback to counts
+                            record.classesTaken > 0 -> "Present"
+                            record.classesMissed > 0 -> "Absent"
+                            else -> "Present"
+                        }
+                    } else {
+                        "Present" // Default if no record found
+                    }
+
                     TeacherAttendanceItem(
                         id = teacher.id,
                         name = teacher.name,
                         profileImageUrl = teacher.profileImageUrl,
-                        attendanceStatus = teacherAttendanceMap[teacher.id]?.status ?: "Present"
+                        attendanceStatus = derivedStatus
                     )
                 }
 
@@ -179,12 +197,8 @@ class TeacherAttendanceActivity : AppCompatActivity() {
     private fun saveAttendance() {
         if (currentOrganizationId == null) return
 
-        // --- FIX #5: REMOVE THE FILTER ---
-        // Get the entire list from the adapter. No filtering is needed anymore
-        // because every teacher has a valid status ("Present" or "Absent").
         val teachersToSave = adapter.getTeachersList()
 
-        // This validation now correctly checks only if there are no teachers to save at all.
         if (teachersToSave.isEmpty()) {
             Toast.makeText(this, "There are no teachers to mark attendance for.", Toast.LENGTH_SHORT).show()
             return
@@ -204,18 +218,27 @@ class TeacherAttendanceActivity : AppCompatActivity() {
                 val existingRecordsMap = existingRecordsQuery.documents.associateBy { it.getString("teacherId") }
 
                 for (teacher in teachersToSave) {
-                    val attendanceRecord = TeacherAttendanceRecord(
-                        teacherId = teacher.id,
-                        teacherName = teacher.name,
-                        date = dateStr,
-                        // No need for '!!' as status is no longer nullable
-                        status = teacher.attendanceStatus,
-                        organizationId = currentOrganizationId!!
+                    // When saving from THIS screen, we only set the simple status.
+                    // We don't overwrite class counts if they exist, ideally, but for this bulk tool
+                    // we typically just set status.
+                    // If you want to be safe, you could fetch existing counts and preserve them,
+                    // but typically a bulk "Present" implies standard attendance.
+
+                    val attendanceRecord = hashMapOf(
+                        "teacherId" to teacher.id,
+                        "teacherName" to teacher.name,
+                        "date" to dateStr,
+                        "status" to teacher.attendanceStatus,
+                        "organizationId" to currentOrganizationId!!,
+                        // If marking from here, we assume defaults for counts if they don't exist
+                        // Or you can leave them out to not overwrite existing fields if using update
+                        "classesTaken" to if(teacher.attendanceStatus == "Present") 1 else 0,
+                        "classesMissed" to if(teacher.attendanceStatus == "Absent") 1 else 0
                     )
 
                     val existingDoc = existingRecordsMap[teacher.id]
                     if (existingDoc != null) {
-                        batch.set(existingDoc.reference, attendanceRecord)
+                        batch.update(existingDoc.reference, attendanceRecord as Map<String, Any>)
                     } else {
                         batch.set(attendanceCollection.document(), attendanceRecord)
                     }
@@ -244,5 +267,6 @@ class TeacherAttendanceActivity : AppCompatActivity() {
     private fun setEmptyState(isEmpty: Boolean) {
         tvNoTeachers.visibility = if (isEmpty) View.VISIBLE else View.GONE
         recyclerView.visibility = if (isEmpty) View.GONE else View.VISIBLE
+        btnSave.isEnabled = !isEmpty
     }
 }

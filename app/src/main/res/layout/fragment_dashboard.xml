@@ -5,6 +5,7 @@
     android:id="@+id/swipe_refresh_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:paddingTop="10dp"
     android:background="?android:colorBackground"
     tools:context=".DashboardFragment">
 
@@ -25,7 +26,7 @@
                 android:visibility="invisible"
                 tools:visibility="visible">
 
-                <!-- Main Stats Grid -->
+                <!-- Main Stats Grid (Same as before) -->
                 <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -33,7 +34,7 @@
                     android:rowCount="2"
                     android:padding="8dp">
 
-                    <!-- Card 1: Total Students (Primary Color) -->
+                    <!-- Card 1: Total Students -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/totalStudentsCard"
                         android:layout_width="0dp"
@@ -51,8 +52,7 @@
                             <ImageView
                                 android:layout_width="32dp"
                                 android:layout_height="32dp"
-                                android:src="@drawable/ic_student_management"
-                                app:tint="@android:color/white"/>
+                                android:src="@drawable/ic_person_outlined" />
                             <TextView
                                 android:id="@+id/tvTotalStudentsCount"
                                 android:layout_width="wrap_content"
@@ -60,7 +60,7 @@
                                 android:layout_marginTop="12dp"
                                 android:textAppearance="?attr/textAppearanceHeadlineMedium"
                                 android:textColor="@android:color/white"
-                                tools:text="152" />
+                                tools:text="120" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
@@ -70,15 +70,13 @@
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <!-- Card 2: Total Teachers (White) -->
+                    <!-- Card 2: Total Teachers -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/totalTeachersCard"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="8dp"
-                        android:clickable="true"
-                        android:focusable="true"
                         app:cardElevation="4dp"
                         app:cardCornerRadius="16dp">
                         <LinearLayout
@@ -102,21 +100,19 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Total Teachers"
+                                android:text="Teachers"
                                 android:textAppearance="?attr/textAppearanceBodyMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <!-- Card 3: Inactive Students (White) -->
+                    <!-- Card 3: Inactive Students -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/inactiveStudentsCard"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="8dp"
-                        android:clickable="true"
-                        android:focusable="true"
                         app:cardElevation="4dp"
                         app:cardCornerRadius="16dp">
                         <LinearLayout
@@ -140,21 +136,19 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Inactive Students"
+                                android:text="Inactive"
                                 android:textAppearance="?attr/textAppearanceBodyMedium"
                                 android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <!-- Card 4: High Absences (Primary Color) -->
+                    <!-- Card 4: High Absences -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/highAbsenceCard"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
                         android:layout_margin="8dp"
-                        android:clickable="true"
-                        android:focusable="true"
                         app:cardBackgroundColor="?attr/colorPrimary"
                         app:cardElevation="4dp"
                         app:cardCornerRadius="16dp">
@@ -175,7 +169,7 @@
                                 android:layout_marginTop="12dp"
                                 android:textAppearance="?attr/textAppearanceHeadlineMedium"
                                 android:textColor="@android:color/white"
-                                tools:text="3" />
+                                tools:text="2" />
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
@@ -186,14 +180,13 @@
                     </com.google.android.material.card.MaterialCardView>
                 </GridLayout>
 
-
-                <!-- Today's Attendance Summary -->
+                <!-- Student Attendance Summary (Existing) -->
                 <TextView
                     style="@style/DashboardSectionHeader"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
-                    android:text="Today's Attendance" />
+                    android:text="Student Attendance (Today)" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -203,7 +196,6 @@
                     android:layout_marginTop="8dp"
                     android:baselineAligned="false">
 
-                    <!-- Present -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/present_card_section"
                         android:layout_width="0dp"
@@ -221,22 +213,19 @@
                                 android:id="@+id/tv_present_count"
                                 style="@style/DashboardCardValue"
                                 android:textColor="@color/status_paid_green"
-                                tools:text="140" />
+                                tools:text="100" />
                             <TextView
                                 style="@style/DashboardCardTitle"
                                 android:text="Present" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <!-- Absent -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/absent_card_section"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_margin="8dp"
-                        android:clickable="true"
-                        android:focusable="true"
                         app:cardCornerRadius="12dp">
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -248,14 +237,13 @@
                                 android:id="@+id/tv_absent_count"
                                 style="@style/DashboardCardValue"
                                 android:textColor="@color/status_unpaid_red"
-                                tools:text="12" />
+                                tools:text="15" />
                             <TextView
                                 style="@style/DashboardCardTitle"
                                 android:text="Absent" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <!-- Not Marked -->
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/not_marked_card_section"
                         android:layout_width="0dp"
@@ -275,7 +263,7 @@
                                 android:id="@+id/tv_not_marked_count"
                                 style="@style/DashboardCardValue"
                                 android:textColor="?attr/colorOnSurfaceVariant"
-                                tools:text="10" />
+                                tools:text="5" />
                             <TextView
                                 style="@style/DashboardCardTitle"
                                 android:text="Not Marked" />
@@ -283,27 +271,99 @@
                     </com.google.android.material.card.MaterialCardView>
                 </LinearLayout>
 
-                <!-- Student Distribution Chart -->
+                <!-- NEW SECTION: Teacher Attendance Summary (Replaces Bar Chart) -->
                 <TextView
                     style="@style/DashboardSectionHeader"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
                     android:layout_marginTop="16dp"
-                    android:text="Students per Class" />
+                    android:text="Teacher Attendance (Today)" />
 
-                <com.google.android.material.card.MaterialCardView
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="300dp"
-                    android:layout_margin="16dp"
-                    app:cardElevation="2dp"
-                    app:cardCornerRadius="12dp">
-                    <com.github.mikephil.charting.charts.BarChart
-                        android:id="@+id/bar_chart_class_distribution"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:padding="12dp" />
-                </com.google.android.material.card.MaterialCardView>
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="8dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="24dp"
+                    android:baselineAligned="false">
+
+                    <!-- Teacher Present -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/teacher_present_card"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_margin="8dp"
+                        app:cardCornerRadius="12dp">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="16dp">
+                            <TextView
+                                android:id="@+id/tv_teacher_present_count"
+                                style="@style/DashboardCardValue"
+                                android:textColor="@color/status_paid_green"
+                                tools:text="7" />
+                            <TextView
+                                style="@style/DashboardCardTitle"
+                                android:text="Present" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Teacher Absent -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/teacher_absent_card"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_margin="8dp"
+                        app:cardCornerRadius="12dp">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="16dp">
+                            <TextView
+                                android:id="@+id/tv_teacher_absent_count"
+                                style="@style/DashboardCardValue"
+                                android:textColor="@color/status_unpaid_red"
+                                tools:text="1" />
+                            <TextView
+                                style="@style/DashboardCardTitle"
+                                android:text="Absent" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Teacher Not Marked -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/teacher_not_marked_card"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_margin="8dp"
+                        app:cardCornerRadius="12dp">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:padding="16dp">
+                            <TextView
+                                android:id="@+id/tv_teacher_not_marked_count"
+                                style="@style/DashboardCardValue"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                tools:text="0" />
+                            <TextView
+                                style="@style/DashboardCardTitle"
+                                android:text="Not Marked" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
 
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>

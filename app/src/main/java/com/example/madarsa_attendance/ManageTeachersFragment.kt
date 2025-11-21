@@ -1,25 +1,22 @@
 package com.example.madarsa_attendance
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.example.madarsa_attendance.TeacherWithStudentCount
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.QuerySnapshot
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -28,198 +25,218 @@ import java.util.Locale
 
 class ManageTeachersFragment : Fragment() {
 
-    private companion object {
-        private const val TAG = "ManageTeachersFragment"
-    }
-
-    private lateinit var recyclerViewManageTeachers: RecyclerView
-    private lateinit var manageTeachersAdapter: ManageTeachersAdapter
-    private lateinit var fabAddTeacher: ExtendedFloatingActionButton
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var adapter: ManageTeachersAdapter
     private lateinit var progressBar: ProgressBar
     private lateinit var tvNoTeachers: TextView
-    private lateinit var db: FirebaseFirestore
-    private var currentOrganizationId: String? = null
+    private lateinit var fabAddTeacher: ExtendedFloatingActionButton
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+
+    private val db = FirebaseFirestore.getInstance()
+    private var organizationId: String? = null
     private val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-    private val teacherDisplayList = mutableListOf<TeacherSpinnerItem>()
-
-    private val teacherActionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (!isAdded) return@registerForActivityResult
-        if (result.resultCode == Activity.RESULT_OK) {
-            Log.d(TAG, "Add/Edit Teacher successful, reloading teachers.")
-            loadTeachers()
-        }
-        if (::fabAddTeacher.isInitialized) {
-            fabAddTeacher.shrink()
-        }
-    }
-
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        // The layout file name seems to be activity_manage_teachers_fragment.xml based on your code
-        return inflater.inflate(R.layout.activity_manage_teachers_fragment, container, false)
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        val view = inflater.inflate(R.layout.activity_manage_teachers_fragment, container, false)
+        organizationId = FirebaseAuthManager.getOrganizationId(requireContext())
+        return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        db = FirebaseFirestore.getInstance()
-        currentOrganizationId = FirebaseAuthManager.getOrganizationId(requireContext())
-
-        if (currentOrganizationId == null) {
-            Toast.makeText(context, "Organization information missing. Please log in.", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        recyclerViewManageTeachers = view.findViewById(R.id.recyclerViewManageTeachers)
-        fabAddTeacher = view.findViewById(R.id.fabAddTeacher)
-        progressBar = view.findViewById(R.id.progressBarManageTeachers)
-        tvNoTeachers = view.findViewById(R.id.tvNoTeachersManage)
-
+        setupViews(view)
         setupRecyclerView()
-        setupFabInteraction()
-
-        fabAddTeacher.shrink()
-    }
-
-    override fun onResume() {
-        super.onResume()
         loadTeachers()
     }
 
-    private fun setupFabInteraction() {
+    private fun setupViews(view: View) {
+        recyclerView = view.findViewById(R.id.recyclerViewManageTeachers)
+        progressBar = view.findViewById(R.id.progressBarManageTeachers)
+        tvNoTeachers = view.findViewById(R.id.tvNoTeachersManage)
+        fabAddTeacher = view.findViewById(R.id.fabAddTeacher)
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout_teachers)
+
         fabAddTeacher.setOnClickListener {
-            if (currentOrganizationId == null) {
-                Toast.makeText(context, "Cannot add teacher: Organization ID missing.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            val intent = Intent(requireContext(), AddTeacherActivity::class.java)
-            teacherActionLauncher.launch(intent)
+            startActivity(Intent(activity, AddTeacherActivity::class.java))
+        }
+
+        swipeRefreshLayout.setOnRefreshListener {
+            loadTeachers()
         }
     }
 
     private fun setupRecyclerView() {
-        manageTeachersAdapter = ManageTeachersAdapter(
-            teachers = emptyList(),
-            onTeacherCardClick = { selectedTeacher ->
-                val intent = Intent(requireContext(), TeacherOptionsActivity::class.java).apply {
-                    putExtra("TEACHER_ID", selectedTeacher.id)
-                    putExtra("TEACHER_NAME", selectedTeacher.name)
-                    putExtra("TEACHER_IMAGE_URL", selectedTeacher.profileImageUrl)
-
-                    putExtra(TeacherOptionsActivity.EXTRA_USER_ROLE, TeacherOptionsActivity.ROLE_ADMIN)
-                }
-                startActivity(intent)
+        adapter = ManageTeachersAdapter(
+            emptyList(),
+            onTeacherCardClick = { teacher ->
+                // Single click opens the class options (Attendance, Students, etc.)
+                openTeacherOptions(teacher)
             },
-            // --- THIS IS THE FIX ---
-            // Implement the long click listener to show the attendance dialog
             onTeacherCardLongClick = { teacher ->
-                showAttendanceDialog(teacher)
+                // --- FIX: Long press now opens simple Present/Absent dialog ---
+                showQuickAttendanceDialog(teacher)
             },
-            // --- END OF FIX ---
-            onEditTeacherClick = { selectedTeacher ->
-                val intent = Intent(requireContext(), EditTeacherActivity::class.java).apply {
-                    putExtra("TEACHER_ID", selectedTeacher.id)
-                }
-                teacherActionLauncher.launch(intent)
-            },
-            onDeleteTeacherClick = { selectedTeacher ->
-                (requireActivity() as MainActivity).confirmDeleteTeacher(selectedTeacher)
-            }
+            onEditTeacherClick = { teacher -> editTeacher(teacher) },
+            onDeleteTeacherClick = { teacher -> confirmDeleteTeacher(teacher) }
         )
-        recyclerViewManageTeachers.layoutManager = LinearLayoutManager(requireContext())
-        recyclerViewManageTeachers.adapter = manageTeachersAdapter
+        recyclerView.layoutManager = LinearLayoutManager(context)
+        recyclerView.adapter = adapter
     }
 
-    private fun showAttendanceDialog(teacher: TeacherSpinnerItem) {
+    // --- NEW FUNCTION: Simple Dialog for Present/Absent ---
+    private fun showQuickAttendanceDialog(teacher: TeacherWithStudentCount) {
         val options = arrayOf("Mark Present", "Mark Absent")
-        AlertDialog.Builder(requireContext())
-            .setTitle("Mark Today's Attendance for ${teacher.name}")
+        AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
+            .setTitle("Mark Attendance: ${teacher.name}")
             .setItems(options) { _, which ->
                 val status = if (which == 0) "Present" else "Absent"
                 markTeacherAttendance(teacher, status)
             }
-            .setNegativeButton("Cancel", null)
             .show()
     }
 
-    private fun markTeacherAttendance(teacher: TeacherSpinnerItem, status: String) {
-        if (currentOrganizationId == null) return
+    // --- NEW FUNCTION: Save the attendance to Firestore ---
+    private fun markTeacherAttendance(teacher: TeacherWithStudentCount, status: String) {
+        if (organizationId == null) return
+
         val loadingDialog = StatusDialogFragment.newInstance(true, "Saving...").apply { isCancelable = false }
         loadingDialog.show(parentFragmentManager, "savingAttendance")
 
         lifecycleScope.launch {
             try {
-                val query = db.collection("organizations").document(currentOrganizationId!!)
+                // Check if a record already exists for today
+                val query = db.collection("organizations").document(organizationId!!)
                     .collection("teacherAttendance")
                     .whereEqualTo("teacherId", teacher.id)
                     .whereEqualTo("date", todayDateStr)
                     .limit(1)
                     .get().await()
 
-                val attendanceRecord = TeacherAttendanceRecord(
-                    teacherId = teacher.id,
-                    teacherName = teacher.name,
-                    date = todayDateStr,
-                    status = status,
-                    organizationId = currentOrganizationId!!
+                val attendanceRecord = hashMapOf(
+                    "teacherId" to teacher.id,
+                    "teacherName" to teacher.name,
+                    "date" to todayDateStr,
+                    "status" to status,
+                    "organizationId" to organizationId!!
                 )
 
                 if (query.isEmpty) {
-                    db.collection("organizations").document(currentOrganizationId!!)
+                    // Create new record
+                    db.collection("organizations").document(organizationId!!)
                         .collection("teacherAttendance").add(attendanceRecord).await()
                 } else {
+                    // Update existing record
                     val docId = query.documents[0].id
-                    db.collection("organizations").document(currentOrganizationId!!)
+                    db.collection("organizations").document(organizationId!!)
                         .collection("teacherAttendance").document(docId).set(attendanceRecord).await()
                 }
 
                 loadingDialog.dismiss()
-                StatusDialogFragment.newInstance(true, "Attendance marked as $status").show(parentFragmentManager, "successDialog")
+                StatusDialogFragment.newInstance(true, "${teacher.name} marked $status").show(parentFragmentManager, "successDialog")
 
             } catch (e: Exception) {
                 loadingDialog.dismiss()
-                StatusDialogFragment.newInstance(false, "Error: ${e.message}").show(parentFragmentManager, "errorDialog")
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    public fun loadTeachers() {
-        if (!isAdded || currentOrganizationId == null) return
+    private fun openTeacherOptions(teacher: TeacherWithStudentCount) {
+        val intent = Intent(activity, TeacherOptionsActivity::class.java).apply {
+            putExtra(TeacherOptionsActivity.EXTRA_TEACHER_ID, teacher.id)
+            putExtra(TeacherOptionsActivity.EXTRA_TEACHER_NAME, teacher.name)
+            putExtra(TeacherOptionsActivity.EXTRA_TEACHER_IMAGE_URL, teacher.profileImageUrl)
+            putExtra(TeacherOptionsActivity.EXTRA_USER_ROLE, "admin")
+        }
+        startActivity(intent)
+    }
+
+    fun loadTeachers() {
+        if (organizationId == null) {
+            Toast.makeText(context, "Organization ID not found.", Toast.LENGTH_SHORT).show()
+            return
+        }
         progressBar.visibility = View.VISIBLE
         tvNoTeachers.visibility = View.GONE
-        recyclerViewManageTeachers.visibility = View.GONE
+        recyclerView.visibility = View.GONE
 
-        db.collection("organizations").document(currentOrganizationId!!)
-            .collection("teachers")
-            .orderBy("teacherName", Query.Direction.ASCENDING)
-            .get()
-            .addOnSuccessListener { querySnapshot: QuerySnapshot? ->
-                if (!isAdded) return@addOnSuccessListener
-                progressBar.visibility = View.GONE
-                teacherDisplayList.clear()
-                if (querySnapshot != null && !querySnapshot.isEmpty) {
-                    querySnapshot.documents.forEach { doc ->
-                        teacherDisplayList.add(
-                            TeacherSpinnerItem(
-                                id = doc.id,
-                                name = doc.getString("teacherName") ?: "N/A",
-                                profileImageUrl = doc.getString("profileImageUrl")
-                            )
-                        )
-                    }
-                    recyclerViewManageTeachers.visibility = View.VISIBLE
-                } else {
+        lifecycleScope.launch {
+            try {
+                val teachersSnapshot = db.collection("organizations").document(organizationId!!)
+                    .collection("teachers").get().await()
+                val teachersList = teachersSnapshot.toObjects(Teacher::class.java)
+
+                if (teachersList.isEmpty()) {
+                    tvNoTeachers.visibility = View.VISIBLE
+                    adapter.updateData(emptyList())
+                    progressBar.visibility = View.GONE
+                    swipeRefreshLayout.isRefreshing = false
+                    return@launch
+                }
+
+                val studentsSnapshot = db.collection("organizations").document(organizationId!!)
+                    .collection("students").whereEqualTo("isActive", true).get().await()
+                val studentsList = studentsSnapshot.toObjects(Student::class.java)
+
+                val studentsByTeacher = studentsList.groupBy { it.teacherId }
+
+                val teachersWithCounts = teachersList.map { teacher ->
+                    val studentCount = studentsByTeacher[teacher.teacherId]?.size ?: 0
+                    TeacherWithStudentCount(
+                        id = teacher.teacherId,
+                        name = teacher.teacherName,
+                        profileImageUrl = teacher.profileImageUrl,
+                        studentCount = studentCount
+                    )
+                }
+
+                adapter.updateData(teachersWithCounts)
+                recyclerView.visibility = View.VISIBLE
+
+            } catch (e: Exception) {
+                if(isAdded) {
+                    tvNoTeachers.text = "Failed to load teachers."
                     tvNoTeachers.visibility = View.VISIBLE
                 }
-                manageTeachersAdapter.updateData(teacherDisplayList)
+            } finally {
+                if(isAdded) {
+                    progressBar.visibility = View.GONE
+                    swipeRefreshLayout.isRefreshing = false
+                }
+            }
+        }
+    }
+
+    private fun editTeacher(teacher: TeacherWithStudentCount) {
+        val intent = Intent(activity, EditTeacherActivity::class.java).apply {
+            putExtra("TEACHER_ID", teacher.id)
+        }
+        startActivity(intent)
+    }
+
+    private fun confirmDeleteTeacher(teacher: TeacherWithStudentCount) {
+        AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
+            .setTitle("Delete Teacher")
+            .setMessage("Are you sure you want to delete ${teacher.name}? This will also delete all associated students and data!")
+            .setPositiveButton("Delete") { _, _ -> deleteTeacher(teacher) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun deleteTeacher(teacher: TeacherWithStudentCount) {
+        if (organizationId == null) return
+        db.collection("organizations").document(organizationId!!)
+            .collection("teachers").document(teacher.id)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(context, "Teacher deleted.", Toast.LENGTH_SHORT).show()
+                loadTeachers()
             }
             .addOnFailureListener { e ->
-                if (isAdded) {
-                    progressBar.visibility = View.GONE
-                    tvNoTeachers.text = "Error loading teachers."
-                    tvNoTeachers.visibility = View.VISIBLE
-                    manageTeachersAdapter.updateData(emptyList())
-                }
+                Toast.makeText(context, "Error deleting teacher: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 }

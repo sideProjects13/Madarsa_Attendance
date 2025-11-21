@@ -23,36 +23,58 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val TAG = "DashboardViewModel"
     private val DEFAULT_ABSENCE_THRESHOLD = 3
 
-    // LiveData declarations (Unchanged)
+    // --- Loading States ---
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
+
+    // [RESTORED] This was missing and caused the error in QuickFeesDialogFragment
     private val _isStudentListLoading = MutableLiveData<Boolean>()
     val isStudentListLoading: LiveData<Boolean> = _isStudentListLoading
+
+    // --- Dashboard Counts ---
     private val _totalStudents = MutableLiveData<Long>()
     val totalStudents: LiveData<Long> = _totalStudents
     private val _totalTeachers = MutableLiveData<Long>()
     val totalTeachers: LiveData<Long> = _totalTeachers
     private val _totalInactiveStudents = MutableLiveData<Int>()
     val totalInactiveStudents: LiveData<Int> = _totalInactiveStudents
+
+    // --- High Absence List ---
     private val _highAbsenceStudents = MutableLiveData<List<DashboardStudentItem>>()
     val highAbsenceStudents: LiveData<List<DashboardStudentItem>> = _highAbsenceStudents
-    private val _classDistribution = MutableLiveData<Map<String, Int>>()
-    val classDistribution: LiveData<Map<String, Int>> = _classDistribution
+
+    // --- Teacher Attendance Counts (New) ---
+    private val _teacherPresentCount = MutableLiveData<Int>()
+    val teacherPresentCount: LiveData<Int> = _teacherPresentCount
+    private val _teacherAbsentCount = MutableLiveData<Int>()
+    val teacherAbsentCount: LiveData<Int> = _teacherAbsentCount
+    private val _teacherNotMarkedCount = MutableLiveData<Int>()
+    val teacherNotMarkedCount: LiveData<Int> = _teacherNotMarkedCount
+
+    // --- Student Attendance Counts (Existing) ---
     private val _presentCount = MutableLiveData<Int>()
     val presentCount: LiveData<Int> = _presentCount
     private val _absentCount = MutableLiveData<Int>()
     val absentCount: LiveData<Int> = _absentCount
     private val _notMarkedCount = MutableLiveData<Int>()
     val notMarkedCount: LiveData<Int> = _notMarkedCount
+
     private val _absentStudents = MutableLiveData<List<DashboardStudentItem>>()
     val absentStudents: LiveData<List<DashboardStudentItem>> = _absentStudents
-    private val _allStudentsList = MutableLiveData<List<StudentDetailsItem>>()
-    val allStudentsList: LiveData<List<StudentDetailsItem>> get() = _allStudentsList
     private val _unmarkedTeachers = MutableLiveData<List<Teacher>>()
     val unmarkedTeachers: LiveData<List<Teacher>> = _unmarkedTeachers
 
+    // --- Chart Data ---
+    private val _classDistribution = MutableLiveData<Map<String, Int>>()
+    val classDistribution: LiveData<Map<String, Int>> = _classDistribution
+
+    // --- Shared Data ---
+    private val _allStudentsList = MutableLiveData<List<StudentDetailsItem>>()
+    val allStudentsList: LiveData<List<StudentDetailsItem>> get() = _allStudentsList
+
     private val organizationId: String? = FirebaseAuthManager.getOrganizationId(application.applicationContext)
     private var isDashboardDataLoaded = false
+    // [RESTORED] Flag to prevent double loading
     private var isStudentListFetchInProgress = false
 
     init {
@@ -61,35 +83,22 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun loadInitialData() {
         if (organizationId != null) {
-            if (!isDashboardDataLoaded) {
-                refreshData()
-            }
-            if (_allStudentsList.value.isNullOrEmpty()) {
-                fetchStudentListForSearch(forceRefresh = false)
-            }
+            if (!isDashboardDataLoaded) refreshData()
+            if (_allStudentsList.value.isNullOrEmpty()) fetchStudentListForSearch(false)
         }
     }
 
     fun refreshData() {
         if (organizationId == null) {
-            Log.e(TAG, "Cannot refresh data: Organization ID is null.")
             _isLoading.postValue(false)
             return
         }
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val orgDocDeferred = async {
-                    db.collection("organizations").document(organizationId).get().await()
-                }
-                val allTeachersDeferred = async {
-                    db.collection("organizations").document(organizationId)
-                        .collection("teachers").get().await().toObjects<Teacher>()
-                }
-                val allStudentsDeferred = async {
-                    db.collection("organizations").document(organizationId)
-                        .collection("students").get().await().toObjects<StudentDetailsItem>()
-                }
+                val orgDocDeferred = async { db.collection("organizations").document(organizationId).get().await() }
+                val allTeachersDeferred = async { db.collection("organizations").document(organizationId).collection("teachers").get().await().toObjects<Teacher>() }
+                val allStudentsDeferred = async { db.collection("organizations").document(organizationId).collection("students").get().await().toObjects<StudentDetailsItem>() }
 
                 val orgDocument = orgDocDeferred.await()
                 val allTeachers = allTeachersDeferred.await()
@@ -97,7 +106,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
                 val allActiveStudents = allStudents.filter { it.isActive }
                 val allInactiveStudents = allStudents.filter { !it.isActive }
-
                 val orgData = orgDocument.toObject(Organization::class.java)
                 val highAbsenceThreshold = orgData?.highAbsenceThreshold ?: DEFAULT_ABSENCE_THRESHOLD
 
@@ -105,13 +113,15 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 _totalTeachers.postValue(allTeachers.size.toLong())
                 _totalInactiveStudents.postValue(allInactiveStudents.size)
 
+                // Fetch data in parallel
                 val classDistDeferred = async { fetchClassDistribution(allActiveStudents) }
-                val attendanceDeferred = async { fetchTodaysAttendanceStats(organizationId, allActiveStudents, allTeachers) }
+                val studentAttendanceDeferred = async { fetchTodaysStudentAttendance(organizationId, allActiveStudents, allTeachers) }
+                val teacherAttendanceDeferred = async { fetchTodaysTeacherAttendance(organizationId, allTeachers) }
                 val highAbsenceDeferred = async { calculateHighAbsenceStats(organizationId, allActiveStudents, highAbsenceThreshold) }
 
                 classDistDeferred.await()
-                attendanceDeferred.await()
-
+                studentAttendanceDeferred.await()
+                teacherAttendanceDeferred.await()
                 _highAbsenceStudents.postValue(highAbsenceDeferred.await() ?: emptyList())
 
                 isDashboardDataLoaded = true
@@ -123,16 +133,17 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // [RESTORED] This function now correctly updates _isStudentListLoading
     fun fetchStudentListForSearch(forceRefresh: Boolean) {
         if (organizationId == null || isStudentListFetchInProgress || (!forceRefresh && !_allStudentsList.value.isNullOrEmpty())) {
             return
         }
         isStudentListFetchInProgress = true
         _isStudentListLoading.postValue(true)
+
         db.collection("organizations").document(organizationId)
             .collection("students").whereEqualTo("isActive", true)
-            .orderBy("studentName")
-            .get()
+            .orderBy("studentName").get()
             .addOnSuccessListener { documents ->
                 _allStudentsList.postValue(documents.toObjects())
             }
@@ -145,9 +156,52 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             }
     }
 
-    private suspend fun fetchTodaysAttendanceStats(orgId: String, allActiveStudents: List<StudentDetailsItem>, allTeachers: List<Teacher>) {
+    private suspend fun fetchTodaysTeacherAttendance(orgId: String, allTeachers: List<Teacher>) {
         try {
-            // Create a Set of active student IDs and a Map of their details for very fast lookups.
+            val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val attendanceQuery = db.collection("organizations").document(orgId)
+                .collection("teacherAttendance")
+                .whereEqualTo("date", todayDateStr)
+                .get().await()
+
+            var present = 0
+            var absent = 0
+            val markedTeacherIds = mutableSetOf<String>()
+
+            for (doc in attendanceQuery.documents) {
+                val teacherId = doc.getString("teacherId") ?: continue
+                markedTeacherIds.add(teacherId)
+
+                val status = doc.getString("status")
+                val classesTaken = doc.getLong("classesTaken")?.toInt() ?: 0
+                val classesMissed = doc.getLong("classesMissed")?.toInt() ?: 0
+
+                val derivedStatus = when {
+                    status != null && status.isNotEmpty() -> status
+                    classesTaken > 0 -> "Present"
+                    classesMissed > 0 -> "Absent"
+                    else -> "Present"
+                }
+
+                if (derivedStatus == "Present") present++ else absent++
+            }
+
+            val notMarked = allTeachers.size - markedTeacherIds.size
+
+            _teacherPresentCount.postValue(present)
+            _teacherAbsentCount.postValue(absent)
+            _teacherNotMarkedCount.postValue(notMarked.coerceAtLeast(0))
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching teacher attendance stats", e)
+            _teacherPresentCount.postValue(0)
+            _teacherAbsentCount.postValue(0)
+            _teacherNotMarkedCount.postValue(allTeachers.size)
+        }
+    }
+
+    private suspend fun fetchTodaysStudentAttendance(orgId: String, allActiveStudents: List<StudentDetailsItem>, allTeachers: List<Teacher>) {
+        try {
             val activeStudentIds = allActiveStudents.map { it.id }.toSet()
             val activeStudentsMap = allActiveStudents.associateBy { it.id }
             val totalActiveStudentsCount = activeStudentIds.size
@@ -166,26 +220,20 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 val studentAttendances = doc.get("studentAttendances") as? List<Map<String, Any>>
                 studentAttendances?.forEach { studentMap ->
                     val studentId = studentMap["studentId"] as? String
-
-                    // Only count attendance if the student is in our active list.
                     if (studentId != null && activeStudentIds.contains(studentId)) {
                         when (studentMap["status"] as? String) {
                             "Present" -> present++
                             "Absent" -> {
                                 absent++
-                                // --- THIS IS THE FIX ---
-                                // Look up the student in our fresh map to get the LATEST name and details.
                                 val freshStudentDetails = activeStudentsMap[studentId]
                                 absentStudentItems.add(
                                     DashboardStudentItem(
                                         id = studentId,
-                                        // Use the fresh name, fallback to the old name if lookup fails.
                                         name = freshStudentDetails?.studentName ?: studentMap["studentName"] as? String ?: "Unknown",
-                                        imageUrl = freshStudentDetails?.profileImageUrl, // Get the latest image URL
+                                        imageUrl = freshStudentDetails?.profileImageUrl,
                                         subtitle = doc.getString("teacherName")
                                     )
                                 )
-                                // --- END OF FIX ---
                             }
                         }
                     }
@@ -201,12 +249,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             _unmarkedTeachers.postValue(unmarked)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching attendance stats", e)
-            _presentCount.postValue(0)
-            _absentCount.postValue(0)
-            _notMarkedCount.postValue(allActiveStudents.size)
-            _absentStudents.postValue(emptyList())
-            _unmarkedTeachers.postValue(allTeachers)
+            Log.e(TAG, "Error fetching student attendance stats", e)
         }
     }
 
@@ -222,16 +265,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private suspend fun calculateHighAbsenceStats(
-        orgId: String,
-        activeStudents: List<StudentDetailsItem>,
-        threshold: Int
-    ): List<DashboardStudentItem> {
+    private suspend fun calculateHighAbsenceStats(orgId: String, activeStudents: List<StudentDetailsItem>, threshold: Int): List<DashboardStudentItem> {
         try {
             val calendar = Calendar.getInstance()
             val year = calendar.get(Calendar.YEAR)
             val month = calendar.get(Calendar.MONTH) + 1
-
             val firstDayOfMonth = String.format(Locale.getDefault(), "%d-%02d-01", year, month)
             val lastDayOfMonth = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
 
@@ -247,26 +285,16 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 studentAttendances?.forEach { studentMap ->
                     if (studentMap["status"] as? String == "Absent") {
                         val studentId = studentMap["studentId"] as? String
-                        if (studentId != null) {
-                            absentCounts[studentId] = (absentCounts[studentId] ?: 0) + 1
-                        }
+                        if (studentId != null) absentCounts[studentId] = (absentCounts[studentId] ?: 0) + 1
                     }
                 }
             }
-
             val highAbsenceStudentIds = absentCounts.filterValues { it >= threshold }.keys
             if (highAbsenceStudentIds.isEmpty()) return emptyList()
-
             val activeStudentsMap = activeStudents.associateBy { it.id }
-
             return highAbsenceStudentIds.mapNotNull { studentId ->
                 activeStudentsMap[studentId]?.let { studentDetails ->
-                    DashboardStudentItem(
-                        id = studentId,
-                        name = studentDetails.studentName ?: "N/A",
-                        imageUrl = studentDetails.profileImageUrl,
-                        subtitle = "${absentCounts[studentId]} Absents this month"
-                    )
+                    DashboardStudentItem(studentId, studentDetails.studentName ?: "N/A", studentDetails.profileImageUrl, "${absentCounts[studentId]} Absents this month")
                 }
             }
         } catch (e: Exception) {

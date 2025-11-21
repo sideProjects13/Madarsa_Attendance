@@ -7,7 +7,6 @@
     android:layout_height="match_parent"
     tools:context=".TakeAttendanceFragment">
 
-    <!-- The AppBarLayout remains unchanged -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
@@ -15,6 +14,7 @@
         android:background="?attr/colorSurface"
         app:elevation="2dp">
 
+        <!-- Header Section -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -44,6 +44,24 @@
                 app:tint="?attr/colorPrimary" />
 
         </LinearLayout>
+
+        <!-- ============================================= -->
+        <!-- START: NEW SEARCH VIEW ADDED                  -->
+        <!-- ============================================= -->
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/searchViewStudents"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/search_view_bg"
+            app:iconifiedByDefault="false"
+            app:queryHint="Search student by name..." />
+        <!-- You will need to create a drawable file named search_view_bg.xml for the background -->
+        <!-- ============================================= -->
+        <!-- END: NEW SEARCH VIEW ADDED                    -->
+        <!-- ============================================= -->
+
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -74,14 +92,11 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvAttendanceDate" />
 
-        <!-- ============================================================= -->
-        <!-- START: SWIPE REFRESH LAYOUT                                   -->
-        <!-- ============================================================= -->
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipe_refresh_layout_attendance"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            app:layout_constraintBottom_toTopOf="@+id/btnSaveAttendance"
+            app:layout_constraintBottom_toTopOf="@+id/bottom_bar"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/header_divider">
@@ -126,23 +141,64 @@
             </FrameLayout>
 
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-        <!-- ============================================================= -->
-        <!-- END: SWIPE REFRESH LAYOUT                                     -->
-        <!-- ============================================================= -->
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSaveAttendance"
-
+        <!-- ============================================= -->
+        <!-- START: MODIFIED BOTTOM BAR                    -->
+        <!-- ============================================= -->
+        <LinearLayout
+            android:id="@+id/bottom_bar"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="16dp"
-            android:paddingVertical="12dp"
-            android:text="@string/save_attendance"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="16dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintStart_toStartOf="parent">
+
+            <LinearLayout
+                android:id="@+id/layoutAttendanceStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <ImageView
+                    android:id="@+id/ivAttendanceStatusIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_check_circle"
+                    app:tint="?attr/colorPrimary"
+                    android:contentDescription="Status Icon"/>
+
+                <TextView
+                    android:id="@+id/tvAttendanceStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    tools:text="Attendance Saved"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="?attr/colorPrimary"/>
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveAttendance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingVertical="12dp"
+                android:text="@string/save_attendance" />
+        </LinearLayout>
+        <!-- ============================================= -->
+        <!-- END: MODIFIED BOTTOM BAR                      -->
+        <!-- ============================================= -->
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

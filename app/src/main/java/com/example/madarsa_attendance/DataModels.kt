@@ -175,10 +175,14 @@
 
     data class TeacherAttendanceRecord(
         @DocumentId val id: String = "",
-        val teacherId: String = "", // The ID from the 'teachers' collection
+        val teacherId: String = "",
         val teacherName: String = "",
         val date: String = "", // Format "YYYY-MM-DD"
         val status: String = "", // "Present", "Absent"
+        // --- ADD THESE TWO LINES ---
+        val classesTaken: Int = 0,
+        val classesMissed: Int = 0,
+        // ----------------------------
         val organizationId: String = ""
     )
 
@@ -236,3 +240,9 @@
         val fullResult: ExamResult // The complete document, needed for report generation
     )
 
+    data class TeacherWithStudentCount(
+        val id: String,
+        val name: String,
+        val profileImageUrl: String?,
+        val studentCount: Int
+    )

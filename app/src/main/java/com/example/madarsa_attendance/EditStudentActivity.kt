@@ -54,7 +54,6 @@ class EditStudentActivity : AppCompatActivity() {
 
     private companion object {
         private const val TAG = "EditStudentActivity"
-        // MODIFIED: Changed constant names for clarity
         private const val PERMISSION_REQUEST_CODE_STORAGE = 104
         private const val PERMISSION_REQUEST_CODE_CAMERA = 105
         private const val UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT = "BIBI_AYESHA_MASJID"
@@ -84,6 +83,11 @@ class EditStudentActivity : AppCompatActivity() {
     private lateinit var tilAlternateMobile: TextInputLayout
     private lateinit var etAddress: TextInputEditText
     private lateinit var tilAddress: TextInputLayout
+    // --- START: ADDED UI COMPONENTS FOR FEE ---
+    private lateinit var etMonthlyFee: TextInputEditText
+    private lateinit var tilMonthlyFee: TextInputLayout
+    // --- END: ADDED UI COMPONENTS FOR FEE ---
+
 
     // Backend
     private lateinit var db: FirebaseFirestore
@@ -93,7 +97,6 @@ class EditStudentActivity : AppCompatActivity() {
     private var imageUri: Uri? = null
     private var existingProfileImageUrl: String? = null
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
-    // ADDED: Launcher for taking a picture
     private lateinit var takePictureLauncher: ActivityResultLauncher<Intent>
     private var cameraImageUri: Uri? = null
 
@@ -139,6 +142,10 @@ class EditStudentActivity : AppCompatActivity() {
         tilAlternateMobile = findViewById(R.id.tilAlternateMobileEdit)
         etAddress = findViewById(R.id.etAddressEdit)
         tilAddress = findViewById(R.id.tilAddressEdit)
+        // --- START: INITIALIZE FEE VIEWS ---
+        etMonthlyFee = findViewById(R.id.etMonthlyFeeEdit)
+        tilMonthlyFee = findViewById(R.id.tilMonthlyFeeEdit)
+        // --- END: INITIALIZE FEE VIEWS ---
     }
 
     private fun setupListeners() {
@@ -155,7 +162,6 @@ class EditStudentActivity : AppCompatActivity() {
             }
         }
 
-        // ADDED: Initialize the take picture launcher
         takePictureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
                 cameraImageUri?.let { uri ->
@@ -165,7 +171,6 @@ class EditStudentActivity : AppCompatActivity() {
             }
         }
 
-        // MODIFIED: The click listener now shows a dialog to choose between camera and gallery
         val imageSelectionClickListener = View.OnClickListener { showImageSourceDialog() }
         btnSelectImage.setOnClickListener(imageSelectionClickListener)
         cardViewProfileImage.setOnClickListener(imageSelectionClickListener)
@@ -183,6 +188,186 @@ class EditStudentActivity : AppCompatActivity() {
         btnSaveChanges.setOnClickListener { validateAndUpdateStudentDetails() }
     }
 
+    private fun loadStudentDetails() {
+        if (studentId == null || currentOrganizationId == null) return
+        setInputsEnabled(false, isInitialLoad = true)
+
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId!!).get().addOnSuccessListener { document ->
+                setInputsEnabled(true)
+                if (document != null && document.exists()) {
+                    val student = document.toObject(StudentDetailsItem::class.java)
+                    if (student != null) {
+                        etStudentName.setText(student.studentName)
+                        etParentName.setText(student.parentName)
+                        etParentMobile.setText(student.parentMobileNumber)
+                        etRegNo.setText(student.regNo)
+                        etBirthDate.setText(student.birthDate)
+                        etAdmissionDate.setText(student.admissionDate)
+                        etAlternateMobile.setText(student.alternateMobileNumber)
+                        etAddress.setText(student.address)
+
+                        // --- START: LOAD EXISTING MONTHLY FEE ---
+                        // This will handle null fees and format it nicely (e.g., "1000" instead of "1000.0")
+                        student.monthlyFee?.let { fee ->
+                            etMonthlyFee.setText(String.format(Locale.US, "%.0f", fee))
+                        }
+                        // --- END: LOAD EXISTING MONTHLY FEE ---
+
+                        when (student.gender) {
+                            "Male" -> rgGender.check(R.id.rbMaleEdit)
+                            "Female" -> rgGender.check(R.id.rbFemaleEdit)
+                        }
+
+                        existingProfileImageUrl = student.profileImageUrl
+                        if (!existingProfileImageUrl.isNullOrEmpty()) {
+                            Glide.with(this).load(existingProfileImageUrl).circleCrop().placeholder(R.drawable.student).into(ivProfileImage)
+                        } else {
+                            ivProfileImage.setImageResource(R.drawable.student)
+                        }
+                        tvCurrentTeacher.text = student.teacherName ?: currentTeacherNameFromIntent ?: "N/A"
+                    }
+                } else {
+                    Toast.makeText(this, "Student details not found.", Toast.LENGTH_SHORT).show(); finish()
+                }
+            }.addOnFailureListener { e ->
+                setInputsEnabled(true)
+                Toast.makeText(this, "Error loading details: ${e.message}", Toast.LENGTH_LONG).show(); finish()
+            }
+    }
+
+    private fun validateAndUpdateStudentDetails() {
+        tilStudentName.error = null
+        tilAlternateMobile.error = null
+        tilBirthDate.error = null
+        tilAdmissionDate.error = null
+        // --- START: ADDED VALIDATION FOR FEE ---
+        tilMonthlyFee.error = null
+        // --- END: ADDED VALIDATION FOR FEE ---
+
+        var isValid = true
+
+        if (etStudentName.text.toString().trim().isEmpty()) {
+            tilStudentName.error = "Student name cannot be empty"
+            isValid = false
+        }
+        val alternateMobile = etAlternateMobile.text.toString().trim()
+        if (alternateMobile.isNotEmpty() && (alternateMobile.length != 10 || !alternateMobile.all { it.isDigit() })) {
+            tilAlternateMobile.error = "Enter a valid 10-digit number"
+            isValid = false
+        }
+
+        // --- START: ADDED FEE VALIDATION LOGIC ---
+        val monthlyFeeText = etMonthlyFee.text.toString().trim()
+        if (monthlyFeeText.isEmpty()) {
+            tilMonthlyFee.error = "Monthly fee cannot be empty"
+            isValid = false
+        } else {
+            val feeValue = monthlyFeeText.toDoubleOrNull()
+            if (feeValue == null || feeValue <= 0) {
+                tilMonthlyFee.error = "Enter a valid positive fee amount"
+                isValid = false
+            }
+        }
+        // --- END: ADDED FEE VALIDATION LOGIC ---
+
+        val birthDateStr = etBirthDate.text.toString().trim()
+        if (birthDateStr.isNotEmpty()) {
+            if (!isValidDateFormat(birthDateStr)) {
+                tilBirthDate.error = "Invalid format or date"; isValid = false
+            } else if (isDateInFuture(birthDateStr)) {
+                tilBirthDate.error = "Date cannot be in the future"; isValid = false
+            }
+        }
+        val admissionDateStr = etAdmissionDate.text.toString().trim()
+        if (admissionDateStr.isNotEmpty()) {
+            if (!isValidDateFormat(admissionDateStr)) {
+                tilAdmissionDate.error = "Invalid format or date"; isValid = false
+            } else if (isDateInFuture(admissionDateStr)) {
+                tilAdmissionDate.error = "Date cannot be in the future"; isValid = false
+            }
+        }
+
+        if (!isValid) return
+
+        if (currentOrganizationId == null) {
+            handleFailure("Cannot save: Organization ID is missing.")
+            return
+        }
+
+        setInputsEnabled(false)
+        if (imageUri != null) {
+            uploadImageAndUpdateStudent()
+        } else {
+            updateStudentInFirestore(existingProfileImageUrl)
+        }
+    }
+
+    private fun updateStudentInFirestore(imageUrl: String?) {
+        if (studentId == null || currentOrganizationId == null) return
+
+        val selectedGenderId = rgGender.checkedRadioButtonId
+        val gender = if (selectedGenderId != -1) findViewById<RadioButton>(selectedGenderId).text.toString() else null
+
+        val studentUpdates = mutableMapOf<String, Any?>(
+            "studentName" to etStudentName.text.toString().trim(),
+            "parentName" to etParentName.text.toString().trim(),
+            "parentMobileNumber" to etParentMobile.text.toString().trim(),
+            "regNo" to etRegNo.text.toString().trim(),
+            "gender" to gender,
+            "birthDate" to etBirthDate.text.toString().trim().ifEmpty { null },
+            "admissionDate" to etAdmissionDate.text.toString().trim().ifEmpty { null },
+            "lastUpdatedAt" to FieldValue.serverTimestamp(),
+            "alternateMobileNumber" to etAlternateMobile.text.toString().trim().ifEmpty { null },
+            "address" to etAddress.text.toString().trim().ifEmpty { null },
+            // --- START: ADDED FEE TO THE UPDATE MAP ---
+            "monthlyFee" to (etMonthlyFee.text.toString().trim().toDoubleOrNull() ?: 0.0)
+            // --- END: ADDED FEE TO THE UPDATE MAP ---
+        )
+
+        imageUrl?.let { studentUpdates["profileImageUrl"] = it }
+
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId!!)
+            .set(studentUpdates, SetOptions.merge())
+            .addOnSuccessListener {
+                StatusDialogFragment.newInstance(
+                    isSuccess = true,
+                    message = "Details Updated Successfully!",
+                    finishActivityOnDismiss = true
+                ).show(supportFragmentManager, "successDialog")
+                setResult(Activity.RESULT_OK)
+            }.addOnFailureListener { e ->
+                Log.e(TAG, "Error updating student details", e)
+                handleFailure("Failed to update details.")
+            }
+    }
+
+    private fun setInputsEnabled(enabled: Boolean, isInitialLoad: Boolean = false) {
+        if (isInitialLoad) {
+            progressBar.visibility = View.VISIBLE
+        } else {
+            progressBar.visibility = if (enabled) View.GONE else View.VISIBLE
+        }
+        btnSaveChanges.isEnabled = enabled
+        btnSelectImage.isEnabled = enabled
+        etStudentName.isEnabled = enabled
+        etParentName.isEnabled = enabled
+        etParentMobile.isEnabled = enabled
+        etRegNo.isEnabled = enabled
+        rgGender.isEnabled = enabled
+        etBirthDate.isEnabled = enabled
+        etAdmissionDate.isEnabled = enabled
+        etAlternateMobile.isEnabled = enabled
+        etAddress.isEnabled = enabled
+        cardViewProfileImage.isClickable = enabled
+        // --- START: ENABLE/DISABLE FEE INPUT ---
+        etMonthlyFee.isEnabled = enabled
+        // --- END: ENABLE/DISABLE FEE INPUT ---
+    }
+
+
+    // The following functions remain unchanged, but are included for completeness
     private fun isValidDateFormat(dateStr: String): Boolean {
         if (dateStr.isEmpty()) return true
         val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
@@ -229,9 +414,7 @@ class EditStudentActivity : AppCompatActivity() {
                 if (date != null) {
                     calendar.time = date
                 }
-            } catch (e: Exception) {
-                // If parsing fails, use current date
-            }
+            } catch (e: Exception) { /* Use current date on error */ }
         }
 
         yearPicker.minValue = 1950
@@ -261,7 +444,7 @@ class EditStudentActivity : AppCompatActivity() {
         yearPicker.setOnValueChangedListener(onValueChangeListener)
         monthPicker.setOnValueChangedListener(onValueChangeListener)
 
-        val dialog = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("Select Date")
             .setView(dialogView)
             .setPositiveButton("OK") { _, _ ->
@@ -273,98 +456,7 @@ class EditStudentActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .create()
-        dialog.show()
-    }
-
-    private fun loadStudentDetails() {
-        if (studentId == null || currentOrganizationId == null) return
-        setInputsEnabled(false, isInitialLoad = true)
-
-        db.collection("organizations").document(currentOrganizationId!!)
-            .collection("students").document(studentId!!).get().addOnSuccessListener { document ->
-                setInputsEnabled(true)
-                if (document != null && document.exists()) {
-                    val student = document.toObject(StudentDetailsItem::class.java)
-                    if (student != null) {
-                        etStudentName.setText(student.studentName)
-                        etParentName.setText(student.parentName)
-                        etParentMobile.setText(student.parentMobileNumber)
-                        etRegNo.setText(student.regNo)
-                        etBirthDate.setText(student.birthDate)
-                        etAdmissionDate.setText(student.admissionDate)
-                        etAlternateMobile.setText(student.alternateMobileNumber)
-                        etAddress.setText(student.address)
-
-                        when (student.gender) {
-                            "Male" -> rgGender.check(R.id.rbMaleEdit)
-                            "Female" -> rgGender.check(R.id.rbFemaleEdit)
-                        }
-
-                        existingProfileImageUrl = student.profileImageUrl
-                        if (!existingProfileImageUrl.isNullOrEmpty()) {
-                            Glide.with(this).load(existingProfileImageUrl).circleCrop().placeholder(R.drawable.student).into(ivProfileImage)
-                        } else {
-                            ivProfileImage.setImageResource(R.drawable.student)
-                        }
-                        tvCurrentTeacher.text = student.teacherName ?: currentTeacherNameFromIntent ?: "N/A"
-                    }
-                } else {
-                    Toast.makeText(this, "Student details not found.", Toast.LENGTH_SHORT).show(); finish()
-                }
-            }.addOnFailureListener { e ->
-                setInputsEnabled(true)
-                Toast.makeText(this, "Error loading details: ${e.message}", Toast.LENGTH_LONG).show(); finish()
-            }
-    }
-
-    private fun validateAndUpdateStudentDetails() {
-        tilStudentName.error = null
-        tilAlternateMobile.error = null
-        tilBirthDate.error = null
-        tilAdmissionDate.error = null
-
-        var isValid = true
-
-        if (etStudentName.text.toString().trim().isEmpty()) {
-            tilStudentName.error = "Student name cannot be empty"
-            isValid = false
-        }
-        val alternateMobile = etAlternateMobile.text.toString().trim()
-        if (alternateMobile.isNotEmpty() && (alternateMobile.length != 10 || !alternateMobile.all { it.isDigit() })) {
-            tilAlternateMobile.error = "Enter a valid 10-digit number"
-            isValid = false
-        }
-
-        val birthDateStr = etBirthDate.text.toString().trim()
-        if (birthDateStr.isNotEmpty()) {
-            if (!isValidDateFormat(birthDateStr)) {
-                tilBirthDate.error = "Invalid format or date"; isValid = false
-            } else if (isDateInFuture(birthDateStr)) {
-                tilBirthDate.error = "Date cannot be in the future"; isValid = false
-            }
-        }
-        val admissionDateStr = etAdmissionDate.text.toString().trim()
-        if (admissionDateStr.isNotEmpty()) {
-            if (!isValidDateFormat(admissionDateStr)) {
-                tilAdmissionDate.error = "Invalid format or date"; isValid = false
-            } else if (isDateInFuture(admissionDateStr)) {
-                tilAdmissionDate.error = "Date cannot be in the future"; isValid = false
-            }
-        }
-
-        if (!isValid) return
-
-        if (currentOrganizationId == null) {
-            handleFailure("Cannot save: Organization ID is missing.")
-            return
-        }
-
-        setInputsEnabled(false)
-        if (imageUri != null) {
-            uploadImageAndUpdateStudent()
-        } else {
-            updateStudentInFirestore(existingProfileImageUrl)
-        }
+            .show()
     }
 
     private fun uriToFile(uri: Uri): File {
@@ -384,10 +476,9 @@ class EditStudentActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val imageFile = uriToFile(imageUri!!)
-                // MODIFIED: Added a size constraint to ensure the image is under 100 KB
                 val compressedImageFile = Compressor.compress(this@EditStudentActivity, imageFile) {
                     quality(80)
-                    size(100 * 1024) // 100 KB
+                    size(100 * 1024)
                 }
                 MediaManager.get().upload(compressedImageFile.path)
                     .unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT)
@@ -413,43 +504,6 @@ class EditStudentActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateStudentInFirestore(imageUrl: String?) {
-        if (studentId == null || currentOrganizationId == null) return
-
-        val selectedGenderId = rgGender.checkedRadioButtonId
-        val gender = if (selectedGenderId != -1) findViewById<RadioButton>(selectedGenderId).text.toString() else null
-
-        val studentUpdates = mutableMapOf<String, Any?>(
-            "studentName" to etStudentName.text.toString().trim(),
-            "parentName" to etParentName.text.toString().trim(),
-            "parentMobileNumber" to etParentMobile.text.toString().trim(),
-            "regNo" to etRegNo.text.toString().trim(),
-            "gender" to gender,
-            "birthDate" to etBirthDate.text.toString().trim().ifEmpty { null },
-            "admissionDate" to etAdmissionDate.text.toString().trim().ifEmpty { null },
-            "lastUpdatedAt" to FieldValue.serverTimestamp(),
-            "alternateMobileNumber" to etAlternateMobile.text.toString().trim().ifEmpty { null },
-            "address" to etAddress.text.toString().trim().ifEmpty { null }
-        )
-
-        imageUrl?.let { studentUpdates["profileImageUrl"] = it }
-
-        db.collection("organizations").document(currentOrganizationId!!)
-            .collection("students").document(studentId!!)
-            .set(studentUpdates, SetOptions.merge())
-            .addOnSuccessListener {
-                StatusDialogFragment.newInstance(
-                    isSuccess = true,
-                    message = "Details Updated Successfully!",
-                    finishActivityOnDismiss = true
-                ).show(supportFragmentManager, "successDialog")
-                setResult(Activity.RESULT_OK)
-            }.addOnFailureListener { e ->
-                Log.e(TAG, "Error updating student details", e)
-                handleFailure("Failed to update details.")
-            }
-    }
-
     private fun handleFailure(message: String) {
         setInputsEnabled(true)
         StatusDialogFragment.newInstance(
@@ -458,28 +512,6 @@ class EditStudentActivity : AppCompatActivity() {
         ).show(supportFragmentManager, "failureDialog")
     }
 
-
-    private fun setInputsEnabled(enabled: Boolean, isInitialLoad: Boolean = false) {
-        if (isInitialLoad) {
-            progressBar.visibility = View.VISIBLE
-        } else {
-            progressBar.visibility = if (enabled) View.GONE else View.VISIBLE
-        }
-        btnSaveChanges.isEnabled = enabled
-        btnSelectImage.isEnabled = enabled
-        etStudentName.isEnabled = enabled
-        etParentName.isEnabled = enabled
-        etParentMobile.isEnabled = enabled
-        etRegNo.isEnabled = enabled
-        rgGender.isEnabled = enabled
-        etBirthDate.isEnabled = enabled
-        etAdmissionDate.isEnabled = enabled
-        etAlternateMobile.isEnabled = enabled
-        etAddress.isEnabled = enabled
-        cardViewProfileImage.isClickable = enabled
-    }
-
-    // ADDED: This function shows the dialog to choose between camera and gallery
     private fun showImageSourceDialog() {
         val options = arrayOf("Take Photo", "Choose from Gallery")
         AlertDialog.Builder(this)
@@ -493,7 +525,6 @@ class EditStudentActivity : AppCompatActivity() {
             .show()
     }
 
-    // MODIFIED: Renamed to checkStoragePermissions
     private fun checkStoragePermissions() {
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_IMAGES
@@ -507,7 +538,6 @@ class EditStudentActivity : AppCompatActivity() {
         }
     }
 
-    // ADDED: New function to check for camera permissions
     private fun checkCameraPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), PERMISSION_REQUEST_CODE_CAMERA)
@@ -516,7 +546,6 @@ class EditStudentActivity : AppCompatActivity() {
         }
     }
 
-    // MODIFIED: onRequestPermissionsResult now handles both storage and camera permissions
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
@@ -542,7 +571,6 @@ class EditStudentActivity : AppCompatActivity() {
         imagePickerLauncher.launch(intent)
     }
 
-    // ADDED: This function opens the camera to take a picture
     private fun openCamera() {
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
         var photoFile: File? = null
@@ -565,7 +593,6 @@ class EditStudentActivity : AppCompatActivity() {
         }
     }
 
-    // ADDED: This function creates a temporary file to store the captured image
     @Throws(IOException::class)
     private fun createImageFile(): File {
         val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())

@@ -9,7 +9,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Typeface
+import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Build
@@ -19,6 +19,7 @@ import android.text.TextPaint
 import android.util.Log
 import android.widget.Toast
 import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.Target
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -73,18 +74,26 @@ class ReportCardGenerator(private val context: Context) {
         saveAndOpenFile(document, "Result_${studentName}.pdf")
     }
 
+    // --- START: MODIFIED FUNCTION TO FETCH HIGH-QUALITY LOGO ---
     private suspend fun awaitLogo(): Bitmap? = withContext(Dispatchers.IO) {
         val logoUrl = FirebaseAuthManager.getOrganizationLogoUrl(context)
         if (logoUrl.isNullOrEmpty()) {
             return@withContext BitmapFactory.decodeResource(context.resources, R.drawable.logo) // Fallback
         }
         try {
-            Glide.with(context).asBitmap().load(logoUrl).submit().get()
+            // By using Target.SIZE_ORIGINAL, we tell Glide to fetch the image at its full,
+            // original resolution, which is essential for high-quality printing.
+            Glide.with(context)
+                .asBitmap()
+                .load(logoUrl)
+                .submit(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL)
+                .get()
         } catch (e: Exception) {
             Log.e("ReportCardGenerator", "Failed to load logo from URL", e)
             BitmapFactory.decodeResource(context.resources, R.drawable.logo) // Fallback
         }
     }
+    // --- END: MODIFIED FUNCTION ---
 
     private suspend fun drawReportPage(canvas: Canvas, data: ReportData, madarsaName: String, madarsaAddress: String, logo: Bitmap?) {
         val studentPhoto: Bitmap? = withContext(Dispatchers.IO) {
@@ -100,19 +109,25 @@ class ReportCardGenerator(private val context: Context) {
         drawFooter(canvas, A4_HEIGHT - MARGIN - 20f)
     }
 
+    // --- START: MODIFIED FUNCTION TO DRAW IMAGES WITH HIGH QUALITY ---
     private fun drawHeader(canvas: Canvas, logo: Bitmap?, studentPhoto: Bitmap?, madarsaName: String, madarsaAddress: String, examName: String): Float {
         val titlePaint = TextPaint().apply { color = Color.BLACK; textSize = 20f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
         val addressPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 11f; textAlign = Paint.Align.CENTER }
         val reportTitlePaint = TextPaint().apply { color = Color.BLACK; textSize = 16f; isFakeBoldText = true; textAlign = Paint.Align.CENTER }
         val photoBorderPaint = Paint().apply { color = Color.DKGRAY; style = Paint.Style.STROKE; strokeWidth = 1f }
 
-        // Safely draw the logo if it's not null
+        // --- HIGH-QUALITY LOGO DRAWING LOGIC ---
         logo?.let {
-            val scaledLogo = Bitmap.createScaledBitmap(it, 70, 70, true)
-            canvas.drawBitmap(scaledLogo, MARGIN, MARGIN, null)
+            val logoSize = 70f // The desired height of the logo
+            val aspectRatio = it.width.toFloat() / it.height.toFloat()
+            val destWidth = logoSize * aspectRatio
+            val destRect = RectF(MARGIN, MARGIN, MARGIN + destWidth, MARGIN + logoSize)
+            // This method of drawing preserves aspect ratio and provides high-quality scaling.
+            canvas.drawBitmap(it, null, destRect, null)
         }
+        // --- END OF LOGO DRAWING LOGIC ---
 
-        // Safely draw the student photo if it's not null
+        // Safely draw the student photo if it's not null (this part was already good)
         studentPhoto?.let {
             val photoWidth = 80f
             val photoHeight = 100f
@@ -131,6 +146,8 @@ class ReportCardGenerator(private val context: Context) {
         canvas.drawLine(MARGIN, lineY, A4_WIDTH - MARGIN, lineY, photoBorderPaint)
         return lineY
     }
+    // --- END: MODIFIED FUNCTION ---
+
     private suspend fun saveAndOpenFile(document: PdfDocument, fileName: String) {
         var fileUri: Uri? = null
         try {
@@ -139,7 +156,7 @@ class ReportCardGenerator(private val context: Context) {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + File.separator + "MadarsaReports") // Save to subfolder
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + File.separator + "MadarsaReports")
                 }
             }
             fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
@@ -173,18 +190,25 @@ class ReportCardGenerator(private val context: Context) {
         }
     }
 
+    // --- START: MODIFIED WATERMARK FUNCTION FOR HIGH QUALITY ---
     private fun drawWatermark(canvas: Canvas, logo: Bitmap) {
         val watermarkPaint = Paint().apply {
-            alpha = 30
+            alpha = 30 // Keep it subtle
             isAntiAlias = true
         }
-        val watermarkSize = A4_WIDTH / 2
-        val scaledWatermark = Bitmap.createScaledBitmap(logo, watermarkSize, watermarkSize, true)
-        val x = (A4_WIDTH - watermarkSize) / 2f
-        val y = (A4_HEIGHT - watermarkSize) / 2f
-        canvas.drawBitmap(scaledWatermark, x, y, watermarkPaint)
-    }
+        val watermarkSize = A4_WIDTH / 2f // The desired width of the watermark
+        val aspectRatio = logo.height.toFloat() / logo.width.toFloat()
+        val watermarkHeight = watermarkSize * aspectRatio
 
+        // Center the watermark on the page
+        val x = (A4_WIDTH - watermarkSize) / 2f
+        val y = (A4_HEIGHT - watermarkHeight) / 2f
+
+        val destRect = RectF(x, y, x + watermarkSize, y + watermarkHeight)
+        // This drawing method ensures high-quality scaling for the watermark as well.
+        canvas.drawBitmap(logo, null, destRect, watermarkPaint)
+    }
+    // --- END: MODIFIED WATERMARK FUNCTION ---
 
     private fun drawStudentDetails(canvas: Canvas, student: StudentDetailsItem, startY: Float): Float {
         val labelPaint = TextPaint().apply { color = Color.DKGRAY; textSize = 10f; }
@@ -261,7 +285,7 @@ class ReportCardGenerator(private val context: Context) {
         val totalMarksX = A4_WIDTH - MARGIN
         val totalLabelX = totalMarksX - 100
 
-        canvas.drawText("Total Marks:", totalLabelX, currentY, totalLabelPaint)
+        canvas.drawText("Total Marks:", totalLabelX, currentY, totalValuePaint)
         canvas.drawText(totalMarks.toString(), totalMarksX, currentY, totalValuePaint)
 
         currentY += 20
