@@ -45,9 +45,6 @@
 
         </LinearLayout>
 
-        <!-- ============================================= -->
-        <!-- START: NEW SEARCH VIEW ADDED                  -->
-        <!-- ============================================= -->
         <androidx.appcompat.widget.SearchView
             android:id="@+id/searchViewStudents"
             android:layout_width="match_parent"
@@ -57,10 +54,6 @@
             android:background="@drawable/search_view_bg"
             app:iconifiedByDefault="false"
             app:queryHint="Search student by name..." />
-        <!-- You will need to create a drawable file named search_view_bg.xml for the background -->
-        <!-- ============================================= -->
-        <!-- END: NEW SEARCH VIEW ADDED                    -->
-        <!-- ============================================= -->
 
     </com.google.android.material.appbar.AppBarLayout>
 
@@ -69,19 +62,75 @@
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
+        <!-- ROW 1: Date (Left) and Save Button (Right) -->
         <TextView
             android:id="@+id/tvAttendanceDate"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:paddingHorizontal="16dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
+            android:paddingVertical="12dp"
+            android:gravity="center_vertical"
             android:textAppearance="?attr/textAppearanceBodyLarge"
             android:textColor="?attr/colorOnSurfaceVariant"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/btnSaveAttendance"
             app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/layoutAttendanceStatus"
             tools:text="Date: 2024-05-24" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveAttendance"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:iconTint="@color/mono_palette_white"
+            android:layout_marginEnd="16dp"
+            android:text="@string/save_attendance"
+            android:minHeight="40dp"
+            android:textColor="@color/mono_palette_white"
+            android:backgroundTint="@color/mono_palette_black"
+            android:paddingHorizontal="20dp"
+            app:icon="@drawable/ic_check_circle"
+            app:iconSize="18dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/tvAttendanceDate"
+            app:layout_constraintBottom_toBottomOf="@+id/tvAttendanceDate"/>
+
+        <!-- ROW 2: Status Bar (Full width, below Date/Button) -->
+        <!-- This will only appear when needed -->
+        <LinearLayout
+            android:id="@+id/layoutAttendanceStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:background="?attr/colorSurfaceVariant"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/tvAttendanceDate"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:visibility="visible">
+
+            <ImageView
+                android:id="@+id/ivAttendanceStatusIcon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_check_circle"
+                app:tint="?attr/colorPrimary"
+                android:contentDescription="Status Icon"/>
+
+            <TextView
+                android:id="@+id/tvAttendanceStatusText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                tools:text="Attendance Saved"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textStyle="bold"
+                android:textColor="?attr/colorPrimary"/>
+        </LinearLayout>
 
         <View
             android:id="@+id/header_divider"
@@ -90,13 +139,14 @@
             android:background="?attr/colorOutline"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tvAttendanceDate" />
+            app:layout_constraintTop_toBottomOf="@id/layoutAttendanceStatus" />
 
+        <!-- SwipeRefreshLayout contains the list -->
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipe_refresh_layout_attendance"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            app:layout_constraintBottom_toTopOf="@+id/bottom_bar"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/header_divider">
@@ -111,7 +161,7 @@
                     android:layout_height="match_parent"
                     android:clipToPadding="false"
                     android:paddingTop="8dp"
-                    android:paddingBottom="8dp"
+                    android:paddingBottom="16dp"
                     app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
                     tools:listitem="@layout/item_student_attendance" />
 
@@ -141,64 +191,6 @@
             </FrameLayout>
 
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-
-        <!-- ============================================= -->
-        <!-- START: MODIFIED BOTTOM BAR                    -->
-        <!-- ============================================= -->
-        <LinearLayout
-            android:id="@+id/bottom_bar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
-            android:paddingBottom="16dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent">
-
-            <LinearLayout
-                android:id="@+id/layoutAttendanceStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:visibility="gone"
-                tools:visibility="visible">
-
-                <ImageView
-                    android:id="@+id/ivAttendanceStatusIcon"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_check_circle"
-                    app:tint="?attr/colorPrimary"
-                    android:contentDescription="Status Icon"/>
-
-                <TextView
-                    android:id="@+id/tvAttendanceStatusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    tools:text="Attendance Saved"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?attr/colorPrimary"/>
-            </LinearLayout>
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1"/>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSaveAttendance"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingVertical="12dp"
-                android:text="@string/save_attendance" />
-        </LinearLayout>
-        <!-- ============================================= -->
-        <!-- END: MODIFIED BOTTOM BAR                      -->
-        <!-- ============================================= -->
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

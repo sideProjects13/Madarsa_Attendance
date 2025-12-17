@@ -3,6 +3,7 @@
     import com.google.firebase.Timestamp
     import com.google.firebase.firestore.DocumentId
     import java.io.Serializable
+    import com.google.firebase.firestore.PropertyName
     import java.util.Date
 
     data class Teacher(
@@ -40,7 +41,8 @@
         val gender: String? = null,
         val admissionDate: String? = null,
         val birthDate: String? = null,
-        val isActive: Boolean = true,
+        @get:PropertyName("isActive") @set:PropertyName("isActive")
+        var isActive: Boolean = true,
         val monthlyFee: Double? = null,
         val alternateMobileNumber: String? = null,
         val address: String? = null

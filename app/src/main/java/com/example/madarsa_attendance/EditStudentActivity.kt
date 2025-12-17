@@ -1,5 +1,4 @@
 package com.example.madarsa_attendance
-
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -49,9 +48,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
 class EditStudentActivity : AppCompatActivity() {
-
     private companion object {
         private const val TAG = "EditStudentActivity"
         private const val PERMISSION_REQUEST_CODE_STORAGE = 104
@@ -86,7 +83,7 @@ class EditStudentActivity : AppCompatActivity() {
     // --- START: ADDED UI COMPONENTS FOR FEE ---
     private lateinit var etMonthlyFee: TextInputEditText
     private lateinit var tilMonthlyFee: TextInputLayout
-    // --- END: ADDED UI COMPONENTS FOR FEE ---
+// --- END: ADDED UI COMPONENTS FOR FEE ---
 
 
     // Backend

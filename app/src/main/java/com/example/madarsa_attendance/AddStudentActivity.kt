@@ -1,5 +1,4 @@
 package com.example.madarsa_attendance
-
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -51,11 +50,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
 class AddStudentActivity : AppCompatActivity() {
 
     private companion object {
         private const val TAG = "AddStudentActivity"
+
         // MODIFIED: Changed constant names for clarity
         private const val PERMISSION_REQUEST_CODE_STORAGE = 103
         private const val PERMISSION_REQUEST_CODE_CAMERA = 104
@@ -97,6 +96,7 @@ class AddStudentActivity : AppCompatActivity() {
     private var preselectedTeacherName: String? = null
     private var imageUri: Uri? = null
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
+
     // ADDED: Launcher for taking a picture
     private lateinit var takePictureLauncher: ActivityResultLauncher<Intent>
     private var cameraImageUri: Uri? = null
@@ -113,7 +113,11 @@ class AddStudentActivity : AppCompatActivity() {
         currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
 
         if (currentOrganizationId == null) {
-            Toast.makeText(this, "Organization data missing. Please log in again.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                "Organization data missing. Please log in again.",
+                Toast.LENGTH_LONG
+            ).show()
             finish()
             return
         }
@@ -157,24 +161,28 @@ class AddStudentActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        imagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                result.data?.data?.let { uri ->
-                    imageUri = uri
-                    Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student).into(ivStudentProfileImage)
+        imagePickerLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    result.data?.data?.let { uri ->
+                        imageUri = uri
+                        Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student)
+                            .into(ivStudentProfileImage)
+                    }
                 }
             }
-        }
 
         // ADDED: Initialize the take picture launcher
-        takePictureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                cameraImageUri?.let { uri ->
-                    imageUri = uri
-                    Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student).into(ivStudentProfileImage)
+        takePictureLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == Activity.RESULT_OK) {
+                    cameraImageUri?.let { uri ->
+                        imageUri = uri
+                        Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student)
+                            .into(ivStudentProfileImage)
+                    }
                 }
             }
-        }
 
         // MODIFIED: The click listener now shows a dialog to choose between camera and gallery
         val imageSelectionClickListener = View.OnClickListener { showImageSourceDialog() }
@@ -194,7 +202,8 @@ class AddStudentActivity : AppCompatActivity() {
         if (preselectedTeacherId != null && preselectedTeacherName != null) {
             spinnerTeachers.visibility = View.GONE
             tvLabelSelectTeacher.visibility = View.GONE
-            selectedTeacher = TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
+            selectedTeacher =
+                TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
         } else {
             loadTeachersIntoSpinner()
         }
@@ -240,7 +249,8 @@ class AddStudentActivity : AppCompatActivity() {
     }
 
     private fun setInputsEnabled(enabled: Boolean, showProgressForSpinner: Boolean = false) {
-        progressBar.visibility = if (!enabled && !showProgressForSpinner) View.VISIBLE else View.GONE
+        progressBar.visibility =
+            if (!enabled && !showProgressForSpinner) View.VISIBLE else View.GONE
         spinnerTeachers.isEnabled = enabled
         etStudentName.isEnabled = enabled
         etParentName.isEnabled = enabled
@@ -321,7 +331,8 @@ class AddStudentActivity : AppCompatActivity() {
             tilRegNo.error = "Registration number is required"; isValid = false
         }
         if (rgGender.checkedRadioButtonId == -1) {
-            Toast.makeText(this, "Please select a gender", Toast.LENGTH_SHORT).show(); isValid = false
+            Toast.makeText(this, "Please select a gender", Toast.LENGTH_SHORT).show(); isValid =
+                false
         }
         val monthlyFeeText = etMonthlyFee.text.toString().trim()
         if (monthlyFeeText.isEmpty()) {
@@ -385,7 +396,20 @@ class AddStudentActivity : AppCompatActivity() {
         yearPicker.maxValue = currentYear
         yearPicker.value = calendar.get(Calendar.YEAR)
 
-        val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        val months = arrayOf(
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec"
+        )
         monthPicker.minValue = 1
         monthPicker.maxValue = 12
         monthPicker.displayedValues = months
@@ -415,7 +439,13 @@ class AddStudentActivity : AppCompatActivity() {
                 val selectedYear = yearPicker.value
                 val selectedMonth = monthPicker.value
                 val selectedDay = dayPicker.value
-                val formattedDate = String.format(Locale.getDefault(), "%02d-%02d-%04d", selectedDay, selectedMonth, selectedYear)
+                val formattedDate = String.format(
+                    Locale.getDefault(),
+                    "%02d-%02d-%04d",
+                    selectedDay,
+                    selectedMonth,
+                    selectedYear
+                )
                 editText.setText(formattedDate)
             }
             .setNegativeButton("Cancel", null)
@@ -439,13 +469,22 @@ class AddStudentActivity : AppCompatActivity() {
 
     // MODIFIED: Renamed to checkStoragePermissions
     private fun checkStoragePermissions() {
-        val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(permission), PERMISSION_REQUEST_CODE_STORAGE)
+        val permission =
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES
+            } else {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
+        if (ContextCompat.checkSelfPermission(
+                this,
+                permission
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(permission),
+                PERMISSION_REQUEST_CODE_STORAGE
+            )
         } else {
             openGallery()
         }
@@ -453,15 +492,27 @@ class AddStudentActivity : AppCompatActivity() {
 
     // ADDED: New function to check for camera permissions
     private fun checkCameraPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), PERMISSION_REQUEST_CODE_CAMERA)
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.CAMERA),
+                PERMISSION_REQUEST_CODE_CAMERA
+            )
         } else {
             openCamera()
         }
     }
 
     // MODIFIED: onRequestPermissionsResult now handles both storage and camera permissions
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
             PERMISSION_REQUEST_CODE_STORAGE -> {
@@ -471,6 +522,7 @@ class AddStudentActivity : AppCompatActivity() {
                     Toast.makeText(this, "Storage permission denied.", Toast.LENGTH_SHORT).show()
                 }
             }
+
             PERMISSION_REQUEST_CODE_CAMERA -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     openCamera()
@@ -512,7 +564,8 @@ class AddStudentActivity : AppCompatActivity() {
     // ADDED: This function creates a temporary file to store the captured image
     @Throws(IOException::class)
     private fun createImageFile(): File {
-        val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val timeStamp: String =
+            SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val storageDir: File? = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
         return File.createTempFile(
             "JPEG_${timeStamp}_",
@@ -543,19 +596,29 @@ class AddStudentActivity : AppCompatActivity() {
                     )
                     teacherList.add(teacher)
                 }
-                val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, teacherList.map { it.name })
+                val adapter = ArrayAdapter(
+                    this,
+                    android.R.layout.simple_spinner_item,
+                    teacherList.map { it.name })
                 adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                 spinnerTeachers.adapter = adapter
                 setInputsEnabled(true)
 
-                spinnerTeachers.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                    override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                        selectedTeacher = if (position > 0) teacherList[position] else null
+                spinnerTeachers.onItemSelectedListener =
+                    object : AdapterView.OnItemSelectedListener {
+                        override fun onItemSelected(
+                            parent: AdapterView<*>,
+                            view: View?,
+                            position: Int,
+                            id: Long
+                        ) {
+                            selectedTeacher = if (position > 0) teacherList[position] else null
+                        }
+
+                        override fun onNothingSelected(parent: AdapterView<*>) {
+                            selectedTeacher = null
+                        }
                     }
-                    override fun onNothingSelected(parent: AdapterView<*>) {
-                        selectedTeacher = null
-                    }
-                }
             }
             .addOnFailureListener { exception ->
                 handleSaveFailure(exception, "Error loading teachers")
@@ -563,12 +626,16 @@ class AddStudentActivity : AppCompatActivity() {
             }
     }
 
-    private fun isValidIndianMobileNumber(mobile: String) = mobile.length == 10 && mobile.all { it.isDigit() }
+    private fun isValidIndianMobileNumber(mobile: String) =
+        mobile.length == 10 && mobile.all { it.isDigit() }
 
     private fun saveStudent() {
         if (!validateStudentInputs()) return
         if (currentOrganizationId == null) {
-            handleSaveFailure(Exception("Organization ID is null"), "Cannot save: Org ID is missing.")
+            handleSaveFailure(
+                Exception("Organization ID is null"),
+                "Cannot save: Org ID is missing."
+            )
             return
         }
 
@@ -581,7 +648,11 @@ class AddStudentActivity : AppCompatActivity() {
         val regNo = etRegNo.text.toString().trim()
         val alternateMobile = etAlternateMobile.text.toString().trim().ifEmpty { null }
         val address = etAddress.text.toString().trim().ifEmpty { null }
-        val finalTeacher = selectedTeacher ?: TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
+        val finalTeacher = selectedTeacher ?: TeacherSpinnerItem(
+            preselectedTeacherId!!,
+            preselectedTeacherName!!,
+            null
+        )
 
         if (finalTeacher.id.isEmpty()) {
             handleSaveFailure(Exception("No teacher assigned"), "Please assign a teacher.")
@@ -626,23 +697,35 @@ class AddStudentActivity : AppCompatActivity() {
     }
 
     private fun uploadImageAndSaveStudent(
-        studentName: String, parentName: String, parentMobile: String, monthlyFee: Double,
-        regNo: String, teacher: TeacherSpinnerItem, gender: String, birthDate: String?, admissionDate: String?,
-        alternateMobile: String?, address: String?
+        studentName: String,
+        parentName: String,
+        parentMobile: String,
+        monthlyFee: Double,
+        regNo: String,
+        teacher: TeacherSpinnerItem,
+        gender: String,
+        birthDate: String?,
+        admissionDate: String?,
+        alternateMobile: String?,
+        address: String?
     ) {
         if (imageUri != null) {
             lifecycleScope.launch {
                 try {
                     val imageFile = uriToFile(imageUri!!)
                     // MODIFIED: Added a size constraint to ensure the image is under 100 KB
-                    val compressedImageFile = Compressor.compress(this@AddStudentActivity, imageFile) {
-                        quality(80)
-                        size(100 * 1024) // 100 KB
-                    }
+                    val compressedImageFile =
+                        Compressor.compress(this@AddStudentActivity, imageFile) {
+                            quality(80)
+                            size(100 * 1024) // 100 KB
+                        }
                     MediaManager.get().upload(compressedImageFile.path)
                         .unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT)
                         .option("folder", "student_profiles").callback(object : UploadCallback {
-                            override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
+                            override fun onSuccess(
+                                requestId: String?,
+                                resultData: MutableMap<Any?, Any?>?
+                            ) {
                                 val imageUrl = resultData?.get("secure_url") as? String
                                 saveStudentDataToFirestore(
                                     studentName, parentName, parentMobile, monthlyFee,
@@ -650,16 +733,27 @@ class AddStudentActivity : AppCompatActivity() {
                                     alternateMobile, address, imageUrl
                                 )
                             }
+
                             override fun onError(requestId: String?, error: ErrorInfo?) {
-                                Log.w(TAG, "Image upload failed, saving without image. Error: ${error?.description}")
+                                Log.w(
+                                    TAG,
+                                    "Image upload failed, saving without image. Error: ${error?.description}"
+                                )
                                 saveStudentDataToFirestore(
                                     studentName, parentName, parentMobile, monthlyFee,
                                     regNo, teacher, gender, birthDate, admissionDate,
                                     alternateMobile, address, null
                                 )
                             }
+
                             override fun onStart(requestId: String?) {}
-                            override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
+                            override fun onProgress(
+                                requestId: String?,
+                                bytes: Long,
+                                totalBytes: Long
+                            ) {
+                            }
+
                             override fun onReschedule(requestId: String?, error: ErrorInfo?) {}
                         }).dispatch()
                 } catch (e: Exception) {
@@ -684,7 +778,10 @@ class AddStudentActivity : AppCompatActivity() {
         profileImageUrl: String?
     ) {
         if (currentOrganizationId == null) {
-            handleSaveFailure(Exception("Organization ID is null"), "Internal Error: Org data missing.")
+            handleSaveFailure(
+                Exception("Organization ID is null"),
+                "Internal Error: Org data missing."
+            )
             return
         }
 

@@ -1,7 +1,4 @@
-1.Now items can be sold to other people.
-2.You can see count of total students on Manage Teacher Page
-3.Bar Chart Has been removed
-4.Attendance Status now can be updatable
-5.Logo on result is now clear
-6.Fees is editable
-7.Some bug fixes
+1.Inactive count(BUG) has been fixed
+2.Inactive has been now deducted from Not marked
+3. Attendance saving button is now placed on top
+4.Other Bugs
