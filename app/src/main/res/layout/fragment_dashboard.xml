@@ -5,7 +5,7 @@
     android:id="@+id/swipe_refresh_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:paddingTop="10dp"
+    android:paddingTop="20dp"
     android:background="?android:colorBackground"
     tools:context=".DashboardFragment">
 
@@ -26,7 +26,7 @@
                 android:visibility="invisible"
                 tools:visibility="visible">
 
-                <!-- Main Stats Grid (Same as before) -->
+                <!-- Main Stats Grid -->
                 <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -52,7 +52,7 @@
                             <ImageView
                                 android:layout_width="32dp"
                                 android:layout_height="32dp"
-                                android:src="@drawable/ic_person_outlined" />
+                                android:src="@drawable/person" />
                             <TextView
                                 android:id="@+id/tvTotalStudentsCount"
                                 android:layout_width="wrap_content"
@@ -180,7 +180,7 @@
                     </com.google.android.material.card.MaterialCardView>
                 </GridLayout>
 
-                <!-- Student Attendance Summary (Existing) -->
+                <!-- Student Attendance Summary (Today) -->
                 <TextView
                     style="@style/DashboardSectionHeader"
                     android:layout_width="wrap_content"
@@ -271,7 +271,69 @@
                     </com.google.android.material.card.MaterialCardView>
                 </LinearLayout>
 
-                <!-- NEW SECTION: Teacher Attendance Summary (Replaces Bar Chart) -->
+                <!-- NEW SECTION: YESTERDAY'S ABSENCE SUMMARY -->
+                <TextView
+                    style="@style/DashboardSectionHeader"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginTop="8dp"
+                    android:text="Absence Summary (Yesterday)" />
+
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/yesterday_absent_card"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="16dp"
+                    android:layout_marginTop="8dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="2dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:padding="16dp"
+                        android:gravity="center_vertical">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+                            <TextView
+                                android:text="Total Absent Yesterday"
+                                android:textAppearance="?attr/textAppearanceBodyLarge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"/>
+                            <TextView
+                                android:text="Tap to view list for punishment"
+                                android:textAppearance="?attr/textAppearanceBodySmall"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"/>
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tv_yesterday_absent_count"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            style="@style/DashboardCardValue"
+                            android:textColor="@color/status_unpaid_red"
+                            android:textSize="24sp"
+                            tools:text="12" />
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_arrow_forward"
+                            app:tint="?attr/colorOnSurfaceVariant"
+                            android:layout_marginStart="12dp"/>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+
+                <!-- Teacher Attendance Summary (Today) -->
                 <TextView
                     style="@style/DashboardSectionHeader"
                     android:layout_width="wrap_content"

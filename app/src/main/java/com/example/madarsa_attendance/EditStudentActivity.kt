@@ -1,4 +1,5 @@
 package com.example.madarsa_attendance
+
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -48,7 +49,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
 class EditStudentActivity : AppCompatActivity() {
+
     private companion object {
         private const val TAG = "EditStudentActivity"
         private const val PERMISSION_REQUEST_CODE_STORAGE = 104
@@ -83,7 +86,7 @@ class EditStudentActivity : AppCompatActivity() {
     // --- START: ADDED UI COMPONENTS FOR FEE ---
     private lateinit var etMonthlyFee: TextInputEditText
     private lateinit var tilMonthlyFee: TextInputLayout
-// --- END: ADDED UI COMPONENTS FOR FEE ---
+    // --- END: ADDED UI COMPONENTS FOR FEE ---
 
 
     // Backend
@@ -205,7 +208,6 @@ class EditStudentActivity : AppCompatActivity() {
                         etAddress.setText(student.address)
 
                         // --- START: LOAD EXISTING MONTHLY FEE ---
-                        // This will handle null fees and format it nicely (e.g., "1000" instead of "1000.0")
                         student.monthlyFee?.let { fee ->
                             etMonthlyFee.setText(String.format(Locale.US, "%.0f", fee))
                         }
@@ -238,9 +240,7 @@ class EditStudentActivity : AppCompatActivity() {
         tilAlternateMobile.error = null
         tilBirthDate.error = null
         tilAdmissionDate.error = null
-        // --- START: ADDED VALIDATION FOR FEE ---
         tilMonthlyFee.error = null
-        // --- END: ADDED VALIDATION FOR FEE ---
 
         var isValid = true
 
@@ -300,162 +300,6 @@ class EditStudentActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateStudentInFirestore(imageUrl: String?) {
-        if (studentId == null || currentOrganizationId == null) return
-
-        val selectedGenderId = rgGender.checkedRadioButtonId
-        val gender = if (selectedGenderId != -1) findViewById<RadioButton>(selectedGenderId).text.toString() else null
-
-        val studentUpdates = mutableMapOf<String, Any?>(
-            "studentName" to etStudentName.text.toString().trim(),
-            "parentName" to etParentName.text.toString().trim(),
-            "parentMobileNumber" to etParentMobile.text.toString().trim(),
-            "regNo" to etRegNo.text.toString().trim(),
-            "gender" to gender,
-            "birthDate" to etBirthDate.text.toString().trim().ifEmpty { null },
-            "admissionDate" to etAdmissionDate.text.toString().trim().ifEmpty { null },
-            "lastUpdatedAt" to FieldValue.serverTimestamp(),
-            "alternateMobileNumber" to etAlternateMobile.text.toString().trim().ifEmpty { null },
-            "address" to etAddress.text.toString().trim().ifEmpty { null },
-            // --- START: ADDED FEE TO THE UPDATE MAP ---
-            "monthlyFee" to (etMonthlyFee.text.toString().trim().toDoubleOrNull() ?: 0.0)
-            // --- END: ADDED FEE TO THE UPDATE MAP ---
-        )
-
-        imageUrl?.let { studentUpdates["profileImageUrl"] = it }
-
-        db.collection("organizations").document(currentOrganizationId!!)
-            .collection("students").document(studentId!!)
-            .set(studentUpdates, SetOptions.merge())
-            .addOnSuccessListener {
-                StatusDialogFragment.newInstance(
-                    isSuccess = true,
-                    message = "Details Updated Successfully!",
-                    finishActivityOnDismiss = true
-                ).show(supportFragmentManager, "successDialog")
-                setResult(Activity.RESULT_OK)
-            }.addOnFailureListener { e ->
-                Log.e(TAG, "Error updating student details", e)
-                handleFailure("Failed to update details.")
-            }
-    }
-
-    private fun setInputsEnabled(enabled: Boolean, isInitialLoad: Boolean = false) {
-        if (isInitialLoad) {
-            progressBar.visibility = View.VISIBLE
-        } else {
-            progressBar.visibility = if (enabled) View.GONE else View.VISIBLE
-        }
-        btnSaveChanges.isEnabled = enabled
-        btnSelectImage.isEnabled = enabled
-        etStudentName.isEnabled = enabled
-        etParentName.isEnabled = enabled
-        etParentMobile.isEnabled = enabled
-        etRegNo.isEnabled = enabled
-        rgGender.isEnabled = enabled
-        etBirthDate.isEnabled = enabled
-        etAdmissionDate.isEnabled = enabled
-        etAlternateMobile.isEnabled = enabled
-        etAddress.isEnabled = enabled
-        cardViewProfileImage.isClickable = enabled
-        // --- START: ENABLE/DISABLE FEE INPUT ---
-        etMonthlyFee.isEnabled = enabled
-        // --- END: ENABLE/DISABLE FEE INPUT ---
-    }
-
-
-    // The following functions remain unchanged, but are included for completeness
-    private fun isValidDateFormat(dateStr: String): Boolean {
-        if (dateStr.isEmpty()) return true
-        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-        sdf.isLenient = false
-        return try {
-            sdf.parse(dateStr)
-            dateStr.length == 10
-        } catch (e: ParseException) {
-            false
-        }
-    }
-
-    private fun isDateInFuture(dateStr: String): Boolean {
-        if (!isValidDateFormat(dateStr)) return false
-        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-        return try {
-            val enteredDate = sdf.parse(dateStr) ?: return false
-            val today = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.time
-            enteredDate.after(today)
-        } catch (e: ParseException) {
-            false
-        }
-    }
-
-    private fun showCustomDatePickerDialog(editText: TextInputEditText) {
-        val dialogView = View.inflate(this, R.layout.dialog_custom_date_picker, null)
-        val dayPicker = dialogView.findViewById<NumberPicker>(R.id.dayPicker)
-        val monthPicker = dialogView.findViewById<NumberPicker>(R.id.monthPicker)
-        val yearPicker = dialogView.findViewById<NumberPicker>(R.id.yearPicker)
-
-        val calendar = Calendar.getInstance()
-        val currentYear = calendar.get(Calendar.YEAR)
-
-        val existingDateStr = editText.text.toString()
-        if (isValidDateFormat(existingDateStr)) {
-            try {
-                val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-                val date = sdf.parse(existingDateStr)
-                if (date != null) {
-                    calendar.time = date
-                }
-            } catch (e: Exception) { /* Use current date on error */ }
-        }
-
-        yearPicker.minValue = 1950
-        yearPicker.maxValue = currentYear
-        yearPicker.value = calendar.get(Calendar.YEAR)
-
-        val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-        monthPicker.minValue = 1
-        monthPicker.maxValue = 12
-        monthPicker.displayedValues = months
-        monthPicker.value = calendar.get(Calendar.MONTH) + 1
-
-        dayPicker.minValue = 1
-        dayPicker.maxValue = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-        dayPicker.value = calendar.get(Calendar.DAY_OF_MONTH)
-
-        val onValueChangeListener = NumberPicker.OnValueChangeListener { _, _, _ ->
-            val tempCalendar = Calendar.getInstance()
-            tempCalendar.set(Calendar.YEAR, yearPicker.value)
-            tempCalendar.set(Calendar.MONTH, monthPicker.value - 1)
-            val maxDay = tempCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-            if (dayPicker.value > maxDay) {
-                dayPicker.value = maxDay
-            }
-            dayPicker.maxValue = maxDay
-        }
-        yearPicker.setOnValueChangedListener(onValueChangeListener)
-        monthPicker.setOnValueChangedListener(onValueChangeListener)
-
-        AlertDialog.Builder(this)
-            .setTitle("Select Date")
-            .setView(dialogView)
-            .setPositiveButton("OK") { _, _ ->
-                val selectedYear = yearPicker.value
-                val selectedMonth = monthPicker.value
-                val selectedDay = dayPicker.value
-                val formattedDate = String.format(Locale.getDefault(), "%02d-%02d-%04d", selectedDay, selectedMonth, selectedYear)
-                editText.setText(formattedDate)
-            }
-            .setNegativeButton("Cancel", null)
-            .create()
-            .show()
-    }
-
     private fun uriToFile(uri: Uri): File {
         val inputStream = contentResolver.openInputStream(uri)!!
         val tempFile = File.createTempFile("prefix", ".extension", cacheDir)
@@ -467,6 +311,7 @@ class EditStudentActivity : AppCompatActivity() {
         return tempFile
     }
 
+    // --- REVERTED TO CLOUDINARY LOGIC ---
     private fun uploadImageAndUpdateStudent() {
         if (imageUri == null) return
 
@@ -477,9 +322,12 @@ class EditStudentActivity : AppCompatActivity() {
                     quality(80)
                     size(100 * 1024)
                 }
+
+                // Cloudinary Upload
                 MediaManager.get().upload(compressedImageFile.path)
                     .unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT_EDIT)
-                    .option("folder", "student_profiles").callback(object : UploadCallback {
+                    .option("folder", "student_profiles")
+                    .callback(object : UploadCallback {
                         override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
                             val newImageUrl = resultData?.get("secure_url") as? String
                             updateStudentInFirestore(newImageUrl)
@@ -501,12 +349,71 @@ class EditStudentActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateStudentInFirestore(imageUrl: String?) {
+        if (studentId == null || currentOrganizationId == null) return
+
+        val selectedGenderId = rgGender.checkedRadioButtonId
+        val gender = if (selectedGenderId != -1) findViewById<RadioButton>(selectedGenderId).text.toString() else null
+
+        val studentUpdates = mutableMapOf<String, Any?>(
+            "studentName" to etStudentName.text.toString().trim(),
+            "parentName" to etParentName.text.toString().trim(),
+            "parentMobileNumber" to etParentMobile.text.toString().trim(),
+            "regNo" to etRegNo.text.toString().trim(),
+            "gender" to gender,
+            "birthDate" to etBirthDate.text.toString().trim().ifEmpty { null },
+            "admissionDate" to etAdmissionDate.text.toString().trim().ifEmpty { null },
+            "lastUpdatedAt" to FieldValue.serverTimestamp(),
+            "alternateMobileNumber" to etAlternateMobile.text.toString().trim().ifEmpty { null },
+            "address" to etAddress.text.toString().trim().ifEmpty { null },
+            "monthlyFee" to (etMonthlyFee.text.toString().trim().toDoubleOrNull() ?: 0.0)
+        )
+
+        imageUrl?.let { studentUpdates["profileImageUrl"] = it }
+
+        db.collection("organizations").document(currentOrganizationId!!)
+            .collection("students").document(studentId!!)
+            .set(studentUpdates, SetOptions.merge())
+            .addOnSuccessListener {
+                StatusDialogFragment.newInstance(
+                    isSuccess = true,
+                    message = "Details Updated Successfully!",
+                    finishActivityOnDismiss = true
+                ).show(supportFragmentManager, "successDialog")
+                setResult(Activity.RESULT_OK)
+            }.addOnFailureListener { e ->
+                Log.e(TAG, "Error updating student details", e)
+                handleFailure("Failed to update details.")
+            }
+    }
+
     private fun handleFailure(message: String) {
         setInputsEnabled(true)
         StatusDialogFragment.newInstance(
             isSuccess = false,
             message = message
         ).show(supportFragmentManager, "failureDialog")
+    }
+
+    private fun setInputsEnabled(enabled: Boolean, isInitialLoad: Boolean = false) {
+        if (isInitialLoad) {
+            progressBar.visibility = View.VISIBLE
+        } else {
+            progressBar.visibility = if (enabled) View.GONE else View.VISIBLE
+        }
+        btnSaveChanges.isEnabled = enabled
+        btnSelectImage.isEnabled = enabled
+        etStudentName.isEnabled = enabled
+        etParentName.isEnabled = enabled
+        etParentMobile.isEnabled = enabled
+        etRegNo.isEnabled = enabled
+        rgGender.isEnabled = enabled
+        etBirthDate.isEnabled = enabled
+        etAdmissionDate.isEnabled = enabled
+        etAlternateMobile.isEnabled = enabled
+        etAddress.isEnabled = enabled
+        cardViewProfileImage.isClickable = enabled
+        etMonthlyFee.isEnabled = enabled
     }
 
     private fun showImageSourceDialog() {
@@ -599,5 +506,96 @@ class EditStudentActivity : AppCompatActivity() {
             ".jpg",
             storageDir
         )
+    }
+
+    private fun isValidDateFormat(dateStr: String): Boolean {
+        if (dateStr.isEmpty()) return true
+        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+        sdf.isLenient = false
+        return try {
+            sdf.parse(dateStr)
+            dateStr.length == 10
+        } catch (e: ParseException) {
+            false
+        }
+    }
+
+    private fun isDateInFuture(dateStr: String): Boolean {
+        if (!isValidDateFormat(dateStr)) return false
+        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+        return try {
+            val enteredDate = sdf.parse(dateStr) ?: return false
+            val today = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.time
+            enteredDate.after(today)
+        } catch (e: ParseException) {
+            false
+        }
+    }
+
+    private fun showCustomDatePickerDialog(editText: TextInputEditText) {
+        val dialogView = View.inflate(this, R.layout.dialog_custom_date_picker, null)
+        val dayPicker = dialogView.findViewById<NumberPicker>(R.id.dayPicker)
+        val monthPicker = dialogView.findViewById<NumberPicker>(R.id.monthPicker)
+        val yearPicker = dialogView.findViewById<NumberPicker>(R.id.yearPicker)
+
+        val calendar = Calendar.getInstance()
+        val currentYear = calendar.get(Calendar.YEAR)
+
+        val existingDateStr = editText.text.toString()
+        if (isValidDateFormat(existingDateStr)) {
+            try {
+                val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+                val date = sdf.parse(existingDateStr)
+                if (date != null) {
+                    calendar.time = date
+                }
+            } catch (e: Exception) { }
+        }
+
+        yearPicker.minValue = 1950
+        yearPicker.maxValue = currentYear
+        yearPicker.value = calendar.get(Calendar.YEAR)
+
+        val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        monthPicker.minValue = 1
+        monthPicker.maxValue = 12
+        monthPicker.displayedValues = months
+        monthPicker.value = calendar.get(Calendar.MONTH) + 1
+
+        dayPicker.minValue = 1
+        dayPicker.maxValue = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+        dayPicker.value = calendar.get(Calendar.DAY_OF_MONTH)
+
+        val onValueChangeListener = NumberPicker.OnValueChangeListener { _, _, _ ->
+            val tempCalendar = Calendar.getInstance()
+            tempCalendar.set(Calendar.YEAR, yearPicker.value)
+            tempCalendar.set(Calendar.MONTH, monthPicker.value - 1)
+            val maxDay = tempCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+            if (dayPicker.value > maxDay) {
+                dayPicker.value = maxDay
+            }
+            dayPicker.maxValue = maxDay
+        }
+        yearPicker.setOnValueChangedListener(onValueChangeListener)
+        monthPicker.setOnValueChangedListener(onValueChangeListener)
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Date")
+            .setView(dialogView)
+            .setPositiveButton("OK") { _, _ ->
+                val selectedYear = yearPicker.value
+                val selectedMonth = monthPicker.value
+                val selectedDay = dayPicker.value
+                val formattedDate = String.format(Locale.getDefault(), "%02d-%02d-%04d", selectedDay, selectedMonth, selectedYear)
+                editText.setText(formattedDate)
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+            .show()
     }
 }

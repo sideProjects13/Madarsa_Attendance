@@ -9,6 +9,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.RecyclerView
@@ -37,12 +38,16 @@ class DashboardFragment : Fragment() {
     private lateinit var inactiveStudentsCard: MaterialCardView
     private lateinit var highAbsenceCard: MaterialCardView
 
-    // Student Attendance Cards
+    // Student Attendance Cards (Today)
     private lateinit var presentCardSection: MaterialCardView
     private lateinit var absentCardSection: MaterialCardView
     private lateinit var notMarkedCardSection: MaterialCardView
 
-    // Teacher Attendance Cards (NEW)
+    // NEW: Yesterday Absent Card
+    private lateinit var yesterdayAbsentCard: MaterialCardView
+    private lateinit var tvYesterdayAbsentCount: TextView
+
+    // Teacher Attendance Cards
     private lateinit var teacherPresentCard: MaterialCardView
     private lateinit var teacherAbsentCard: MaterialCardView
     private lateinit var teacherNotMarkedCard: MaterialCardView
@@ -52,7 +57,7 @@ class DashboardFragment : Fragment() {
     private lateinit var tvAbsentCount: TextView
     private lateinit var tvNotMarkedCount: TextView
 
-    // Teacher Attendance Summary Text Views (NEW)
+    // Teacher Attendance Summary Text Views
     private lateinit var tvTeacherPresentCount: TextView
     private lateinit var tvTeacherAbsentCount: TextView
     private lateinit var tvTeacherNotMarkedCount: TextView
@@ -84,7 +89,7 @@ class DashboardFragment : Fragment() {
         highAbsenceCard = view.findViewById(R.id.highAbsenceCard)
         tvHighAbsenceStudents = view.findViewById(R.id.tvHighAbsenceStudentsCount)
 
-        // Student Attendance Section
+        // Student Attendance Section (Today)
         presentCardSection = view.findViewById(R.id.present_card_section)
         tvPresentCount = view.findViewById(R.id.tv_present_count)
         absentCardSection = view.findViewById(R.id.absent_card_section)
@@ -92,7 +97,11 @@ class DashboardFragment : Fragment() {
         notMarkedCardSection = view.findViewById(R.id.not_marked_card_section)
         tvNotMarkedCount = view.findViewById(R.id.tv_not_marked_count)
 
-        // Teacher Attendance Section (NEW)
+        // NEW: Yesterday Absent Section
+        yesterdayAbsentCard = view.findViewById(R.id.yesterday_absent_card)
+        tvYesterdayAbsentCount = view.findViewById(R.id.tv_yesterday_absent_count)
+
+        // Teacher Attendance Section
         teacherPresentCard = view.findViewById(R.id.teacher_present_card)
         tvTeacherPresentCount = view.findViewById(R.id.tv_teacher_present_count)
         teacherAbsentCard = view.findViewById(R.id.teacher_absent_card)
@@ -112,7 +121,6 @@ class DashboardFragment : Fragment() {
             startActivity(Intent(activity, ManageTeachersActivity::class.java))
         }
 
-        // For student not marked
         notMarkedCardSection.setOnClickListener {
             viewModel.unmarkedTeachers.value?.let { teachers ->
                 if (teachers.isNotEmpty()) {
@@ -137,10 +145,19 @@ class DashboardFragment : Fragment() {
             }
         }
 
-        // You can add click listeners for the new teacher cards here if needed
-        // e.g., teacherNotMarkedCard.setOnClickListener { ... navigate to TeacherAttendanceActivity ... }
         teacherNotMarkedCard.setOnClickListener {
             startActivity(Intent(activity, TeacherAttendanceActivity::class.java))
+        }
+
+        // --- NEW: Yesterday Absent Click Listener ---
+        yesterdayAbsentCard.setOnClickListener {
+            viewModel.yesterdayAbsentStudents.value?.let { students ->
+                if (students.isNotEmpty()) {
+                    showYesterdayAbsenteesDialog(students)
+                } else {
+                    Toast.makeText(context, "No students marked absent yesterday.", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -158,32 +175,34 @@ class DashboardFragment : Fragment() {
             }
         }
 
-        // Basic Stats
         viewModel.totalStudents.observe(viewLifecycleOwner) { tvTotalStudents.text = it.toString() }
         viewModel.totalTeachers.observe(viewLifecycleOwner) { tvTotalTeachers.text = it.toString() }
         viewModel.totalInactiveStudents.observe(viewLifecycleOwner) { tvTotalInactiveStudents.text = it.toString() }
         viewModel.highAbsenceStudents.observe(viewLifecycleOwner) { tvHighAbsenceStudents.text = it.size.toString() }
 
-        // Student Attendance Stats
         viewModel.presentCount.observe(viewLifecycleOwner) { tvPresentCount.text = it.toString() }
         viewModel.absentCount.observe(viewLifecycleOwner) { tvAbsentCount.text = it.toString() }
         viewModel.notMarkedCount.observe(viewLifecycleOwner) { tvNotMarkedCount.text = it.toString() }
 
-        // Teacher Attendance Stats (NEW)
         viewModel.teacherPresentCount.observe(viewLifecycleOwner) { tvTeacherPresentCount.text = it.toString() }
         viewModel.teacherAbsentCount.observe(viewLifecycleOwner) { tvTeacherAbsentCount.text = it.toString() }
         viewModel.teacherNotMarkedCount.observe(viewLifecycleOwner) { tvTeacherNotMarkedCount.text = it.toString() }
+
+        // --- NEW OBSERVER ---
+        viewModel.yesterdayAbsentCount.observe(viewLifecycleOwner) { count ->
+            tvYesterdayAbsentCount.text = count.toString()
+        }
     }
+
+    // ... (Existing Dialog functions: showUnmarkedClassesDialog, showHighAbsenceStudentsDialog)
 
     private fun showUnmarkedClassesDialog(teachers: List<Teacher>) {
         val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_not_marked, null)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_not_marked_classes)
-
         val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
             .setView(dialogView)
             .setNegativeButton("Close", null)
             .create()
-
         val adapter = NotMarkedAdapter(teachers) { selectedTeacher ->
             val intent = Intent(activity, TeacherOptionsActivity::class.java).apply {
                 putExtra(TeacherOptionsActivity.EXTRA_TEACHER_ID, selectedTeacher.teacherId)
@@ -202,16 +221,48 @@ class DashboardFragment : Fragment() {
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_not_marked_classes)
         val dialogTitle = dialogView.findViewById<TextView>(R.id.dialog_title)
         dialogTitle?.text = "High Absenteeism Students"
+        val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
+            .setView(dialogView)
+            .setNegativeButton("Close", null)
+            .create()
+        val adapter = DashboardStudentAdapter().apply { submitList(students) }
+        recyclerView.adapter = adapter
+        dialog.show()
+    }
+
+    // --- NEW DIALOG: Yesterday's Absentees with Filter ---
+    private fun showYesterdayAbsenteesDialog(allAbsentStudents: List<DashboardStudentItem>) {
+        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_yesterday_absent, null)
+        val recyclerView = dialogView.findViewById<RecyclerView>(R.id.rv_yesterday_absent)
+        val searchView = dialogView.findViewById<SearchView>(R.id.sv_yesterday_absent)
 
         val dialog = AlertDialog.Builder(requireContext(), R.style.AlertDialog_App_Monochrome)
             .setView(dialogView)
             .setNegativeButton("Close", null)
             .create()
 
-        val adapter = DashboardStudentAdapter().apply {
-            submitList(students)
-        }
+        val adapter = DashboardStudentAdapter()
+        adapter.submitList(allAbsentStudents)
         recyclerView.adapter = adapter
+
+        // Setup simple filter logic
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean = false
+            override fun onQueryTextChange(newText: String?): Boolean {
+                val query = newText?.lowercase() ?: ""
+                val filteredList = if (query.isEmpty()) {
+                    allAbsentStudents
+                } else {
+                    allAbsentStudents.filter {
+                        it.name.lowercase().contains(query) ||
+                                it.subtitle?.lowercase()?.contains(query) == true // Search by Class Name too
+                    }
+                }
+                adapter.submitList(filteredList)
+                return true
+            }
+        })
+
         dialog.show()
     }
 }

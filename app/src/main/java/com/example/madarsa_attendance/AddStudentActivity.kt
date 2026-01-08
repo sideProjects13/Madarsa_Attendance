@@ -1,12 +1,17 @@
 package com.example.madarsa_attendance
+
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Log
 import android.view.View
 import android.widget.AdapterView
@@ -42,6 +47,7 @@ import com.google.firebase.firestore.Query
 import id.zelory.compressor.Compressor
 import id.zelory.compressor.constraint.quality
 import id.zelory.compressor.constraint.size
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
@@ -50,12 +56,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
 class AddStudentActivity : AppCompatActivity() {
 
     private companion object {
         private const val TAG = "AddStudentActivity"
-
-        // MODIFIED: Changed constant names for clarity
         private const val PERMISSION_REQUEST_CODE_STORAGE = 103
         private const val PERMISSION_REQUEST_CODE_CAMERA = 104
     }
@@ -96,10 +101,9 @@ class AddStudentActivity : AppCompatActivity() {
     private var preselectedTeacherName: String? = null
     private var imageUri: Uri? = null
     private lateinit var imagePickerLauncher: ActivityResultLauncher<Intent>
-
-    // ADDED: Launcher for taking a picture
     private lateinit var takePictureLauncher: ActivityResultLauncher<Intent>
     private var cameraImageUri: Uri? = null
+    // Cloudinary Preset
     private val UNSIGNED_UPLOAD_PRESET_STUDENT = "BIBI_AYESHA_MASJID"
     private var currentOrganizationId: String? = null
 
@@ -113,11 +117,7 @@ class AddStudentActivity : AppCompatActivity() {
         currentOrganizationId = FirebaseAuthManager.getOrganizationId(this)
 
         if (currentOrganizationId == null) {
-            Toast.makeText(
-                this,
-                "Organization data missing. Please log in again.",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Organization data missing. Please log in again.", Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -161,30 +161,24 @@ class AddStudentActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        imagePickerLauncher =
-            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                if (result.resultCode == Activity.RESULT_OK) {
-                    result.data?.data?.let { uri ->
-                        imageUri = uri
-                        Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student)
-                            .into(ivStudentProfileImage)
-                    }
+        imagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data?.data?.let { uri ->
+                    imageUri = uri
+                    Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student).into(ivStudentProfileImage)
                 }
             }
+        }
 
-        // ADDED: Initialize the take picture launcher
-        takePictureLauncher =
-            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                if (result.resultCode == Activity.RESULT_OK) {
-                    cameraImageUri?.let { uri ->
-                        imageUri = uri
-                        Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student)
-                            .into(ivStudentProfileImage)
-                    }
+        takePictureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                cameraImageUri?.let { uri ->
+                    imageUri = uri
+                    Glide.with(this).load(uri).circleCrop().placeholder(R.drawable.student).into(ivStudentProfileImage)
                 }
             }
+        }
 
-        // MODIFIED: The click listener now shows a dialog to choose between camera and gallery
         val imageSelectionClickListener = View.OnClickListener { showImageSourceDialog() }
         btnSelectImageStudent.setOnClickListener(imageSelectionClickListener)
         cardViewProfileImage.setOnClickListener(imageSelectionClickListener)
@@ -202,8 +196,7 @@ class AddStudentActivity : AppCompatActivity() {
         if (preselectedTeacherId != null && preselectedTeacherName != null) {
             spinnerTeachers.visibility = View.GONE
             tvLabelSelectTeacher.visibility = View.GONE
-            selectedTeacher =
-                TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
+            selectedTeacher = TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
         } else {
             loadTeachersIntoSpinner()
         }
@@ -214,15 +207,11 @@ class AddStudentActivity : AppCompatActivity() {
 
     private fun fetchNextRegistrationNumber() {
         if (currentOrganizationId == null) {
-            Log.e(TAG, "fetchNextRegistrationNumber: Aborting - currentOrganizationId is null.")
-            tilRegNo.helperText = "Error loading. Please restart app."
             etRegNo.isEnabled = false
             return
         }
-
         tilRegNo.helperText = "Suggesting next number..."
         etRegNo.isEnabled = false
-
         db.collection("organizations").document(currentOrganizationId!!)
             .collection("students")
             .orderBy("regNo", Query.Direction.DESCENDING)
@@ -233,24 +222,21 @@ class AddStudentActivity : AppCompatActivity() {
                 if (!documents.isEmpty) {
                     val lastRegNoStr = documents.documents[0].getString("regNo")
                     val lastRegNo = lastRegNoStr?.toIntOrNull()
-                    if (lastRegNo != null) {
-                        nextRegNo = lastRegNo + 1
-                    }
+                    if (lastRegNo != null) nextRegNo = lastRegNo + 1
                 }
                 etRegNo.setText(nextRegNo.toString())
                 tilRegNo.helperText = "Next available number is suggested"
                 etRegNo.isEnabled = true
             }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Error fetching last registration number", e)
+            .addOnFailureListener {
                 tilRegNo.helperText = "Enter registration number manually"
                 etRegNo.isEnabled = true
             }
     }
 
     private fun setInputsEnabled(enabled: Boolean, showProgressForSpinner: Boolean = false) {
-        progressBar.visibility =
-            if (!enabled && !showProgressForSpinner) View.VISIBLE else View.GONE
+        progressBar.visibility = if (!enabled && !showProgressForSpinner) View.VISIBLE else View.GONE
+        btnSaveStudent.isEnabled = enabled
         spinnerTeachers.isEnabled = enabled
         etStudentName.isEnabled = enabled
         etParentName.isEnabled = enabled
@@ -263,379 +249,45 @@ class AddStudentActivity : AppCompatActivity() {
         etAlternateMobile.isEnabled = enabled
         etAddress.isEnabled = enabled
         btnSelectImageStudent.isEnabled = enabled
-        btnSaveStudent.isEnabled = enabled
         cardViewProfileImage.isClickable = enabled
-    }
-
-    private fun isValidDateFormat(dateStr: String): Boolean {
-        if (dateStr.isEmpty()) return true
-        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-        sdf.isLenient = false
-        return try {
-            sdf.parse(dateStr)
-            dateStr.length == 10
-        } catch (e: ParseException) {
-            false
-        }
-    }
-
-    private fun isDateInFuture(dateStr: String): Boolean {
-        if (!isValidDateFormat(dateStr)) return false
-        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-        return try {
-            val enteredDate = sdf.parse(dateStr) ?: return false
-            // Reset time part of today's date for a fair comparison
-            val today = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.time
-            enteredDate.after(today)
-        } catch (e: ParseException) {
-            false
-        }
     }
 
     private fun validateStudentInputs(): Boolean {
         var isValid = true
-        tilStudentName.error = null
-        tilParentName.error = null
-        tilParentMobileNumber.error = null
-        tilRegNo.error = null
-        tilMonthlyFee.error = null
-        tilAlternateMobile.error = null
-        tilBirthDate.error = null
-        tilAdmissionDate.error = null
+        tilStudentName.error = null; tilParentName.error = null; tilParentMobileNumber.error = null
+        tilRegNo.error = null; tilMonthlyFee.error = null; tilAlternateMobile.error = null
+        tilBirthDate.error = null; tilAdmissionDate.error = null
 
         if (selectedTeacher == null && preselectedTeacherId == null) {
-            Toast.makeText(this, "Please select a teacher.", Toast.LENGTH_SHORT).show()
-            isValid = false
+            Toast.makeText(this, "Please select a teacher.", Toast.LENGTH_SHORT).show(); isValid = false
         }
-        if (etStudentName.text.toString().trim().isEmpty()) {
-            tilStudentName.error = "Student name is required"; isValid = false
-        }
-        if (etParentName.text.toString().trim().isEmpty()) {
-            tilParentName.error = "Parent's name is required"; isValid = false
-        }
-        if (etParentMobileNumber.text.toString().trim().isEmpty()) {
-            tilParentMobileNumber.error = "Parent's mobile is required"; isValid = false
-        } else if (!isValidIndianMobileNumber(etParentMobileNumber.text.toString().trim())) {
-            tilParentMobileNumber.error = "Enter a valid 10-digit number"; isValid = false
-        }
-        val alternateMobile = etAlternateMobile.text.toString().trim()
-        if (alternateMobile.isNotEmpty() && !isValidIndianMobileNumber(alternateMobile)) {
-            tilAlternateMobile.error = "Enter a valid 10-digit number"; isValid = false
-        }
-        if (etRegNo.text.toString().trim().isEmpty()) {
-            tilRegNo.error = "Registration number is required"; isValid = false
-        }
-        if (rgGender.checkedRadioButtonId == -1) {
-            Toast.makeText(this, "Please select a gender", Toast.LENGTH_SHORT).show(); isValid =
-                false
-        }
-        val monthlyFeeText = etMonthlyFee.text.toString().trim()
-        if (monthlyFeeText.isEmpty()) {
-            tilMonthlyFee.error = "Monthly fee is required"; isValid = false
-        } else {
-            val monthlyFeeValue = monthlyFeeText.toDoubleOrNull()
-            if (monthlyFeeValue == null || monthlyFeeValue <= 0) {
-                tilMonthlyFee.error = "Enter a valid positive fee amount"; isValid = false
-            }
-        }
+        if (etStudentName.text.toString().trim().isEmpty()) { tilStudentName.error = "Required"; isValid = false }
+        if (etParentName.text.toString().trim().isEmpty()) { tilParentName.error = "Required"; isValid = false }
+        if (etParentMobileNumber.text.toString().trim().isEmpty()) { tilParentMobileNumber.error = "Required"; isValid = false }
+        else if (!isValidIndianMobileNumber(etParentMobileNumber.text.toString().trim())) { tilParentMobileNumber.error = "Invalid"; isValid = false }
 
-        // --- ENHANCED DATE VALIDATION ---
+        val alternateMobile = etAlternateMobile.text.toString().trim()
+        if (alternateMobile.isNotEmpty() && !isValidIndianMobileNumber(alternateMobile)) { tilAlternateMobile.error = "Invalid"; isValid = false }
+
+        if (etRegNo.text.toString().trim().isEmpty()) { tilRegNo.error = "Required"; isValid = false }
+        if (rgGender.checkedRadioButtonId == -1) { Toast.makeText(this, "Select Gender", Toast.LENGTH_SHORT).show(); isValid = false }
+        if (etMonthlyFee.text.toString().trim().isEmpty()) { tilMonthlyFee.error = "Required"; isValid = false }
+
         val birthDateStr = etBirthDate.text.toString().trim()
-        if (birthDateStr.isNotEmpty()) {
-            if (!isValidDateFormat(birthDateStr)) {
-                tilBirthDate.error = "Invalid format or date"
-                isValid = false
-            } else if (isDateInFuture(birthDateStr)) {
-                tilBirthDate.error = "Date cannot be in the future"
-                isValid = false
-            }
-        }
+        if (birthDateStr.isNotEmpty() && !isValidDateFormat(birthDateStr)) { tilBirthDate.error = "Invalid Date"; isValid = false }
+        else if (isDateInFuture(birthDateStr)) { tilBirthDate.error = "Future Date"; isValid = false }
 
         val admissionDateStr = etAdmissionDate.text.toString().trim()
-        if (admissionDateStr.isNotEmpty()) {
-            if (!isValidDateFormat(admissionDateStr)) {
-                tilAdmissionDate.error = "Invalid format or date"
-                isValid = false
-            } else if (isDateInFuture(admissionDateStr)) {
-                tilAdmissionDate.error = "Date cannot be in the future"
-                isValid = false
-            }
-        }
+        if (admissionDateStr.isNotEmpty() && !isValidDateFormat(admissionDateStr)) { tilAdmissionDate.error = "Invalid Date"; isValid = false }
+        else if (isDateInFuture(admissionDateStr)) { tilAdmissionDate.error = "Future Date"; isValid = false }
 
         return isValid
     }
 
-    private fun showCustomDatePickerDialog(editText: TextInputEditText) {
-        val dialogView = View.inflate(this, R.layout.dialog_custom_date_picker, null)
-        val dayPicker = dialogView.findViewById<NumberPicker>(R.id.dayPicker)
-        val monthPicker = dialogView.findViewById<NumberPicker>(R.id.monthPicker)
-        val yearPicker = dialogView.findViewById<NumberPicker>(R.id.yearPicker)
-
-        val calendar = Calendar.getInstance()
-        val currentYear = calendar.get(Calendar.YEAR)
-
-        val existingDateStr = editText.text.toString()
-        if (isValidDateFormat(existingDateStr)) {
-            try {
-                val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-                val date = sdf.parse(existingDateStr)
-                if (date != null) {
-                    calendar.time = date
-                }
-            } catch (e: Exception) {
-                // If parsing fails, use current date
-            }
-        }
-
-        yearPicker.minValue = 1950
-        yearPicker.maxValue = currentYear
-        yearPicker.value = calendar.get(Calendar.YEAR)
-
-        val months = arrayOf(
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec"
-        )
-        monthPicker.minValue = 1
-        monthPicker.maxValue = 12
-        monthPicker.displayedValues = months
-        monthPicker.value = calendar.get(Calendar.MONTH) + 1
-
-        dayPicker.minValue = 1
-        dayPicker.maxValue = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-        dayPicker.value = calendar.get(Calendar.DAY_OF_MONTH)
-
-        val onValueChangeListener = NumberPicker.OnValueChangeListener { _, _, _ ->
-            val tempCalendar = Calendar.getInstance()
-            tempCalendar.set(Calendar.YEAR, yearPicker.value)
-            tempCalendar.set(Calendar.MONTH, monthPicker.value - 1)
-            val maxDay = tempCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-            if (dayPicker.value > maxDay) {
-                dayPicker.value = maxDay
-            }
-            dayPicker.maxValue = maxDay
-        }
-        yearPicker.setOnValueChangedListener(onValueChangeListener)
-        monthPicker.setOnValueChangedListener(onValueChangeListener)
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Select Date")
-            .setView(dialogView)
-            .setPositiveButton("OK") { _, _ ->
-                val selectedYear = yearPicker.value
-                val selectedMonth = monthPicker.value
-                val selectedDay = dayPicker.value
-                val formattedDate = String.format(
-                    Locale.getDefault(),
-                    "%02d-%02d-%04d",
-                    selectedDay,
-                    selectedMonth,
-                    selectedYear
-                )
-                editText.setText(formattedDate)
-            }
-            .setNegativeButton("Cancel", null)
-            .create()
-        dialog.show()
-    }
-
-    // ADDED: This function shows the dialog to choose between camera and gallery
-    private fun showImageSourceDialog() {
-        val options = arrayOf("Take Photo", "Choose from Gallery")
-        AlertDialog.Builder(this)
-            .setTitle("Select Image Source")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> checkCameraPermissions()
-                    1 -> checkStoragePermissions()
-                }
-            }
-            .show()
-    }
-
-    // MODIFIED: Renamed to checkStoragePermissions
-    private fun checkStoragePermissions() {
-        val permission =
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_IMAGES
-            } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            }
-        if (ContextCompat.checkSelfPermission(
-                this,
-                permission
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(permission),
-                PERMISSION_REQUEST_CODE_STORAGE
-            )
-        } else {
-            openGallery()
-        }
-    }
-
-    // ADDED: New function to check for camera permissions
-    private fun checkCameraPermissions() {
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.CAMERA),
-                PERMISSION_REQUEST_CODE_CAMERA
-            )
-        } else {
-            openCamera()
-        }
-    }
-
-    // MODIFIED: onRequestPermissionsResult now handles both storage and camera permissions
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        when (requestCode) {
-            PERMISSION_REQUEST_CODE_STORAGE -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    openGallery()
-                } else {
-                    Toast.makeText(this, "Storage permission denied.", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            PERMISSION_REQUEST_CODE_CAMERA -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    openCamera()
-                } else {
-                    Toast.makeText(this, "Camera permission denied.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    private fun openGallery() {
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
-        imagePickerLauncher.launch(intent)
-    }
-
-    // ADDED: This function opens the camera to take a picture
-    private fun openCamera() {
-        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        var photoFile: File? = null
-        try {
-            photoFile = createImageFile()
-        } catch (ex: IOException) {
-            Log.e(TAG, "IOException while creating image file", ex)
-            Toast.makeText(this, "Error creating image file.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        photoFile?.also {
-            val photoURI: Uri = FileProvider.getUriForFile(
-                this,
-                "${applicationContext.packageName}.provider",
-                it
-            )
-            cameraImageUri = photoURI
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI)
-            takePictureLauncher.launch(intent)
-        }
-    }
-
-    // ADDED: This function creates a temporary file to store the captured image
-    @Throws(IOException::class)
-    private fun createImageFile(): File {
-        val timeStamp: String =
-            SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-        val storageDir: File? = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-        return File.createTempFile(
-            "JPEG_${timeStamp}_",
-            ".jpg",
-            storageDir
-        )
-    }
-
-
-    private fun loadTeachersIntoSpinner() {
-        if (currentOrganizationId == null) {
-            handleSaveFailure(Exception("Organization ID missing"), "Cannot load teachers.")
-            setInputsEnabled(true)
-            return
-        }
-
-        setInputsEnabled(false, showProgressForSpinner = true)
-        db.collection("organizations").document(currentOrganizationId!!)
-            .collection("teachers").orderBy("teacherName").get()
-            .addOnSuccessListener { documents ->
-                teacherList.clear()
-                teacherList.add(TeacherSpinnerItem("", "Select a Teacher", null))
-                for (document in documents) {
-                    val teacher = TeacherSpinnerItem(
-                        document.id,
-                        document.getString("teacherName") ?: "N/A",
-                        document.getString("profileImageUrl")
-                    )
-                    teacherList.add(teacher)
-                }
-                val adapter = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_spinner_item,
-                    teacherList.map { it.name })
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                spinnerTeachers.adapter = adapter
-                setInputsEnabled(true)
-
-                spinnerTeachers.onItemSelectedListener =
-                    object : AdapterView.OnItemSelectedListener {
-                        override fun onItemSelected(
-                            parent: AdapterView<*>,
-                            view: View?,
-                            position: Int,
-                            id: Long
-                        ) {
-                            selectedTeacher = if (position > 0) teacherList[position] else null
-                        }
-
-                        override fun onNothingSelected(parent: AdapterView<*>) {
-                            selectedTeacher = null
-                        }
-                    }
-            }
-            .addOnFailureListener { exception ->
-                handleSaveFailure(exception, "Error loading teachers")
-                setInputsEnabled(true)
-            }
-    }
-
-    private fun isValidIndianMobileNumber(mobile: String) =
-        mobile.length == 10 && mobile.all { it.isDigit() }
-
     private fun saveStudent() {
         if (!validateStudentInputs()) return
         if (currentOrganizationId == null) {
-            handleSaveFailure(
-                Exception("Organization ID is null"),
-                "Cannot save: Org ID is missing."
-            )
+            handleSaveFailure(Exception("Organization ID is null"), "Cannot save: Org ID is missing.")
             return
         }
 
@@ -648,21 +300,10 @@ class AddStudentActivity : AppCompatActivity() {
         val regNo = etRegNo.text.toString().trim()
         val alternateMobile = etAlternateMobile.text.toString().trim().ifEmpty { null }
         val address = etAddress.text.toString().trim().ifEmpty { null }
-        val finalTeacher = selectedTeacher ?: TeacherSpinnerItem(
-            preselectedTeacherId!!,
-            preselectedTeacherName!!,
-            null
-        )
-
-        if (finalTeacher.id.isEmpty()) {
-            handleSaveFailure(Exception("No teacher assigned"), "Please assign a teacher.")
-            return
-        }
+        val finalTeacher = selectedTeacher ?: TeacherSpinnerItem(preselectedTeacherId!!, preselectedTeacherName!!, null)
 
         db.collection("organizations").document(currentOrganizationId!!)
-            .collection("students")
-            .whereEqualTo("regNo", regNo)
-            .get()
+            .collection("students").whereEqualTo("regNo", regNo).get()
             .addOnSuccessListener { documents ->
                 if (documents.isEmpty) {
                     uploadImageAndSaveStudent(
@@ -674,58 +315,31 @@ class AddStudentActivity : AppCompatActivity() {
                         alternateMobile, address
                     )
                 } else {
-                    handleSaveFailure(
-                        Exception("Reg No already exists."),
-                        "This registration number already exists."
-                    )
+                    handleSaveFailure(Exception("Reg No already exists."), "This registration number already exists.")
                 }
             }
-            .addOnFailureListener { e ->
-                handleSaveFailure(e, "Error checking registration number.")
-            }
-    }
-
-    private fun uriToFile(uri: Uri): File {
-        val inputStream = contentResolver.openInputStream(uri)!!
-        val tempFile = File.createTempFile("prefix", ".extension", cacheDir)
-        tempFile.deleteOnExit()
-        tempFile.outputStream().use { fileOut ->
-            inputStream.copyTo(fileOut)
-        }
-        inputStream.close()
-        return tempFile
+            .addOnFailureListener { e -> handleSaveFailure(e, "Error checking registration number.") }
     }
 
     private fun uploadImageAndSaveStudent(
-        studentName: String,
-        parentName: String,
-        parentMobile: String,
-        monthlyFee: Double,
-        regNo: String,
-        teacher: TeacherSpinnerItem,
-        gender: String,
-        birthDate: String?,
-        admissionDate: String?,
-        alternateMobile: String?,
-        address: String?
+        studentName: String, parentName: String, parentMobile: String, monthlyFee: Double,
+        regNo: String, teacher: TeacherSpinnerItem, gender: String, birthDate: String?, admissionDate: String?,
+        alternateMobile: String?, address: String?
     ) {
         if (imageUri != null) {
             lifecycleScope.launch {
                 try {
                     val imageFile = uriToFile(imageUri!!)
-                    // MODIFIED: Added a size constraint to ensure the image is under 100 KB
-                    val compressedImageFile =
-                        Compressor.compress(this@AddStudentActivity, imageFile) {
-                            quality(80)
-                            size(100 * 1024) // 100 KB
-                        }
+                    val compressedImageFile = Compressor.compress(this@AddStudentActivity, imageFile) {
+                        quality(80)
+                        size(100 * 1024)
+                    }
+
                     MediaManager.get().upload(compressedImageFile.path)
                         .unsigned(UNSIGNED_UPLOAD_PRESET_STUDENT)
-                        .option("folder", "student_profiles").callback(object : UploadCallback {
-                            override fun onSuccess(
-                                requestId: String?,
-                                resultData: MutableMap<Any?, Any?>?
-                            ) {
+                        .option("folder", "student_profiles")
+                        .callback(object : UploadCallback {
+                            override fun onSuccess(requestId: String?, resultData: MutableMap<Any?, Any?>?) {
                                 val imageUrl = resultData?.get("secure_url") as? String
                                 saveStudentDataToFirestore(
                                     studentName, parentName, parentMobile, monthlyFee,
@@ -733,40 +347,20 @@ class AddStudentActivity : AppCompatActivity() {
                                     alternateMobile, address, imageUrl
                                 )
                             }
-
                             override fun onError(requestId: String?, error: ErrorInfo?) {
-                                Log.w(
-                                    TAG,
-                                    "Image upload failed, saving without image. Error: ${error?.description}"
-                                )
-                                saveStudentDataToFirestore(
-                                    studentName, parentName, parentMobile, monthlyFee,
-                                    regNo, teacher, gender, birthDate, admissionDate,
-                                    alternateMobile, address, null
-                                )
+                                Log.e(TAG, "Image Upload Failed: ${error?.description}")
+                                saveStudentDataToFirestore(studentName, parentName, parentMobile, monthlyFee, regNo, teacher, gender, birthDate, admissionDate, alternateMobile, address, null)
                             }
-
                             override fun onStart(requestId: String?) {}
-                            override fun onProgress(
-                                requestId: String?,
-                                bytes: Long,
-                                totalBytes: Long
-                            ) {
-                            }
-
+                            override fun onProgress(requestId: String?, bytes: Long, totalBytes: Long) {}
                             override fun onReschedule(requestId: String?, error: ErrorInfo?) {}
                         }).dispatch()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Image compression or file handling failed", e)
                     handleSaveFailure(e, "Failed to process image.")
                 }
             }
         } else {
-            saveStudentDataToFirestore(
-                studentName, parentName, parentMobile, monthlyFee,
-                regNo, teacher, gender, birthDate, admissionDate,
-                alternateMobile, address, null
-            )
+            saveStudentDataToFirestore(studentName, parentName, parentMobile, monthlyFee, regNo, teacher, gender, birthDate, admissionDate, alternateMobile, address, null)
         }
     }
 
@@ -777,13 +371,7 @@ class AddStudentActivity : AppCompatActivity() {
         alternateMobile: String?, address: String?,
         profileImageUrl: String?
     ) {
-        if (currentOrganizationId == null) {
-            handleSaveFailure(
-                Exception("Organization ID is null"),
-                "Internal Error: Org data missing."
-            )
-            return
-        }
+        if (currentOrganizationId == null) return
 
         val studentData = hashMapOf(
             "studentName" to studentName,
@@ -804,22 +392,158 @@ class AddStudentActivity : AppCompatActivity() {
         )
 
         db.collection("organizations").document(currentOrganizationId!!)
-            .collection("students").add(studentData).addOnSuccessListener {
-                StatusDialogFragment.newInstance(
-                    isSuccess = true,
-                    message = "Student Added Successfully!",
-                    finishActivityOnDismiss = true
-                ).show(supportFragmentManager, "successDialog")
-                setResult(Activity.RESULT_OK)
+            .collection("students").add(studentData).addOnSuccessListener { documentRef ->
+
+                // --- NEW PDF & WHATSAPP LOGIC ---
+                // 1. Create Student Object
+                val newStudent = StudentDetailsItem(
+                    id = documentRef.id,
+                    studentName = studentName,
+                    parentName = parentName,
+                    parentMobileNumber = parentMobile,
+                    teacherId = teacher.id,
+                    teacherName = teacher.name,
+                    profileImageUrl = profileImageUrl,
+                    regNo = regNo,
+                    gender = gender,
+                    birthDate = birthDate,
+                    admissionDate = admissionDate,
+                    monthlyFee = monthlyFee,
+                    alternateMobileNumber = alternateMobile,
+                    address = address,
+                    isActive = true
+                )
+
+                // 2. Generate PDF and Share
+                lifecycleScope.launch {
+                    val generator = AdmissionFormGenerator(this@AddStudentActivity)
+                    val pdfUri = generator.generateAdmissionForm(newStudent)
+
+                    if (pdfUri != null) {
+                        StatusDialogFragment.newInstance(true, "Student Added! Opening WhatsApp...").show(supportFragmentManager, "successDialog")
+                        delay(1000)
+                        sharePdfToWhatsApp(pdfUri, parentMobile)
+                    } else {
+                        StatusDialogFragment.newInstance(true, "Student Added (PDF Failed)").show(supportFragmentManager, "successDialog")
+                        setResult(Activity.RESULT_OK)
+                        finish()
+                    }
+                }
             }.addOnFailureListener { e -> handleSaveFailure(e, "Failed to save student data.") }
+    }
+
+    private fun sharePdfToWhatsApp(pdfUri: Uri, mobileNumber: String?) {
+        try {
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, pdfUri)
+
+                if (!mobileNumber.isNullOrEmpty()) {
+                    val cleanNumber = mobileNumber.replace(Regex("[^0-9]"), "")
+                    val formattedNumber = if (cleanNumber.length == 10) "91$cleanNumber" else cleanNumber
+                    putExtra("jid", "$formattedNumber@s.whatsapp.net")
+                }
+
+                setPackage("com.whatsapp")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+            setResult(Activity.RESULT_OK)
+            finish()
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(this, "WhatsApp not installed. PDF saved to Downloads.", Toast.LENGTH_LONG).show()
+            setResult(Activity.RESULT_OK)
+            finish()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error opening WhatsApp.", Toast.LENGTH_SHORT).show()
+            setResult(Activity.RESULT_OK)
+            finish()
+        }
     }
 
     private fun handleSaveFailure(e: Exception, message: String) {
         setInputsEnabled(true)
-        StatusDialogFragment.newInstance(
-            isSuccess = false,
-            message = message
-        ).show(supportFragmentManager, "failureDialog")
+        StatusDialogFragment.newInstance(isSuccess = false, message = message).show(supportFragmentManager, "failureDialog")
         Log.e(TAG, "$message: Full error: ${e.message}", e)
+    }
+
+    // --- Helper Functions ---
+    private fun uriToFile(uri: Uri): File {
+        val inputStream = contentResolver.openInputStream(uri)!!
+        val tempFile = File.createTempFile("prefix", ".extension", cacheDir)
+        tempFile.deleteOnExit()
+        tempFile.outputStream().use { fileOut -> inputStream.copyTo(fileOut) }
+        inputStream.close()
+        return tempFile
+    }
+
+    private fun isValidDateFormat(dateStr: String): Boolean {
+        if (dateStr.isEmpty()) return true
+        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+        sdf.isLenient = false
+        return try { sdf.parse(dateStr); true } catch (e: Exception) { false }
+    }
+
+    private fun isDateInFuture(dateStr: String): Boolean {
+        if (!isValidDateFormat(dateStr)) return false
+        val sdf = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
+        return try {
+            val enteredDate = sdf.parse(dateStr) ?: return false
+            val today = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.time
+            enteredDate.after(today)
+        } catch (e: ParseException) { false }
+    }
+
+    private fun showCustomDatePickerDialog(editText: TextInputEditText) {
+        val calendar = Calendar.getInstance()
+        val datePickerDialog = android.app.DatePickerDialog(this, { _, year, month, day ->
+            val formattedDate = String.format(Locale.getDefault(), "%02d-%02d-%04d", day, month + 1, year)
+            editText.setText(formattedDate)
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+        datePickerDialog.show()
+    }
+
+    private fun isValidIndianMobileNumber(mobile: String) = mobile.length == 10 && mobile.all { it.isDigit() }
+
+    private fun showImageSourceDialog() {
+        val options = arrayOf("Take Photo", "Choose from Gallery")
+        AlertDialog.Builder(this).setTitle("Select Image Source").setItems(options) { _, which ->
+            when (which) { 0 -> checkCameraPermissions(); 1 -> checkStoragePermissions() }
+        }.show()
+    }
+    private fun checkStoragePermissions() {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this, arrayOf(permission), PERMISSION_REQUEST_CODE_STORAGE) else openGallery()
+    }
+    private fun checkCameraPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), PERMISSION_REQUEST_CODE_CAMERA) else openCamera()
+    }
+    private fun openGallery() { imagePickerLauncher.launch(Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)) }
+    private fun openCamera() {
+        try {
+            val photoFile = File.createTempFile("IMG_", ".jpg", getExternalFilesDir(Environment.DIRECTORY_PICTURES))
+            cameraImageUri = FileProvider.getUriForFile(this, "${applicationContext.packageName}.provider", photoFile)
+            takePictureLauncher.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply { putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri) })
+        } catch (e: IOException) { Toast.makeText(this, "Error creating file", Toast.LENGTH_SHORT).show() }
+    }
+    private fun loadTeachersIntoSpinner() {
+        if (currentOrganizationId == null) return
+        db.collection("organizations").document(currentOrganizationId!!).collection("teachers").get().addOnSuccessListener {
+            teacherList.clear(); teacherList.add(TeacherSpinnerItem("", "Select Teacher", null))
+            it.forEach { doc -> teacherList.add(TeacherSpinnerItem(doc.id, doc.getString("teacherName")?:"", null)) }
+            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, teacherList.map { item -> item.name })
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinnerTeachers.adapter = adapter
+            spinnerTeachers.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) { selectedTeacher = if(pos > 0) teacherList[pos] else null }
+                override fun onNothingSelected(p: AdapterView<*>?) {}
+            }
+        }
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            when (requestCode) { PERMISSION_REQUEST_CODE_STORAGE -> openGallery(); PERMISSION_REQUEST_CODE_CAMERA -> openCamera() }
+        }
     }
 }

@@ -4,5 +4,12 @@
     <dimen name="dialog_min_width_major">65%</dimen> <!-- Percentage of screen width for dialog in major axis (usually portrait width) -->
     <dimen name="dialog_min_width_minor">95%</dimen> <!-- Percentage of screen width for dialog in minor axis (usually landscape width) -->
     <dimen name="toggle_button_stroke_width">0.3dp</dimen>
+    <dimen name="splash_logo_size">220dp</dimen>
+    <dimen name="splash_title_size">32sp</dimen>
+    <dimen name="splash_subtitle_size">14sp</dimen>
+    <dimen name="splash_creator_size">12sp</dimen>
+    <dimen name="splash_padding">32dp</dimen>
+    <dimen name="pattern_size_large">200dp</dimen>
+    <dimen name="pattern_size_small">150dp</dimen>
 
 </resources>

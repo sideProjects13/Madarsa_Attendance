@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- The Outer Square -->
+    <path
+        android:pathData="M4,4 L20,4 L20,20 L4,20 Z"
+        android:strokeWidth="1"
+        android:strokeColor="@color/mono_palette_grey_borders"
+        android:fillColor="@android:color/transparent"/>
+
+    <!-- The Circle (Center 12,12 with Radius 3) converted to Path -->
+    <!-- M12,9 moves to top. The two 'a' commands draw the two halves of the circle. -->
+    <path
+        android:pathData="M12,9 a3,3 0 1 1 0,6 a3,3 0 1 1 0,-6"
+        android:strokeWidth="0.5"
+        android:strokeColor="@color/mono_palette_grey_borders"
+        android:fillColor="@android:color/transparent"/>
+
+</vector>

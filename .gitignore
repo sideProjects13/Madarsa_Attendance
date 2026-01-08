@@ -1,7 +1,12 @@
+functions/node_modules/
+node_modules/
+
 *.iml
 .gradle
 /local.properties
+/.idea/
 /.idea/caches
+/app/build/
 /.idea/libraries
 /.idea/modules.xml
 /.idea/workspace.xml
