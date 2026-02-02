@@ -610,12 +610,12 @@ class MainActivity : AppCompatActivity(),
         return listOf(
             NavigationItem.SingleItem(R.id.nav_quick_attendance, "Attendance", R.drawable.ic_attendance_checklist),
             NavigationItem.SingleItem(R.id.nav_dashboard, "Dashboard", R.drawable.ic_dashboard),
-            NavigationItem.SingleItem(R.id.nav_leaderboard, "Leaderboard", R.drawable.ic_leaderboard_trophy),
-            NavigationItem.SingleItem(R.id.nav_student_profile, "Student Profile", R.drawable.ic_person_outlined),
+            NavigationItem.SingleItem(R.id.nav_leaderboard, "Leaderboard", R.drawable.ic_leaderboard_24),
+            NavigationItem.SingleItem(R.id.nav_student_profile, "Student Profile", R.drawable.baseline_person_24),
 
             NavigationItem.Header(
                 title = "Student Management",
-                iconResId = R.drawable.ic_school,
+                iconResId = R.drawable.ic_student_manage,
                 children = listOf(
                     NavigationItem.Child(R.id.nav_quick_add_student, "Add Student"),
                     NavigationItem.Child(R.id.nav_edit_student, "Edit Student"),
@@ -647,7 +647,7 @@ class MainActivity : AppCompatActivity(),
             ),
             NavigationItem.Header(
                 title = "Fee Management",
-                iconResId = R.drawable.ic_payments,
+                iconResId = R.drawable.fees_icon,
                 children = listOf(
                     NavigationItem.Child(R.id.nav_fees_dashboard, "Fees Dashboard"),
                     NavigationItem.Child(R.id.nav_record_student_fee, "Record Student Fee"),
@@ -679,7 +679,7 @@ class MainActivity : AppCompatActivity(),
             ),
             NavigationItem.Header(
                 title = "Bulk Actions",
-                iconResId = R.drawable.ic_upload_file,
+                iconResId = R.drawable.bulk_download,
                 children = listOf(
                     NavigationItem.Child(R.id.nav_bulk_add_class, "Bulk Add Students to Class"),
                     NavigationItem.Child(R.id.nav_bulk_add_org, "Bulk Add Students to Org"),
@@ -708,7 +708,7 @@ class MainActivity : AppCompatActivity(),
             ),
             NavigationItem.Header(
                 title = "Prints",
-                iconResId = R.drawable.ic_receipt,
+                iconResId = R.drawable.baseline_print_24,
                 children = listOf(
                     NavigationItem.Child(R.id.nav_student_reports, "Student Info Reports"),
                     NavigationItem.Child(R.id.nav_custom_student_info_report, "Custom Student Info Report"),
@@ -1474,3 +1474,4 @@ class MainActivity : AppCompatActivity(),
 //            Log.e(TAG, "Could not update navigation header logo.", e)
 //        }
 }
+

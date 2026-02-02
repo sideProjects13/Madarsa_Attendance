@@ -52,7 +52,7 @@
                             <ImageView
                                 android:layout_width="32dp"
                                 android:layout_height="32dp"
-                                android:src="@drawable/person" />
+                                android:src="@drawable/ic_person_24" />
                             <TextView
                                 android:id="@+id/tvTotalStudentsCount"
                                 android:layout_width="wrap_content"

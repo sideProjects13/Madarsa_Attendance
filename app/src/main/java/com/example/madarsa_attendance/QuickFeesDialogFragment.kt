@@ -103,7 +103,7 @@ class QuickFeesDialogFragment : DialogFragment() {
         setupSearch()
         setupObservers()
 
-        viewModel.fetchStudentListForSearch(forceRefresh = false)
+        viewModel.fetchStudentListForSearch(forceRefresh = true)
     }
 
     private fun setupRecyclerView() {

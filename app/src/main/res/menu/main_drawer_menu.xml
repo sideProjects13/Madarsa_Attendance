@@ -12,7 +12,7 @@
         android:title="Dashboard" />
     <item
         android:id="@+id/nav_leaderboard"
-        android:icon="@drawable/ic_leaderboard"
+        android:icon="@drawable/ic_leaderboard_24"
         android:title="Leaderboard" />
 
     <!-- Student Management Category -->
