@@ -258,7 +258,12 @@ class PaymentSummaryFragment : Fragment() {
         val staticSpinnerTextColor = ContextCompat.getColor(requireContext(), R.color.mono_palette_black)
 
         val months = SimpleDateFormat("MMMM", Locale.getDefault()).let { sdf ->
-            (0..11).map { val cal = Calendar.getInstance(); cal.set(Calendar.MONTH, it); sdf.format(cal.time) }
+            (0..11).map {
+                val cal = Calendar.getInstance()
+                cal.set(Calendar.DAY_OF_MONTH, 1) // not reliable enough
+                cal.set(Calendar.MONTH, it)
+                sdf.format(cal.time)
+            }
         }
         val monthAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, months)
         monthAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -539,7 +544,11 @@ class PaymentSummaryFragment : Fragment() {
         val spinnerReportYear: Spinner = dialogView.findViewById(R.id.spinnerDialogReportYear)
 
         val months = SimpleDateFormat("MMMM", Locale.getDefault()).let { sdf ->
-            (0..11).map { val cal = Calendar.getInstance(); cal.set(Calendar.MONTH, it); sdf.format(cal.time) }
+            (0..11).map { monthIndex ->
+                val cal = Calendar.getInstance()
+                cal.set(2000, monthIndex, 1) // fixed year + day, no rollover
+                sdf.format(cal.time)
+            }
         }
         val monthAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, months)
         monthAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
